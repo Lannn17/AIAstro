@@ -1,0 +1,33 @@
+# Database
+astrology_api/charts.db
+
+# Environment
+astrology_api/.env
+.env
+.env.local
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.pytest_cache/
+
+# Frontend build & deps
+frontend/dist/
+frontend/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+nohup.out
+
+# Python virtual environment
+astrology_api/venv/
+venv/
+
+# Node modules
+frontend/node_modules/
+node_modules/

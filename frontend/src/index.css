@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #0a0a1a;
+  color: #e8e8ff;
+  font-family: 'Georgia', 'Ma Shan Zheng', 'FZYanSongS-R-GB', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;
+}
+
+#root {
+  min-height: 100vh;
+}
