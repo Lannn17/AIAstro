@@ -40,7 +40,7 @@ _chunks: list[dict] | None = None
 _index_source: str = ""
 
 
-_local_model = None  # sentence-transformers model (lazy)
+_local_model = None   # SentenceTransformer (local_index) or None (Gemini)
 
 
 def _pick_index_dir():
@@ -65,11 +65,12 @@ def _load_index():
 
     _index_source = index_dir.name
 
-    # 本地索引用 TF-IDF+SVD pipeline 嵌入查询
+    # 本地索引用 sentence-transformers 嵌入查询
     if index_dir == _LOCAL_DIR:
-        import pickle
-        with open(index_dir / "vectorizer.pkl", "rb") as f:
-            _local_model = pickle.load(f)
+        from sentence_transformers import SentenceTransformer
+        mi = json.loads((index_dir / "model_info.json").read_text())
+        _local_model = SentenceTransformer(mi["model"])
+        print(f"[RAG] using sentence-transformers: {mi['model']}")
 
     print(f"[RAG] index: {_index_source}, {_index.ntotal} vectors")
 
@@ -84,8 +85,9 @@ def retrieve(query: str, k: int = 5) -> list[dict]:
     _load_index()
 
     if _local_model is not None:
-        # TF-IDF + SVD pipeline
-        query_vec = _local_model.transform([query]).astype(np.float32)
+        # sentence-transformers
+        query_vec = _local_model.encode([query], convert_to_numpy=True).astype(np.float32)
+        faiss.normalize_L2(query_vec)
     else:
         # Gemini 嵌入
         response = client.models.embed_content(
