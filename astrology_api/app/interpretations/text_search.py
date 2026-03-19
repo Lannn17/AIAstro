@@ -235,7 +235,7 @@ def get_planet_interpretation(planet_name: str, sign: str, house: int, language:
     query = f"{planet_name} in {sign} in house {house}"
 
     # Buscar documentos relevantes
-    results = search_documents(query)
+    results = advanced_text_search(query)
     if not results:
         return None
 
@@ -339,7 +339,7 @@ def get_aspect_interpretation(planet1: str, planet2: str, aspect: str, language:
     query = f"{planet1} {aspect} {planet2}"
 
     # Buscar documentos relevantes
-    results = search_documents(query)
+    results = advanced_text_search(query)
     if not results:
         return None
 
