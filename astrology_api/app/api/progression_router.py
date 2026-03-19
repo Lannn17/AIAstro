@@ -21,7 +21,7 @@ from ..security import verify_api_key
 
 # Criar o router
 router = APIRouter(
-    prefix="/api/v1",
+    prefix="/api",
     tags=["Progressions"],
     dependencies=[Depends(verify_api_key)],
 )

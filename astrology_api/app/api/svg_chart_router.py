@@ -19,7 +19,7 @@ from ..security import verify_api_key
 
 # Criar o router
 router = APIRouter(
-    prefix="/api/v1",
+    prefix="/api",
     tags=["SVG Chart"],
     dependencies=[Depends(verify_api_key)],
 )

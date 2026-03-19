@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.db import db_list_charts, db_save_chart, db_get_chart, db_delete_chart
 
-router = APIRouter(prefix="/api/v1/charts", tags=["charts"])
+router = APIRouter(prefix="/api/charts", tags=["charts"])
 
 
 class SaveChartRequest(BaseModel):
