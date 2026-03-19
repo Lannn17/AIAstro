@@ -1,11 +1,10 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-from app.db import get_db, SavedChart
+from app.db import db_list_charts, db_save_chart, db_get_chart, db_delete_chart
 
 router = APIRouter(prefix="/api/v1/charts", tags=["charts"])
 
@@ -38,9 +37,6 @@ class ChartSummary(BaseModel):
     location_name: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class ChartDetail(BaseModel):
     id: int
@@ -61,58 +57,39 @@ class ChartDetail(BaseModel):
     svg_data: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+
+def _parse(row: dict) -> dict:
+    if row.get("chart_data") and isinstance(row["chart_data"], str):
+        row["chart_data"] = json.loads(row["chart_data"])
+    return row
 
 
 @router.get("", response_model=list[ChartSummary])
-def list_charts(db: Session = Depends(get_db)):
-    rows = db.query(SavedChart).order_by(SavedChart.created_at.desc()).all()
-    return rows
+def list_charts():
+    return db_list_charts()
 
 
 @router.post("", response_model=ChartDetail)
-def save_chart(body: SaveChartRequest, db: Session = Depends(get_db)):
-    row = SavedChart(
-        label=body.label,
-        name=body.name,
-        birth_year=body.birth_year,
-        birth_month=body.birth_month,
-        birth_day=body.birth_day,
-        birth_hour=body.birth_hour,
-        birth_minute=body.birth_minute,
-        location_name=body.location_name,
-        latitude=body.latitude,
-        longitude=body.longitude,
-        tz_str=body.tz_str,
-        house_system=body.house_system,
-        language=body.language,
-        chart_data=json.dumps(body.chart_data) if body.chart_data else None,
-        svg_data=body.svg_data,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    if row.chart_data:
-        row.chart_data = json.loads(row.chart_data)
-    return row
+def save_chart(body: SaveChartRequest):
+    data = body.model_dump()
+    if data.get("chart_data"):
+        data["chart_data"] = json.dumps(data["chart_data"])
+    row = db_save_chart(data)
+    return _parse(row)
 
 
 @router.get("/{chart_id}", response_model=ChartDetail)
-def get_chart(chart_id: int, db: Session = Depends(get_db)):
-    row = db.query(SavedChart).filter(SavedChart.id == chart_id).first()
+def get_chart(chart_id: int):
+    row = db_get_chart(chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Chart not found")
-    if row.chart_data:
-        row.chart_data = json.loads(row.chart_data)
-    return row
+    return _parse(row)
 
 
 @router.delete("/{chart_id}")
-def delete_chart(chart_id: int, db: Session = Depends(get_db)):
-    row = db.query(SavedChart).filter(SavedChart.id == chart_id).first()
+def delete_chart(chart_id: int):
+    row = db_get_chart(chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Chart not found")
-    db.delete(row)
-    db.commit()
+    db_delete_chart(chart_id)
     return {"ok": True}
