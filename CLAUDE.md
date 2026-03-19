@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.1.0** — 初始可运行版本，本命盘计算与保存功能完整。
+**v0.2.0** — RAG 解读引擎上线；部署改为单 Render 服务，FastAPI serve 前端。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---

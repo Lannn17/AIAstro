@@ -8,6 +8,33 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] - 2026-03-19
+
+### Added
+
+**RAG 解读引擎 / RAG Interpretation Engine**
+- `app/rag.py` — 核心 RAG 模块：Gemini 嵌入向量检索（`gemini-embedding-001`）→ FAISS 检索 top-k 书籍片段 → Gemini 生成中文解读（`gemini-3.1-flash-lite-preview`）
+- 三种索引构建策略，按优先级自动选择：
+  - `build_local_index.py` — 纯本地方案，TF-IDF + SVD (LSA) 生成 384 维密集向量，无需任何 API，依赖 scikit-learn + faiss-cpu
+  - `build_demo_index.py` — 3 本精选书籍 demo 索引，使用 Gemini `gemini-embedding-2-preview`，支持断点续跑
+  - `build_index.py` — 全语料完整索引，Gemini 嵌入，支持断点续跑（速率限制下自动等待）
+- `app/api/interpret_router.py` 新增两个端点：
+  - `POST /api/interpret/rag` — 纯 RAG 模式：书籍片段主导解读
+  - `POST /api/interpret/chat` — 星盘对话（`mode="interpret"` AI 主导 + RAG 补充；`mode="rag"` 片段主导）
+- 星盘摘要格式化 `format_chart_summary()` — 把 `NatalChartResponse` 转为 LLM 可读文本，注入 prompt 上下文
+- `data/demo_index/`、`data/faiss_index/`、`data/local_index/` 索引目录（`.gitignore` 中排除）
+
+**部署修复 / Deployment Fix**
+- `render.yaml` 改为单服务架构：build 时构建前端，FastAPI 在生产环境 serve `dist/` 静态文件 + SPA catch-all
+- `main.py` 新增 `StaticFiles` 挂载（`/assets`）和 SPA 回退路由（`dist/` 存在时自动启用）
+- `requirements.txt` 新增 `aiofiles`（FastAPI StaticFiles 必需）
+
+### Changed
+
+- 解读路由支持 `GOOGLE_API_KEY` 环境变量，在 Turso 环境变量之外另需配置
+
+---
+
 ## [0.1.0] - 2026-03-18
 
 ### Forked from / 派生自
