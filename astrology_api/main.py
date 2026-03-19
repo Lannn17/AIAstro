@@ -6,7 +6,10 @@ os routers, middleware, e outras configurações globais.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 from app.api.natal_chart_router import router as natal_chart_router
@@ -61,3 +64,14 @@ async def read_root():
         "version": "1.0.0",
         "docs": "/docs",
     }
+
+
+# ── Serve frontend static files in production ──────────────────────────────
+DIST_DIR = Path(__file__).parent / "dist"
+if DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """SPA catch-all: serve index.html for all non-API routes."""
+        return FileResponse(DIST_DIR / "index.html")
