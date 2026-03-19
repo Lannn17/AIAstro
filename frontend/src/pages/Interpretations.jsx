@@ -26,7 +26,7 @@ export default function Interpretations() {
     setError(null)
     setResult(null)
     try {
-      const res = await fetch(`${API_BASE}/api/v1/interpret?query=${encodeURIComponent(query)}`)
+      const res = await fetch(`${API_BASE}/api/interpret?query=${encodeURIComponent(query)}`)
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
       setResult(data)
