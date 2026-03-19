@@ -31,3 +31,13 @@ venv/
 # Node modules
 frontend/node_modules/
 node_modules/
+
+# RAG index data (too large for git)
+astrology_api/data/
+
+# Claude Code local config
+.claude/
+
+# Task Master / other tool artifacts
+.env.example
+.taskmaster/
