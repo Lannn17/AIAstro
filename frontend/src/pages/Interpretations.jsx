@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
 const inputStyle = {
   backgroundColor: '#0d0d22',
   border: '1px solid #2a2a5a',
@@ -24,7 +26,7 @@ export default function Interpretations() {
     setError(null)
     setResult(null)
     try {
-      const res = await fetch(`/api/v1/interpret?query=${encodeURIComponent(query)}`)
+      const res = await fetch(`${API_BASE}/api/v1/interpret?query=${encodeURIComponent(query)}`)
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
       setResult(data)

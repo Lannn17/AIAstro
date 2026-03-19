@@ -3,6 +3,8 @@ import ChartForm from '../components/ChartForm'
 import PlanetTable from '../components/PlanetTable'
 import ChartWheel from '../components/ChartWheel'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
 export default function NatalChart() {
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
@@ -19,7 +21,7 @@ export default function NatalChart() {
 
   async function fetchSavedCharts() {
     try {
-      const res = await fetch('/api/v1/charts')
+      const res = await fetch(`${API_BASE}/api/v1/charts`)
       if (res.ok) setSavedCharts(await res.json())
     } catch { /* network error, keep empty list */ }
   }
@@ -34,7 +36,7 @@ export default function NatalChart() {
     setLastLocationName(locationName)
 
     try {
-      const res = await fetch('/api/v1/natal_chart', {
+      const res = await fetch(`${API_BASE}/api/v1/natal_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -43,7 +45,7 @@ export default function NatalChart() {
       const data = await res.json()
       setResult(data)
 
-      const svgRes = await fetch('/api/v1/svg_chart', {
+      const svgRes = await fetch(`${API_BASE}/api/v1/svg_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,7 +72,7 @@ export default function NatalChart() {
         ? `${lastFormData.name} · ${lastFormData.birth_year}/${lastFormData.birth_month}/${lastFormData.birth_day}`
         : `星盘 ${lastFormData.birth_year}/${lastFormData.birth_month}/${lastFormData.birth_day}`
 
-      const res = await fetch('/api/v1/charts', {
+      const res = await fetch(`${API_BASE}/api/v1/charts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,7 +108,7 @@ export default function NatalChart() {
     setSavedId(summary.id)
     setError(null)
     try {
-      const res = await fetch(`/api/v1/charts/${summary.id}`)
+      const res = await fetch(`${API_BASE}/api/v1/charts/${summary.id}`)
       if (!res.ok) throw new Error()
       const chart = await res.json()
       setLastFormData({
@@ -133,7 +135,7 @@ export default function NatalChart() {
 
   async function handleDelete(id, e) {
     e.stopPropagation()
-    await fetch(`/api/v1/charts/${id}`, { method: 'DELETE' })
+    await fetch(`${API_BASE}/api/v1/charts/${id}`, { method: 'DELETE' })
     if (savedId === id) {
       setSavedId(null)
       setResult(null)
