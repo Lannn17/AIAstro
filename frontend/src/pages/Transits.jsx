@@ -363,7 +363,10 @@ export default function Transits() {
                         const tName  = isTP1 ? a.p1_name : a.p2_name
                         const nName  = isTP1 ? a.p2_name : a.p1_name
                         const aspect    = a.aspect_original || a.aspect
-                        const aspectZh  = ASPECT_ZH[aspect] || aspect
+                        const aspectZh  = ASPECT_ZH[aspect] ?? (() => {
+                          console.warn(`[Transits] 未映射的相位名: "${aspect}" — 请在 ASPECT_ZH 中添加中文翻译`)
+                          return aspect
+                        })()
                         const tSym   = PLANET_SYMBOLS[planetKey(tName)] || ''
                         const nSym   = PLANET_SYMBOLS[planetKey(nName)] || ''
                         const color  = ASPECT_COLOR[aspect] || '#d0d0e0'
