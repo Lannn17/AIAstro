@@ -135,9 +135,10 @@ def db_save_chart(data: dict) -> dict:
         INSERT INTO saved_charts
             (label, name, birth_year, birth_month, birth_day, birth_hour, birth_minute,
              location_name, latitude, longitude, tz_str, house_system, language,
-             chart_data, svg_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             chart_data, svg_data, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
+    from datetime import datetime, timezone
     params = [
         data["label"], data.get("name"),
         data["birth_year"], data["birth_month"], data["birth_day"],
@@ -146,6 +147,7 @@ def db_save_chart(data: dict) -> dict:
         data["latitude"], data["longitude"],
         data["tz_str"], data["house_system"], data["language"],
         data.get("chart_data"), data.get("svg_data"),
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     ]
     if USE_TURSO:
         result = _turso_exec(sql, params)

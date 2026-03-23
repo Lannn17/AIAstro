@@ -21,6 +21,7 @@ export default function NatalChart() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatMode, setChatMode] = useState('interpret')
+  const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => { fetchSavedCharts() }, [])
 
@@ -163,6 +164,7 @@ export default function NatalChart() {
 
   async function handleDelete(id, e) {
     e.stopPropagation()
+    if (!window.confirm('确认删除该星盘？此操作无法撤销。')) return
     await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE' })
     if (savedId === id) {
       setSavedId(null)
@@ -285,100 +287,142 @@ export default function NatalChart() {
             </div>
           )}
 
-          {/* Chat box */}
+          {/* Chat open button */}
           {result && (
-            <div className="mt-6" style={{
-              backgroundColor: '#12122a',
-              border: '1px solid #2a2a5a',
-              borderRadius: '10px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                padding: '10px 14px',
-                borderBottom: '1px solid #2a2a5a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <span style={{ color: '#c9a84c', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  ✦ 占星对话
-                </span>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {['interpret', 'rag'].map(m => (
-                    <button key={m} onClick={() => setChatMode(m)} style={{
-                      fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: chatMode === m ? '#c9a84c' : '#1e1e40',
-                      color: chatMode === m ? '#0a0a1a' : '#6666aa',
-                      fontWeight: chatMode === m ? 600 : 400,
-                    }}>
-                      {m === 'interpret' ? 'AI解读' : 'RAG测试'}
-                    </button>
-                  ))}
+            <button
+              className="mt-4 w-full py-2 rounded-lg tracking-wider"
+              onClick={() => setChatOpen(true)}
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid #c9a84c',
+                color: '#c9a84c',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              ✦ 占星对话
+            </button>
+          )}
+
+          {/* Chat modal */}
+          {chatOpen && (
+            <div
+              onClick={() => setChatOpen(false)}
+              style={{
+                position: 'fixed', inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                overflowY: 'auto',
+                zIndex: 1000,
+                padding: '40px 0',
+              }}
+            >
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  backgroundColor: '#12122a',
+                  border: '1px solid #2a2a5a',
+                  borderRadius: '12px',
+                  width: '90%', maxWidth: '640px',
+                  margin: '0 auto',
+                }}
+              >
+                {/* Header */}
+                <div style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid #2a2a5a',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  flexShrink: 0,
+                }}>
+                  <span style={{ color: '#c9a84c', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    ✦ 占星对话
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {['interpret', 'rag'].map(m => (
+                        <button key={m} onClick={() => setChatMode(m)} style={{
+                          fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: chatMode === m ? '#c9a84c' : '#1e1e40',
+                          color: chatMode === m ? '#0a0a1a' : '#6666aa',
+                          fontWeight: chatMode === m ? 600 : 400,
+                        }}>
+                          {m === 'interpret' ? 'AI解读' : 'RAG测试'}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setChatOpen(false)} style={{
+                      background: 'none', border: 'none', color: '#6666aa',
+                      cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: '0 2px',
+                    }}>✕</button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Messages */}
-              <div style={{ padding: '12px 14px', maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {messages.length === 0 && (
-                  <div style={{ color: '#3a3a6a', fontSize: '0.78rem' }}>
-                    问我关于你星盘的任何问题…
-                  </div>
-                )}
-                {messages.map((msg, i) => (
-                  <div key={i} style={{
-                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '90%',
-                    backgroundColor: msg.role === 'user' ? '#1e1e50' : '#1a1a35',
-                    border: `1px solid ${msg.role === 'user' ? '#3a3a8a' : '#2a2a5a'}`,
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    fontSize: '0.82rem',
-                    color: '#e8e8ff',
-                    lineHeight: 1.6,
-                    whiteSpace: 'pre-wrap',
-                  }}>
-                    {msg.text}
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div style={{ color: '#6666aa', fontSize: '0.78rem' }}>思考中…</div>
-                )}
-              </div>
+                {/* Messages */}
+                <div style={{
+                  padding: '14px 16px',
+                  display: 'flex', flexDirection: 'column', gap: '12px',
+                }}>
+                  {messages.length === 0 && (
+                    <div style={{ color: '#3a3a6a', fontSize: '0.78rem' }}>
+                      问我关于你星盘的任何问题…
+                    </div>
+                  )}
+                  {messages.map((msg, i) => (
+                    <div key={i} style={{
+                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '90%',
+                      backgroundColor: msg.role === 'user' ? '#1e1e50' : '#1a1a35',
+                      border: `1px solid ${msg.role === 'user' ? '#3a3a8a' : '#2a2a5a'}`,
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      fontSize: '0.84rem',
+                      color: '#e8e8ff',
+                      lineHeight: 1.7,
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {msg.text}
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div style={{ color: '#6666aa', fontSize: '0.78rem' }}>思考中…</div>
+                  )}
+                </div>
 
-              {/* Input */}
-              <form onSubmit={handleChat} style={{
-                display: 'flex', gap: '8px', padding: '10px 14px',
-                borderTop: '1px solid #2a2a5a',
-              }}>
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  placeholder="问关于星盘的问题…"
-                  disabled={chatLoading}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#0d0d22',
-                    border: '1px solid #2a2a5a',
-                    color: '#e8e8ff',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    fontSize: '0.82rem',
-                    outline: 'none',
-                  }}
-                />
-                <button type="submit" disabled={chatLoading || !chatInput.trim()}
-                  style={{
-                    backgroundColor: '#c9a84c', color: '#0a0a1a',
-                    border: 'none', borderRadius: '6px',
-                    padding: '6px 14px', fontWeight: 600,
-                    fontSize: '0.82rem',
-                    cursor: chatLoading ? 'not-allowed' : 'pointer',
-                    opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
-                  }}>
-                  发送
-                </button>
-              </form>
+                {/* Input */}
+                <form onSubmit={handleChat} style={{
+                  display: 'flex', gap: '8px', padding: '12px 16px',
+                  borderTop: '1px solid #2a2a5a', flexShrink: 0,
+                }}>
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder="问关于星盘的问题…"
+                    disabled={chatLoading}
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0d0d22',
+                      border: '1px solid #2a2a5a',
+                      color: '#e8e8ff',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                    }}
+                  />
+                  <button type="submit" disabled={chatLoading || !chatInput.trim()}
+                    style={{
+                      backgroundColor: '#c9a84c', color: '#0a0a1a',
+                      border: 'none', borderRadius: '6px',
+                      padding: '8px 16px', fontWeight: 600,
+                      fontSize: '0.84rem',
+                      cursor: chatLoading ? 'not-allowed' : 'pointer',
+                      opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
+                    }}>
+                    发送
+                  </button>
+                </form>
+              </div>
             </div>
           )}
         </div>

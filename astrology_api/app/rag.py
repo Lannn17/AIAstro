@@ -152,7 +152,6 @@ def generate(query: str, chunks: list[dict]) -> str:
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT,
             temperature=0.4,
-            max_output_tokens=1024,
         ),
     )
     return response.text
@@ -261,7 +260,6 @@ def rag_query_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_RAG,
             temperature=0.4,
-            max_output_tokens=1024,
         ),
     )
 
@@ -315,7 +313,6 @@ def interpret_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_INTERPRET,
             temperature=0.5,
-            max_output_tokens=1024,
         ),
     )
 

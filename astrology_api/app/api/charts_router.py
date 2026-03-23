@@ -35,7 +35,7 @@ class ChartSummary(BaseModel):
     birth_month: int
     birth_day: int
     location_name: Optional[str]
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 class ChartDetail(BaseModel):
@@ -55,7 +55,7 @@ class ChartDetail(BaseModel):
     language: str
     chart_data: Optional[dict]
     svg_data: Optional[str]
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 def _parse(row: dict) -> dict:
