@@ -144,9 +144,13 @@ async def interpret_transits_full(body: TransitsFullRequest):
         )
 
         # ── 合并：把 AI 分析注入每条行运 ──
-        analysis_map = {a["key"]: a["analysis"] for a in ai_result.get("aspects", [])}
+        aspect_map = {a["key"]: a for a in ai_result.get("aspects", [])}
         for t in active:
-            t["analysis"] = analysis_map.get(t["key"], "")
+            a = aspect_map.get(t["key"], {})
+            t["analysis"] = a.get("analysis", "")
+            t["tone"]     = a.get("tone", "")
+            t["themes"]   = a.get("themes", [])
+            t["is_new"]   = a.get("is_new", False)
 
         return {
             "active_transits": active,

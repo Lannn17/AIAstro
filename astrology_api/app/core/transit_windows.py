@@ -180,24 +180,6 @@ def _find_entry(natal_long, aspect_angle, planet_attr, natal_data, anchor, orb_t
     return hi
 
 
-def _find_exact(natal_long, aspect_angle, planet_attr, natal_data, start, end):
-    span = (end - start).days
-    step = max(1, span // 60)
-    best_date, best_orb = start, float("inf")
-    d = start
-    while d <= end:
-        try:
-            p = getattr(_subject_at(d, natal_data), planet_attr, None)
-            if p:
-                orb = _calc_orb(p.abs_pos, natal_long, aspect_angle)
-                if orb < best_orb:
-                    best_orb, best_date = orb, d
-        except Exception:
-            pass
-        d += timedelta(days=step)
-    return best_date
-
-
 # ── 主函数 ───────────────────────────────────────────────────────
 
 def get_active_transits(
@@ -266,8 +248,6 @@ def get_active_transits(
                         final_exit = _find_exit(natal_long, aspect_angle, t_attr, natal_data, check_d, effective_orb)
                         break
 
-                exact = _find_exact(natal_long, aspect_angle, t_attr, natal_data, entry, final_exit)
-
                 candidates.append({
                     "key":               f"{t_attr}_{aspect_name.lower()}_{n_attr}",
                     "transit_planet":    t_now.name,
@@ -279,7 +259,6 @@ def get_active_transits(
                     "effective_orb":     round(effective_orb, 2),
                     "applying":          applying,
                     "start_date":        entry.isoformat(),
-                    "exact_date":        exact.isoformat(),
                     "end_date":          final_exit.isoformat(),
                     "retrograde_cycle":  retrograde_cycle,
                     "pass_count":        pass_count,

@@ -16,6 +16,31 @@ if USE_TURSO:
 else:
     _db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "charts.db"))
 
+_CREATE_TRANSIT_CACHE = """
+CREATE TABLE IF NOT EXISTS transit_analysis_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chart_id INTEGER NOT NULL,
+    transit_key TEXT NOT NULL,
+    analysis TEXT NOT NULL,
+    tone TEXT NOT NULL,
+    themes TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(chart_id, transit_key)
+)
+"""
+
+_CREATE_TRANSIT_OVERALL = """
+CREATE TABLE IF NOT EXISTS transit_overall_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chart_id INTEGER NOT NULL,
+    transit_set_hash TEXT NOT NULL,
+    overall TEXT NOT NULL,
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(chart_id, transit_set_hash)
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,11 +138,12 @@ def _sqlite_write(sql: str, params: list = None) -> int:
 # ── Public API ───────────────────────────────────────────────────
 
 def create_tables():
-    if USE_TURSO:
-        _turso_exec(_CREATE_TABLE)
-    else:
-        with sqlite3.connect(_db_path) as conn:
-            conn.execute(_CREATE_TABLE)
+    for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL]:
+        if USE_TURSO:
+            _turso_exec(ddl)
+        else:
+            with sqlite3.connect(_db_path) as conn:
+                conn.execute(ddl)
 
 
 def db_list_charts() -> list[dict]:
@@ -171,3 +197,57 @@ def db_delete_chart(chart_id: int):
         _turso_exec(sql, [chart_id])
     else:
         _sqlite_write(sql, [chart_id])
+
+
+# ── Transit analysis cache ────────────────────────────────────────
+
+def db_get_transit_cache(chart_id: int, transit_key: str, today: str) -> dict | None:
+    """Returns {analysis, tone, themes} if cached and end_date >= today."""
+    sql = (
+        "SELECT analysis, tone, themes FROM transit_analysis_cache "
+        "WHERE chart_id=? AND transit_key=? AND end_date >= ?"
+    )
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [chart_id, transit_key, today]))
+        return rows[0] if rows else None
+    return _sqlite_fetchone(sql, [chart_id, transit_key, today])
+
+
+def db_save_transit_cache(
+    chart_id: int, transit_key: str,
+    analysis: str, tone: str, themes_json: str, end_date: str,
+):
+    sql = """
+        INSERT OR REPLACE INTO transit_analysis_cache
+            (chart_id, transit_key, analysis, tone, themes, end_date)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """
+    params = [chart_id, transit_key, analysis, tone, themes_json, end_date]
+    if USE_TURSO:
+        _turso_exec(sql, params)
+    else:
+        _sqlite_write(sql, params)
+
+
+def db_get_overall_cache(chart_id: int, transit_set_hash: str) -> str | None:
+    sql = (
+        "SELECT overall FROM transit_overall_cache "
+        "WHERE chart_id=? AND transit_set_hash=?"
+    )
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [chart_id, transit_set_hash]))
+        return rows[0]["overall"] if rows else None
+    row = _sqlite_fetchone(sql, [chart_id, transit_set_hash])
+    return row["overall"] if row else None
+
+
+def db_save_overall_cache(chart_id: int, transit_set_hash: str, overall: str):
+    sql = """
+        INSERT OR REPLACE INTO transit_overall_cache
+            (chart_id, transit_set_hash, overall)
+        VALUES (?, ?, ?)
+    """
+    if USE_TURSO:
+        _turso_exec(sql, [chart_id, transit_set_hash, overall])
+    else:
+        _sqlite_write(sql, [chart_id, transit_set_hash, overall])

@@ -610,11 +610,7 @@ def analyze_transits(
     }
 
 
-# ── 活跃行运完整分析（单次 Gemini 调用）────────────────────────────
-
-# 缓存：(chart_id, date_str) → {"aspects": [...], "overall": "..."}
-_TRANSIT_FULL_AI_CACHE: dict[tuple, dict] = {}
-
+# ── 活跃行运完整分析（per-transit DB 缓存）────────────────────────
 
 def analyze_active_transits_full(
     natal_chart: dict,
@@ -624,76 +620,129 @@ def analyze_active_transits_full(
     force_refresh: bool = False,
 ) -> dict:
     """
-    一次 Gemini 调用，为所有活跃行运生成：
-    - 每个相位的独立解读（per-aspect analysis）
-    - 整体行运综述（overall report）
+    per-transit DB 缓存的 Gemini 行运分析。
+    - 未缓存/已过期的行运 → 调用 AI
+    - 已缓存的行运 → 直接从 DB 读取
+    - overall：有新行运则重新生成；否则从 DB 读取（按行运集合 hash 缓存）
 
-    返回：{"aspects": [{"key": str, "analysis": str}, ...], "overall": str}
+    每条 aspect 返回：key, analysis, tone, themes (list), is_new (bool)
     """
-    cache_key = (chart_id, query_date)
-    if not force_refresh and cache_key in _TRANSIT_FULL_AI_CACHE:
-        return _TRANSIT_FULL_AI_CACHE[cache_key]
+    import hashlib
+    from .db import (
+        db_get_transit_cache, db_save_transit_cache,
+        db_get_overall_cache, db_save_overall_cache,
+    )
 
     if not active_transits:
         return {"aspects": [], "overall": "当前没有在容许度内的活跃行运相位。"}
 
+    # ── 1. 逐条检查 DB 缓存 ───────────────────────────────────────────
+    cached_aspects: dict[str, dict] = {}
+    new_transits: list[dict] = []
+
+    for t in active_transits:
+        if not force_refresh:
+            row = db_get_transit_cache(chart_id, t["key"], query_date)
+            if row:
+                cached_aspects[t["key"]] = {
+                    "key":      t["key"],
+                    "analysis": row["analysis"],
+                    "tone":     row["tone"],
+                    "themes":   json.loads(row["themes"]),
+                    "is_new":   False,
+                }
+                continue
+        new_transits.append(t)
+
+    # ── 2. 计算行运集合 hash（用于 overall 缓存）──────────────────────
+    all_keys_sorted = sorted(t["key"] for t in active_transits)
+    set_hash = hashlib.md5("|".join(all_keys_sorted).encode()).hexdigest()[:12]
+
+    # ── 3. 全部命中缓存时检查 overall ────────────────────────────────
+    if not new_transits and not force_refresh:
+        overall = db_get_overall_cache(chart_id, set_hash)
+        if overall:
+            aspects = [cached_aspects[t["key"]] for t in active_transits]
+            return {"aspects": aspects, "overall": overall}
+        # overall 未缓存 → 继续调用 AI（仅生成 overall）
+
+    # ── 4. 构建 prompt ────────────────────────────────────────────────
     chart_summary = format_chart_summary(natal_chart, max_aspects=10)
 
-    # 构建行运列表说明，包含优先级分类和容许度信息
-    transit_lines = []
-    for i, t in enumerate(active_transits, 1):
-        orb_dir   = "入相" if t["applying"] else "出相"
+    def _line(i, t):
+        orb_dir    = "入相" if t["applying"] else "出相"
         retro_note = f"（含逆行·{t['pass_count']} 次精确）" if t.get("retrograde_cycle") else ""
-        category  = t.get("category", "")
-        priority  = t.get("priority", 0)
-        transit_lines.append(
-            f"{i}. key={t['key']}  [分类:{category} 优先级:{priority}/14]\n"
-            f"   行运 {t['transit_planet_zh']}（{t['transit_planet']}）"
-            f" {t['aspect']} "
-            f"本命 {t['natal_planet_zh']}（{t['natal_planet']}）\n"
-            f"   容许度：{t['current_orb']}°/{t.get('effective_orb', '?')}°上限，{orb_dir}\n"
-            f"   时段：{t['start_date']} 至 {t['end_date']}{retro_note}，精确日：{t['exact_date']}"
+        return (
+            f"{i}. key={t['key']}  [分类:{t.get('category','')} 优先级:{t.get('priority',0)}/14]\n"
+            f"   行运 {t['transit_planet_zh']} {t['aspect']} 本命 {t['natal_planet_zh']}\n"
+            f"   容许度：{t['current_orb']}°/{t.get('effective_orb','?')}°上限，{orb_dir}\n"
+            f"   时段：{t['start_date']} 至 {t['end_date']}{retro_note}"
         )
 
-    transit_block = "\n\n".join(transit_lines)
+    all_block = "\n\n".join(_line(i, t) for i, t in enumerate(active_transits, 1))
 
-    prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
+    if new_transits:
+        new_block = "\n\n".join(_line(i, t) for i, t in enumerate(new_transits, 1))
+        prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
 
 {chart_summary}
 
-━━━ 当前活跃行运（{query_date}，按优先级排序，已预筛选） ━━━
+━━━ 当前所有活跃行运（{query_date}，供整体分析参考） ━━━
 
-{transit_block}
+{all_block}
+
+━━━ 以下行运需要新的逐相位解读 ━━━
+
+{new_block}
 
 【分析要求】
 
-**逐相位解读**（每个约 150-250 字）：
-- 结合本命盘中该行星的星座、宫位和尊贵状态
-- 说明此行运影响的具体生活领域（事业/感情/内在成长/健康等）
-- 若为逆行周期，点明三次过境的主题演进节奏
-- 优先级高（≥10）的相位应给予更深入的解析
+**对"需要新解读"的每条行运**（约 150-250 字/条）：
+- 结合本命盘中该行星的星座、宫位
+- 说明具体影响的生活领域
+- 若为逆行周期，点明三次过境节奏
+- 给出 tone（顺势/挑战/转化 之一）和 themes（从"事业、感情、家庭、财务、健康、自我成长、人际关系、创意、精神"中选 1-3 个）
 
-**叠加验证（Method 3）**：
-- 检查是否有多个相位同时指向同一生活主题（如两个以上相位都涉及事业/人际/内在转化）
-- 若发现主题叠加，在整体综述中重点标注该主题"已获多重星象确认"
-- 没有叠加时，综述聚焦最高优先级的 1-2 个相位
+**整体行运综述**（约 300-400 字，基于所有活跃行运）：
+- 开头先点出当前阶段主要影响的人生命题（1-2 句）
+- 识别主题叠加（多个相位指向同一领域则标注"已获多重星象确认"）
+- 给出具体行动建议
+- 语言自然，避免机械罗列
 
-**整体行运综述**（约 300-400 字）：
-- 识别当前星象的核心主题（1-3个）
-- 指出叠加确认的主题（若有）
-- 给出具体的时间节点建议（精确日前后如何行动）
-- 语言自然流畅，避免机械罗列
-
-以 JSON 格式返回：
+JSON 格式返回（aspects 只包含"需要新解读"的行运）：
 {{
   "aspects": [
-    {{"key": "<与上方 key 完全一致>", "analysis": "<该行运的详细解读>"}},
-    ...
+    {{
+      "key": "<与上方 key 完全一致>",
+      "analysis": "<150-250字解读>",
+      "tone": "<顺势|挑战|转化>",
+      "themes": ["<主题1>", "<主题2>"]
+    }}
   ],
-  "overall": "<整体行运综述，含主题叠加分析>"
+  "overall": "<整体综述>"
 }}
 """
+    else:
+        # 全部命中缓存，只需生成 overall
+        prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
 
+{chart_summary}
+
+━━━ 当前所有活跃行运（{query_date}） ━━━
+
+{all_block}
+
+请提供整体行运综述（约 300-400 字）：
+- 开头先点出当前阶段主要影响的人生命题（1-2 句）
+- 识别主题叠加（多个相位指向同一领域则标注"已获多重星象确认"）
+- 给出具体行动建议
+- 语言自然，避免机械罗列
+
+JSON 格式返回：
+{{"overall": "<整体综述>"}}
+"""
+
+    # ── 5. 调用 Gemini ────────────────────────────────────────────────
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=prompt,
@@ -708,13 +757,52 @@ def analyze_active_transits_full(
         print(f"[RAG] analyze_active_transits_full finish_reason={finish}")
 
     try:
-        result = json.loads(response.text)
+        ai_result = json.loads(response.text)
     except Exception as e:
         print(f"[RAG] JSON parse error: {e}")
-        result = {"aspects": [], "overall": response.text}
+        ai_result = {"aspects": [], "overall": response.text}
 
-    _TRANSIT_FULL_AI_CACHE[cache_key] = result
-    return result
+    # ── 6. 写入 DB 缓存 ───────────────────────────────────────────────
+    new_map: dict[str, dict] = {}
+    for a in ai_result.get("aspects", []):
+        key = a.get("key", "")
+        if not key:
+            continue
+        new_map[key] = a
+        for t in new_transits:
+            if t["key"] == key:
+                db_save_transit_cache(
+                    chart_id, key,
+                    a.get("analysis", ""),
+                    a.get("tone", ""),
+                    json.dumps(a.get("themes", []), ensure_ascii=False),
+                    t["end_date"],
+                )
+                break
+
+    overall = ai_result.get("overall", "")
+    if overall:
+        db_save_overall_cache(chart_id, set_hash, overall)
+
+    # ── 7. 合并返回 ───────────────────────────────────────────────────
+    all_aspects = []
+    for t in active_transits:
+        key = t["key"]
+        if key in new_map:
+            a = new_map[key]
+            all_aspects.append({
+                "key":      key,
+                "analysis": a.get("analysis", ""),
+                "tone":     a.get("tone", ""),
+                "themes":   a.get("themes", []),
+                "is_new":   True,
+            })
+        elif key in cached_aspects:
+            all_aspects.append(cached_aspects[key])
+        else:
+            all_aspects.append({"key": key, "analysis": "", "tone": "", "themes": [], "is_new": True})
+
+    return {"aspects": all_aspects, "overall": overall}
 
 
 # ── 出生时间校对解读 ───────────────────────────────────────────────

@@ -20,6 +20,12 @@ const ASPECT_COLOR = {
   Trine: '#66cc88', Sextile: '#44aaff', Quincunx: '#bb88ff',
 }
 
+const TONE_COLOR = {
+  '顺势': '#66cc88',
+  '挑战': '#ff9944',
+  '转化': '#bb88ff',
+}
+
 function planetKey(name) {
   const map = {
     '太阳': 'sun', '月亮': 'moon', '水星': 'mercury', '金星': 'venus',
@@ -246,10 +252,12 @@ export default function Transits() {
                 </div>
               )}
 
-              {/* 逐相位卡片 */}
-              {result.active_transits.map(t => (
-                <TransitCard key={t.key} transit={t} />
-              ))}
+              {/* 逐相位卡片：新行运在前，缓存行运在后 */}
+              {[...result.active_transits]
+                .sort((a, b) => (a.is_new === b.is_new ? 0 : a.is_new ? -1 : 1))
+                .map(t => (
+                  <TransitCard key={t.key} transit={t} />
+                ))}
 
               {/* 整体报告 */}
               {result.overall && (
@@ -286,7 +294,8 @@ function TransitCard({ transit: t }) {
     console.warn(`[Transits] 未映射的相位名: "${t.aspect}" — 请在 ASPECT_ZH 中添加中文翻译`)
     return t.aspect
   })()
-  const aspColor = ASPECT_COLOR[t.aspect] || '#d0d0e0'
+  const aspColor  = ASPECT_COLOR[t.aspect] || '#d0d0e0'
+  const toneColor = TONE_COLOR[t.tone] || '#8888aa'
 
   const days    = Math.round((new Date(t.end_date) - new Date(t.start_date)) / 86400000)
   const elapsed = Math.round((new Date() - new Date(t.start_date)) / 86400000)
@@ -294,13 +303,21 @@ function TransitCard({ transit: t }) {
 
   return (
     <div style={{
-      background: '#12122a', border: '1px solid #2a2a5a',
+      background: '#12122a',
+      border: `1px solid ${t.is_new ? '#3a2a6a' : '#2a2a5a'}`,
       borderRadius: '12px', marginBottom: '12px', overflow: 'hidden',
     }}>
       {/* 卡片头 */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a3a' }}>
         {/* 行星 + 相位行 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {t.is_new && (
+            <span style={{
+              background: '#3a2a6a', color: '#bb88ff',
+              fontSize: '0.7rem', fontWeight: 700, padding: '1px 6px',
+              borderRadius: '4px', letterSpacing: '0.05em',
+            }}>新</span>
+          )}
           <span style={{ color: '#c9a84c', fontSize: '1.1rem' }}>{tSym}</span>
           <span style={{ color: '#e0e0f0', fontWeight: 600 }}>{t.transit_planet_zh}</span>
           <span style={{ color: aspColor, fontWeight: 700, padding: '1px 8px',
@@ -309,6 +326,15 @@ function TransitCard({ transit: t }) {
           </span>
           <span style={{ color: '#8888aa', fontSize: '1rem' }}>{nSym}</span>
           <span style={{ color: '#d0d0e0' }}>{t.natal_planet_zh}</span>
+
+          {t.tone && (
+            <span style={{
+              color: toneColor, fontSize: '0.78rem', fontWeight: 600,
+              padding: '1px 8px', background: toneColor + '18', borderRadius: '4px',
+            }}>
+              {t.tone}
+            </span>
+          )}
 
           <span style={{ marginLeft: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
             <span style={{
@@ -326,12 +352,23 @@ function TransitCard({ transit: t }) {
           </span>
         </div>
 
+        {/* 主题标签 */}
+        {t.themes && t.themes.length > 0 && (
+          <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {t.themes.map(theme => (
+              <span key={theme} style={{
+                background: '#1e1e3a', color: '#8888cc',
+                fontSize: '0.73rem', padding: '2px 8px', borderRadius: '10px',
+                border: '1px solid #2a2a5a',
+              }}>{theme}</span>
+            ))}
+          </div>
+        )}
+
         {/* 时间行 */}
         <div style={{ marginTop: '8px', display: 'flex', gap: '12px', flexWrap: 'wrap',
           color: '#555577', fontSize: '0.78rem' }}>
           <span>{t.start_date} — {t.end_date}</span>
-          <span>·</span>
-          <span>精确日：{t.exact_date}</span>
           <span>·</span>
           <span>共 {days} 天（已过 {Math.max(0, elapsed)} 天）</span>
           {retro && <><span>·</span><span style={{ color: '#bb88ff' }}>{retro}</span></>}
