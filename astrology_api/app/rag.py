@@ -905,9 +905,12 @@ def analyze_rectification(
         ),
     )
 
+    print(f"[rectify] raw response ({len(response.text)} chars): {response.text[:300]}")
     try:
         parsed = json.loads(response.text)
-    except Exception:
+    except Exception as e:
+        print(f"[rectify] JSON parse error: {e}")
         parsed = {"candidates": [], "overall": response.text}
 
+    print(f"[rectify] candidates: {len(parsed.get('candidates', []))}, overall len: {len(parsed.get('overall', ''))}")
     return {"candidates": parsed.get("candidates", []), "overall": parsed.get("overall", "")}
