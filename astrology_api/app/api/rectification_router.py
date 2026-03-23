@@ -59,7 +59,13 @@ async def rectify(body: RectifyRequest):
             events=events,
         )
 
-        return {"top3": top3, "analysis": ai.get("answer", "")}
+        # 把逐候选理由合并进 top3
+        for item in ai.get("candidates", []):
+            idx = item.get("rank", 0) - 1
+            if 0 <= idx < len(top3):
+                top3[idx]["reason"] = item.get("reason", "")
+
+        return {"top3": top3, "overall": ai.get("overall", "")}
 
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))

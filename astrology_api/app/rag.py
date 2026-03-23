@@ -788,20 +788,38 @@ def analyze_rectification(
 {chr(10).join(top3_lines)}
 
 ---
-请从占星角度解读校对结果：
-1. 每个候选时间对应的上升星座特征，与用户事件模式是否吻合
-2. 这些时间被算法选出的占星依据（哪些宫位或角点在事件日期被激活）
-3. 你最推荐哪个候选时间，具体理由
-4. 建议用户如何用其他已知事件进一步验证{rag_section}"""
+请以 JSON 格式返回分析结果，结构如下：
+{{
+  "candidates": [
+    {{
+      "rank": 1,
+      "reason": "候选1的具体占星理由：上升星座特征、哪些宫位或角点在事件日期被行运/推运激活、与用户事件模式的吻合度（100-150字）"
+    }},
+    {{
+      "rank": 2,
+      "reason": "候选2的具体占星理由（100-150字）"
+    }},
+    {{
+      "rank": 3,
+      "reason": "候选3的具体占星理由（100-150字）"
+    }}
+  ],
+  "overall": "综合推荐与验证建议：明确指出最推荐哪个候选及原因，并给出用户可用其他事件进一步验证的方法（150-200字）"
+}}{rag_section}"""
 
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            response_mime_type="application/json",
             temperature=0.5,
         ),
     )
 
-    sources = _detect_citations(response.text, chunks) if chunks else []
-    return {"answer": response.text, "sources": sources}
+    try:
+        parsed = json.loads(response.text)
+    except Exception:
+        parsed = {"candidates": [], "overall": response.text}
+
+    return {"candidates": parsed.get("candidates", []), "overall": parsed.get("overall", "")}

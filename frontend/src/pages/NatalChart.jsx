@@ -643,25 +643,37 @@ export default function NatalChart() {
                   <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
                     Top 3 候选时间
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
                     {rectifyResult.top3.map((t, i) => (
-                      <div key={i} style={{ flex: '1 1 130px', background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '14px 16px' }}>
-                        <div style={{ color: i === 0 ? '#c9a84c' : '#7a6aaa', fontSize: '0.7rem', marginBottom: '6px' }}>
-                          {i === 0 ? '★ 推荐' : `候选 ${i + 1}`}
+                      <div key={i} style={{ background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '16px 18px' }}>
+                        {/* 头部：时间 + 标签 */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '8px' }}>
+                          <span style={{ color: '#e0e0f0', fontSize: '1.4rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                            {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
+                          </span>
+                          {t.asc_sign && (
+                            <span style={{ color: '#8888aa', fontSize: '0.82rem' }}>上升 {t.asc_sign}</span>
+                          )}
+                          <span style={{ marginLeft: 'auto', color: i === 0 ? '#c9a84c' : '#7a6aaa', fontSize: '0.72rem', fontWeight: 600 }}>
+                            {i === 0 ? '★ 推荐' : `候选 ${i + 1}`}
+                          </span>
+                          <span style={{ color: '#555577', fontSize: '0.72rem' }}>评分 {t.score}</span>
                         </div>
-                        <div style={{ color: '#e0e0f0', fontSize: '1.3rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                          {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
-                        </div>
-                        {t.asc_sign && (
-                          <div style={{ color: '#8888aa', fontSize: '0.78rem', marginTop: '4px' }}>上升 {t.asc_sign}</div>
+                        {/* 理由 */}
+                        {t.reason && (
+                          <div style={{ color: '#b0b0cc', fontSize: '0.88rem', lineHeight: '1.8', borderTop: '1px solid #2a2a4a', paddingTop: '10px' }}>
+                            {t.reason}
+                          </div>
                         )}
-                        <div style={{ color: '#555577', fontSize: '0.72rem', marginTop: '4px' }}>评分 {t.score}</div>
                       </div>
                     ))}
                   </div>
-                  {rectifyResult.analysis && (
-                    <div style={{ color: '#d0d0e8', fontSize: '0.95rem', lineHeight: '1.9', whiteSpace: 'pre-wrap' }}>
-                      {rectifyResult.analysis}
+                  {rectifyResult.overall && (
+                    <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
+                      <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>综合推荐与验证建议</div>
+                      <div style={{ color: '#d0d0e8', fontSize: '0.95rem', lineHeight: '1.9', whiteSpace: 'pre-wrap' }}>
+                        {rectifyResult.overall}
+                      </div>
                     </div>
                   )}
                 </div>
