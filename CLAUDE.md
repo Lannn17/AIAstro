@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.3.0** — 行运 AI 解读上线；移除独立解释 tab；修复 Render 根路由 404。
+**v0.4.0** — 出生时间校正（Rectification）上线；行运增强：分级容许度、主相位优先、DB 缓存、tone/theme 标签、force_refresh；行星修复：过滤 true_node/true_lilith 重复项，新增 Mean_Lilith 翻译。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---

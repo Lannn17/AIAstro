@@ -8,6 +8,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] - 2026-03-23
+
+### Added
+- **出生时间校正（Rectification）**：新增两阶段扫描算法，结合生命事件权重对候选时间打分，AI 为每个候选时间生成结构化 JSON 原因卡片（`feat(rectify)`）
+- **行运 DB 缓存**：每条行运相位结果单独缓存入数据库，避免重复调用 AI；新增 `force_refresh` 参数强制绕过缓存
+- **行运 tone/theme 标签**：每条行运解读附带 tone（能量基调）与 theme（主题）字段
+- **行星数据修复**：过滤 `true_node`/`true_lilith` 重复条目，新增 Mean Lilith 的七语言翻译
+- **调试工具**：`rag.py` 中 `analyze_rectification` 新增调试日志；新增 `test_rectify.py` 手动测试脚本
+
+### Changed
+- 行运相位分析改用分级容许度（主要相位优先）与优先度评分
+- 行运提示词改为主题聚类式结构，去除 `exact_date` 字段
+
+---
+
 ## [0.3.0] - 2026-03-23
 
 ### Added
