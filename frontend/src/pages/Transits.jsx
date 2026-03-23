@@ -402,23 +402,23 @@ export default function Transits() {
               </div>
 
               {/* AI 解读区块 */}
-              <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <div style={{ color: '#c9a84c', fontSize: '0.9rem', fontWeight: 600 }}>
+              <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '12px', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ color: '#e8c96a', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.06em' }}>
                     ✦ AI 行运解读
                   </div>
                   <button
                     onClick={interpretTransits}
                     disabled={interpretLoading}
                     style={{
-                      padding: '6px 16px',
-                      background: interpretLoading ? '#1e1e3a' : '#1a1a40',
-                      color: interpretLoading ? '#3a3a5a' : '#c9a84c',
-                      border: '1px solid #c9a84c44',
-                      borderRadius: '6px',
+                      padding: '8px 20px',
+                      background: interpretLoading ? '#1e1e3a' : '#c9a84c',
+                      color: interpretLoading ? '#3a3a5a' : '#0a0a18',
+                      border: 'none',
+                      borderRadius: '7px',
                       cursor: interpretLoading ? 'not-allowed' : 'pointer',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
                       transition: 'background 0.2s',
                     }}
                   >
@@ -427,11 +427,11 @@ export default function Transits() {
                 </div>
 
                 {interpretError && (
-                  <p style={{ color: '#ff6666', fontSize: '0.82rem' }}>{interpretError}</p>
+                  <p style={{ color: '#ff7070', fontSize: '0.95rem' }}>{interpretError}</p>
                 )}
 
                 {interpretLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8888aa', fontSize: '0.85rem', padding: '20px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#9999bb', fontSize: '0.95rem', padding: '24px 0' }}>
                     <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>◌</span>
                     正在分析行运相位，AI 解读通常需要 10-20 秒，请稍候…
                   </div>
@@ -440,20 +440,20 @@ export default function Transits() {
                 {interpretation && !interpretLoading && (
                   <div>
                     <div style={{
-                      color: '#d0d0e0',
-                      fontSize: '0.88rem',
-                      lineHeight: '1.9',
+                      color: '#e0e0f0',
+                      fontSize: '1rem',
+                      lineHeight: '2',
                       whiteSpace: 'pre-wrap',
-                      borderTop: '1px solid #1a1a3a',
-                      paddingTop: '14px',
+                      borderTop: '1px solid #2a2a4a',
+                      paddingTop: '18px',
                     }}>
                       {interpretation.answer}
                     </div>
                     {interpretation.sources && interpretation.sources.some(s => s.cited) && (
-                      <div style={{ marginTop: '16px', borderTop: '1px solid #1a1a3a', paddingTop: '12px' }}>
-                        <div style={{ color: '#555577', fontSize: '0.75rem', marginBottom: '6px' }}>参考来源</div>
+                      <div style={{ marginTop: '20px', borderTop: '1px solid #2a2a4a', paddingTop: '14px' }}>
+                        <div style={{ color: '#6666aa', fontSize: '0.82rem', marginBottom: '8px' }}>参考来源</div>
                         {interpretation.sources.filter(s => s.cited).map((s, i) => (
-                          <div key={i} style={{ color: '#4a4a7a', fontSize: '0.75rem', marginBottom: '2px' }}>
+                          <div key={i} style={{ color: '#5a5a8a', fontSize: '0.82rem', marginBottom: '4px' }}>
                             · {s.source.replace('[EN]', '').split('(')[0].trim()}
                           </div>
                         ))}
@@ -463,7 +463,7 @@ export default function Transits() {
                 )}
 
                 {!interpretation && !interpretLoading && !interpretError && (
-                  <p style={{ color: '#3a3a6a', fontSize: '0.83rem' }}>
+                  <p style={{ color: '#4a4a7a', fontSize: '0.95rem' }}>
                     点击「生成解读」，AI 将根据行运相位给出综合解析
                   </p>
                 )}
