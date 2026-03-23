@@ -106,10 +106,9 @@ async def interpret_transit(body: TransitInterpretRequest):
 
 class TransitsFullRequest(BaseModel):
     chart_id: int = 0
-    natal_info: Dict[str, Any]   # year/month/day/hour/minute/latitude/longitude/tz_str/house_system
-    natal_chart_data: Dict[str, Any]   # 完整 NatalChartResponse，供 AI 上下文
-    query_date: str              # "YYYY-MM-DD"
-    orb: float = 1.0
+    natal_info: Dict[str, Any]      # year/month/day/hour/minute/latitude/longitude/tz_str/house_system
+    natal_chart_data: Dict[str, Any]  # 完整 NatalChartResponse，供 AI 上下文
+    query_date: str                 # "YYYY-MM-DD"
     language: str = "zh"
 
 
@@ -126,13 +125,12 @@ async def interpret_transits_full(body: TransitsFullRequest):
         from ..rag import analyze_active_transits_full
 
         # ── Step 1: 计算行运窗口（缓存永久有效，行星历表是确定性的）──
-        calc_key = (body.chart_id, body.query_date, round(body.orb, 2))
+        calc_key = (body.chart_id, body.query_date)
         if calc_key not in _CALC_CACHE:
             q_date = date_type.fromisoformat(body.query_date)
             active = get_active_transits(
                 natal_data=body.natal_info,
                 query_date=q_date,
-                orb_threshold=body.orb,
                 language=body.language,
             )
             _CALC_CACHE[calc_key] = active

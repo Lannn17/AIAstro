@@ -95,12 +95,11 @@ export default function Transits() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chart_id:        Number(selectedId),
-          natal_info:      natalInfo,
+          chart_id:         Number(selectedId),
+          natal_info:       natalInfo,
           natal_chart_data: natalChartData,
-          query_date:      queryDate,
-          orb:             1.0,
-          language:        'zh',
+          query_date:       queryDate,
+          language:         'zh',
         }),
       })
       if (!r.ok) {

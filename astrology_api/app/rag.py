@@ -634,21 +634,23 @@ def analyze_active_transits_full(
         return _TRANSIT_FULL_AI_CACHE[cache_key]
 
     if not active_transits:
-        return {"aspects": [], "overall": "当前没有在 1° 容许度内的活跃行运相位。"}
+        return {"aspects": [], "overall": "当前没有在容许度内的活跃行运相位。"}
 
     chart_summary = format_chart_summary(natal_chart, max_aspects=10)
 
-    # 构建行运列表说明
+    # 构建行运列表说明，包含优先级分类和容许度信息
     transit_lines = []
     for i, t in enumerate(active_transits, 1):
-        orb_dir = "入相" if t["applying"] else "出相"
-        retro_note = f"（含逆行·{t['pass_count']} 次精确）" if t["retrograde_cycle"] else ""
+        orb_dir   = "入相" if t["applying"] else "出相"
+        retro_note = f"（含逆行·{t['pass_count']} 次精确）" if t.get("retrograde_cycle") else ""
+        category  = t.get("category", "")
+        priority  = t.get("priority", 0)
         transit_lines.append(
-            f"{i}. key={t['key']}\n"
+            f"{i}. key={t['key']}  [分类:{category} 优先级:{priority}/14]\n"
             f"   行运 {t['transit_planet_zh']}（{t['transit_planet']}）"
             f" {t['aspect']} "
             f"本命 {t['natal_planet_zh']}（{t['natal_planet']}）\n"
-            f"   容许度：{t['current_orb']}°，{orb_dir}\n"
+            f"   容许度：{t['current_orb']}°/{t.get('effective_orb', '?')}°上限，{orb_dir}\n"
             f"   时段：{t['start_date']} 至 {t['end_date']}{retro_note}，精确日：{t['exact_date']}"
         )
 
@@ -658,27 +660,37 @@ def analyze_active_transits_full(
 
 {chart_summary}
 
-━━━ 当前活跃行运（{query_date}，容许度 ≤ 1°） ━━━
+━━━ 当前活跃行运（{query_date}，按优先级排序，已预筛选） ━━━
 
 {transit_block}
 
-请为每个行运提供深入的中文解读（每段约 150-250 字），并在最后给出一段整体综述（约 300 字）。
+【分析要求】
 
-以 JSON 格式返回，结构如下：
+**逐相位解读**（每个约 150-250 字）：
+- 结合本命盘中该行星的星座、宫位和尊贵状态
+- 说明此行运影响的具体生活领域（事业/感情/内在成长/健康等）
+- 若为逆行周期，点明三次过境的主题演进节奏
+- 优先级高（≥10）的相位应给予更深入的解析
+
+**叠加验证（Method 3）**：
+- 检查是否有多个相位同时指向同一生活主题（如两个以上相位都涉及事业/人际/内在转化）
+- 若发现主题叠加，在整体综述中重点标注该主题"已获多重星象确认"
+- 没有叠加时，综述聚焦最高优先级的 1-2 个相位
+
+**整体行运综述**（约 300-400 字）：
+- 识别当前星象的核心主题（1-3个）
+- 指出叠加确认的主题（若有）
+- 给出具体的时间节点建议（精确日前后如何行动）
+- 语言自然流畅，避免机械罗列
+
+以 JSON 格式返回：
 {{
   "aspects": [
     {{"key": "<与上方 key 完全一致>", "analysis": "<该行运的详细解读>"}},
     ...
   ],
-  "overall": "<整体行运综述>"
+  "overall": "<整体行运综述，含主题叠加分析>"
 }}
-
-解读要求：
-- 结合本命盘中该行星的星座、宫位和尊贵状态
-- 说明此行运可能影响的具体生活领域（事业/感情/内在成长等）
-- 若为逆行周期，说明三次过境的主题演进
-- 整体综述整合所有相位，点出当前最重要的星象主题
-- 语言自然流畅，避免机械罗列术语
 """
 
     response = client.models.generate_content(
