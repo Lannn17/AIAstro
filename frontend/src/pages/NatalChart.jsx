@@ -19,9 +19,9 @@ export default function NatalChart() {
   const [savedId, setSavedId] = useState(null)  // id of currently loaded saved chart
 
   const [messages, setMessages] = useState([])
+  const [chatSummary, setChatSummary] = useState('')
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [chatMode, setChatMode] = useState('interpret')
   const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => { fetchSavedCharts() }, [])
@@ -41,6 +41,8 @@ export default function NatalChart() {
     setSavedId(null)
     setLastFormData(formData)
     setLastLocationName(locationName)
+    setMessages([])
+    setChatSummary('')
 
     try {
       const res = await fetch(`${API_BASE}/api/natal_chart`, {
@@ -114,6 +116,8 @@ export default function NatalChart() {
   async function handleLoad(summary) {
     setSavedId(summary.id)
     setError(null)
+    setMessages([])
+    setChatSummary('')
     try {
       const res = await fetch(`${API_BASE}/api/charts/${summary.id}`)
       if (!res.ok) throw new Error()
@@ -140,11 +144,32 @@ export default function NatalChart() {
     }
   }
 
+  // 滚动摘要：当消息超过8条时，把旧消息压缩成摘要并裁掉，保持 token 消耗恒定
+  async function maybeCompress(allMessages) {
+    if (allMessages.length < 8) return
+    const toSummarize = allMessages.slice(0, -4)  // 除最近4条外全部压缩
+    const keep        = allMessages.slice(-4)
+    try {
+      const res = await fetch(`${API_BASE}/api/interpret/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: toSummarize,
+          chart_name: result?.input_data?.name || '',
+        }),
+      })
+      if (!res.ok) return  // 摘要失败时静默保留原历史，不影响主流程
+      const { summary } = await res.json()
+      setChatSummary(prev => prev ? `${prev}\n${summary}` : summary)
+      setMessages(keep)
+    } catch { /* 静默失败 */ }
+  }
+
   async function handleChat(e) {
     e.preventDefault()
     if (!chatInput.trim() || !result) return
     const question = chatInput.trim()
-    const historySnapshot = messages  // capture before state update
+    const historySnapshot = messages.slice(-4)  // 最近2轮原始历史
     setChatInput('')
     setMessages(prev => [...prev, { role: 'user', text: question }])
     setChatLoading(true)
@@ -152,11 +177,21 @@ export default function NatalChart() {
       const res = await fetch(`${API_BASE}/api/interpret/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: question, chart_data: result, k: 5, mode: chatMode, history: historySnapshot }),
+        body: JSON.stringify({
+          query: question,
+          chart_data: result,
+          k: 5,
+          history: historySnapshot,
+          summary: chatSummary,
+        }),
       })
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', text: data.answer }])
+      setMessages(prev => {
+        const next = [...prev, { role: 'assistant', text: data.answer, sources: data.sources }]
+        maybeCompress(next)  // 后台异步压缩，不阻塞 UI
+        return next
+      })
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', text: `⚠ ${e.message}` }])
     } finally {
@@ -352,19 +387,6 @@ export default function NatalChart() {
                 <span style={{ color: '#c9a84c', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                   ✦ 占星对话
                 </span>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {['interpret', 'rag'].map(m => (
-                    <button key={m} onClick={() => setChatMode(m)} style={{
-                      fontSize: '0.72rem', padding: '3px 10px', borderRadius: '4px', border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: chatMode === m ? '#c9a84c' : '#1e1e40',
-                      color: chatMode === m ? '#0a0a1a' : '#6666aa',
-                      fontWeight: chatMode === m ? 600 : 400,
-                    }}>
-                      {m === 'interpret' ? 'AI解读' : 'RAG测试'}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Messages */}
@@ -390,7 +412,7 @@ export default function NatalChart() {
                     color: '#e8e8ff',
                     lineHeight: 1.75,
                   }}>
-                    {msg.role === 'user' ? msg.text : (
+                    {msg.role === 'user' ? msg.text : (<>
                       <ReactMarkdown components={{
                         h1: ({children}) => <div style={{fontSize:'1.05rem', fontWeight:700, color:'#c9a84c', marginBottom:'6px'}}>{children}</div>,
                         h2: ({children}) => <div style={{fontSize:'1rem', fontWeight:700, color:'#c9a84c', marginBottom:'5px'}}>{children}</div>,
@@ -404,7 +426,34 @@ export default function NatalChart() {
                       }}>
                         {msg.text}
                       </ReactMarkdown>
-                    )}
+                      {msg.sources?.length > 0 && (
+                        <div style={{ marginTop: '12px', borderTop: '1px solid #2a2a5a', paddingTop: '10px' }}>
+                          <div style={{ color: '#555577', fontSize: '0.72rem', marginBottom: '6px', letterSpacing: '0.05em' }}>
+                            RAG 检索来源
+                            <span style={{ marginLeft: '8px', color: '#3a3a6a' }}>
+                              ✓ 已引用 · ○ 未引用
+                            </span>
+                          </div>
+                          {msg.sources.map((s, si) => {
+                            const name = s.source.replace('[EN]', '').split('(')[0].trim()
+                            const cited = s.cited
+                            return (
+                              <div key={si} style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
+                                <span style={{ color: cited ? '#8888cc' : '#444466' }}>
+                                  <span style={{ marginRight: '5px', color: cited ? '#66cc88' : '#333355' }}>
+                                    {cited ? '✓' : '○'}
+                                  </span>
+                                  {name}
+                                </span>
+                                <span style={{ color: s.score >= 0.5 ? '#c9a84c' : '#444466', flexShrink: 0 }}>
+                                  {s.score.toFixed(3)}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>)}
                   </div>
                 ))}
                 {chatLoading && (
