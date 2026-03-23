@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from typing import Any, Dict, List
 from ..interpretations.text_search import simple_text_search
 
-# 计算结果缓存：(chart_id, date_str, orb) → active_transits list
-_CALC_CACHE: dict[tuple, list] = {}
+# 注意：计算缓存已移除（Kerykeion 本地计算足够快，每次实时计算）
+# AI 缓存在 rag.py 的 _TRANSIT_FULL_AI_CACHE 中管理
 
 router = APIRouter(
     prefix="/api",
@@ -106,10 +106,11 @@ async def interpret_transit(body: TransitInterpretRequest):
 
 class TransitsFullRequest(BaseModel):
     chart_id: int = 0
-    natal_info: Dict[str, Any]      # year/month/day/hour/minute/latitude/longitude/tz_str/house_system
+    natal_info: Dict[str, Any]        # year/month/day/hour/minute/latitude/longitude/tz_str/house_system
     natal_chart_data: Dict[str, Any]  # 完整 NatalChartResponse，供 AI 上下文
-    query_date: str                 # "YYYY-MM-DD"
+    query_date: str                   # "YYYY-MM-DD"
     language: str = "zh"
+    force_refresh: bool = False       # True 时跳过 AI 缓存，重新生成解读
 
 
 @router.post("/interpret/transits_full")
@@ -125,24 +126,21 @@ async def interpret_transits_full(body: TransitsFullRequest):
         from ..rag import analyze_active_transits_full
 
         # ── Step 1: 计算行运窗口（缓存永久有效，行星历表是确定性的）──
-        calc_key = (body.chart_id, body.query_date)
-        if calc_key not in _CALC_CACHE:
-            q_date = date_type.fromisoformat(body.query_date)
-            active = get_active_transits(
-                natal_data=body.natal_info,
-                query_date=q_date,
-                language=body.language,
-            )
-            _CALC_CACHE[calc_key] = active
-        else:
-            active = list(_CALC_CACHE[calc_key])   # shallow copy
+        # ── Step 1: 实时计算行运窗口（无缓存，确保始终反映最新代码）──
+        q_date = date_type.fromisoformat(body.query_date)
+        active = get_active_transits(
+            natal_data=body.natal_info,
+            query_date=q_date,
+            language=body.language,
+        )
 
-        # ── Step 2: AI 分析（缓存 key = chart_id + date，结果不变）──
+        # ── Step 2: AI 分析（按 chart_id+date 缓存，force_refresh 可绕过）──
         ai_result = analyze_active_transits_full(
             natal_chart=body.natal_chart_data,
             active_transits=active,
             query_date=body.query_date,
             chart_id=body.chart_id,
+            force_refresh=body.force_refresh,
         )
 
         # ── 合并：把 AI 分析注入每条行运 ──

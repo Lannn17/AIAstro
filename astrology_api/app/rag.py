@@ -621,6 +621,7 @@ def analyze_active_transits_full(
     active_transits: list[dict],
     query_date: str,
     chart_id: int = 0,
+    force_refresh: bool = False,
 ) -> dict:
     """
     一次 Gemini 调用，为所有活跃行运生成：
@@ -630,7 +631,7 @@ def analyze_active_transits_full(
     返回：{"aspects": [{"key": str, "analysis": str}, ...], "overall": str}
     """
     cache_key = (chart_id, query_date)
-    if cache_key in _TRANSIT_FULL_AI_CACHE:
+    if not force_refresh and cache_key in _TRANSIT_FULL_AI_CACHE:
         return _TRANSIT_FULL_AI_CACHE[cache_key]
 
     if not active_transits:

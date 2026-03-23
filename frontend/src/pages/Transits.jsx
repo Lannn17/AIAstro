@@ -12,7 +12,7 @@ const PLANET_SYMBOLS = {
 
 const ASPECT_ZH = {
   Conjunction: '合相', Opposition: '对分相', Square: '刑相',
-  Trine: '三分相', Sextile: '六分相', Quincunx: '梅花相',
+  Trine: '三分相', Sextile: '六分相', Quincunx: '补十二分相',
 }
 
 const ASPECT_COLOR = {
@@ -54,6 +54,7 @@ export default function Transits() {
   const [loading, setLoading]             = useState(false)
   const [error, setError]                 = useState(null)
   const [result, setResult]               = useState(null)   // {active_transits, overall}
+  const [forceRefresh, setForceRefresh]   = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/charts`)
@@ -73,11 +74,12 @@ export default function Transits() {
     } catch { setError('加载星盘失败') }
   }
 
-  async function generate() {
+  async function generate(force = false) {
     if (!selectedChart) return
     setLoading(true)
     setError(null)
     setResult(null)
+    setForceRefresh(force)
 
     const c = selectedChart
     const natalInfo = {
@@ -100,6 +102,7 @@ export default function Transits() {
           natal_chart_data: natalChartData,
           query_date:       queryDate,
           language:         'zh',
+          force_refresh:    force,
         }),
       })
       if (!r.ok) {
@@ -161,7 +164,7 @@ export default function Transits() {
             </p>
 
             <button
-              onClick={generate}
+              onClick={() => generate(false)}
               disabled={!selectedChart || loading}
               style={{
                 width: '100%', marginTop: '18px', padding: '10px',
@@ -172,8 +175,25 @@ export default function Transits() {
                 fontSize: '0.9rem', transition: 'background 0.2s',
               }}
             >
-              {loading ? '分析中…' : '生成行运分析'}
+              {loading && !forceRefresh ? '分析中…' : '生成行运分析'}
             </button>
+
+            {result && (
+              <button
+                onClick={() => generate(true)}
+                disabled={loading}
+                style={{
+                  width: '100%', marginTop: '8px', padding: '8px',
+                  background: 'transparent',
+                  color: loading ? '#3a3a5a' : '#8888aa',
+                  border: '1px solid #2a2a5a', borderRadius: '8px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {loading && forceRefresh ? '重新生成中…' : '↺ 重新生成 AI 解读'}
+              </button>
+            )}
 
             {error && (
               <p style={{ color: '#ff6666', fontSize: '0.8rem', marginTop: '10px' }}>{error}</p>
