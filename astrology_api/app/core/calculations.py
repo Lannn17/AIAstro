@@ -91,8 +91,13 @@ def get_planet_data(subject: AstrologicalSubject, language: LanguageType = "pt")
     # Garantir que language não é None
     language = language or "pt"
     
+    # 只保留平均节点/黑月，过滤掉真实（振荡）版本
+    _SKIP_ATTRS = {'true_node', 'true_lilith'}
+
     for planet_name in subject.planets_names_list:
         attr = planet_name.lower()
+        if attr in _SKIP_ATTRS:
+            continue
         if not hasattr(subject, attr):
             continue
         planet = getattr(subject, attr)

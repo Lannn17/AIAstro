@@ -26,6 +26,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "Nodo Lunar Verdadeiro",
         "Chiron": "Quíron",
         "Lilith": "Lilith",
+        "Mean_Lilith": "Lilith Média",
         "Ascendant": "Ascendente",
         "Midheaven": "Meio-do-Céu"
     },
@@ -44,6 +45,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "Nodo Lunar Verdadeiro",
         "Chiron": "Quirón",
         "Lilith": "Lilith",
+        "Mean_Lilith": "Lilith Media",
         "Ascendant": "Ascendente",
         "Midheaven": "Medio Cielo"
     },
@@ -62,6 +64,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "Nœud Lunaire Vrai",
         "Chiron": "Chiron",
         "Lilith": "Lilith",
+        "Mean_Lilith": "Lilith Moyenne",
         "Ascendant": "Ascendant",
         "Midheaven": "Milieu du Ciel"
     },
@@ -80,6 +83,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "Nodo Lunare Vero",
         "Chiron": "Chirone",
         "Lilith": "Lilith",
+        "Mean_Lilith": "Lilith Media",
         "Ascendant": "Ascendente",
         "Midheaven": "Medio Cielo"
     },
@@ -98,6 +102,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "Wahrer Mondknoten",
         "Chiron": "Chiron",
         "Lilith": "Lilith",
+        "Mean_Lilith": "Mittlere Lilith",
         "Ascendant": "Aszendent",
         "Midheaven": "Medium Coeli"
     },
@@ -115,7 +120,8 @@ PLANETS_TRANSLATION = {
         "Mean_Node": "北交点",
         "True_Node": "北交点",
         "Chiron": "凯龙星",
-        "Lilith": "黑月莉莉斯",
+        "Lilith": "黑月莉莉丝",
+        "Mean_Lilith": "黑月莉莉丝",
         "Ascendant": "上升点",
         "Midheaven": "天顶"
     },
@@ -134,6 +140,7 @@ PLANETS_TRANSLATION = {
         "True_Node": "ノースノード",
         "Chiron": "カイロン",
         "Lilith": "リリス",
+        "Mean_Lilith": "平均リリス",
         "Ascendant": "アセンダント",
         "Midheaven": "MC"
     }
