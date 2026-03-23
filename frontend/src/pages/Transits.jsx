@@ -34,6 +34,18 @@ function planetKey(name) {
   return map[name] || name.toLowerCase().replace(' ', '_')
 }
 
+const ASPECT_ZH = {
+  Conjunction:    '合相',
+  Opposition:     '对分相',
+  Square:         '刑相',
+  Trine:          '三分相',
+  Sextile:        '六分相',
+  Quincunx:       '梅花相',
+  Semisquare:     '半刑相',
+  Sesquiquadrate: '倍半刑相',
+  Semisextile:    '十二分相',
+}
+
 const ASPECT_COLOR = {
   Conjunction: '#ffffff',
   Opposition:  '#ff6666',
@@ -350,7 +362,8 @@ export default function Transits() {
                         const isTP1 = a.p1_owner === 'transit'
                         const tName  = isTP1 ? a.p1_name : a.p2_name
                         const nName  = isTP1 ? a.p2_name : a.p1_name
-                        const aspect = a.aspect_original || a.aspect
+                        const aspect    = a.aspect_original || a.aspect
+                        const aspectZh  = ASPECT_ZH[aspect] || aspect
                         const tSym   = PLANET_SYMBOLS[planetKey(tName)] || ''
                         const nSym   = PLANET_SYMBOLS[planetKey(nName)] || ''
                         const color  = ASPECT_COLOR[aspect] || '#d0d0e0'
@@ -367,7 +380,7 @@ export default function Transits() {
                             <td style={td}>
                               <span style={{ color: '#c9a84c', marginRight: '4px' }}>{tSym}</span>{tName}
                             </td>
-                            <td style={{ ...td, textAlign: 'center', color, fontWeight: 600 }}>{aspect}</td>
+                            <td style={{ ...td, textAlign: 'center', color, fontWeight: 600 }}>{aspectZh}</td>
                             <td style={{ ...td, color: '#8888aa' }}>
                               <span style={{ marginRight: '4px' }}>{nSym}</span>{nName}
                             </td>
