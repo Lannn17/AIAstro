@@ -6,8 +6,6 @@ import Synastry from './pages/Synastry'
 import Progressions from './pages/Progressions'
 import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
-import Interpretations from './pages/Interpretations'
-
 const NAV_ITEMS = [
   { path: '/',              label: '星盘' },
   { path: '/transits',     label: '行运' },
@@ -15,7 +13,6 @@ const NAV_ITEMS = [
   { path: '/progressions', label: '推运' },
   { path: '/solar-return', label: '太阳回归' },
   { path: '/directions',   label: '方向法' },
-  { path: '/interpretations', label: '解释' },
 ]
 
 const navLinkStyle = ({ isActive }) => ({
@@ -78,7 +75,6 @@ export default function App() {
             <Route path="/progressions"  element={<Progressions />} />
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
-            <Route path="/interpretations" element={<Interpretations />} />
           </Routes>
         </main>
 
