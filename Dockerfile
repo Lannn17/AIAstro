@@ -18,9 +18,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install CPU-only torch first to prevent sentence-transformers from pulling CUDA (~2GB)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining Python dependencies
 COPY astrology_api/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download embedding model weights into the image (avoids cold-start download)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
 # Copy backend source
 COPY astrology_api/ ./
