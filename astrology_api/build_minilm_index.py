@@ -1,17 +1,17 @@
 """
-build_fastembed_index.py — 用 FastEmbed multilingual-e5-small 重建 local_index。
+build_minilm_index.py — 用 paraphrase-multilingual-MiniLM-L12-v2 构建本地 FAISS 索引。
 
 支持中文查询匹配英文/葡文书籍内容。
-依赖：fastembed + faiss-cpu（均已在 requirements.txt 中）
+依赖：sentence-transformers + faiss-cpu（均已在 requirements.txt 中）
 
 输出：
-  data/local_index/index.faiss
-  data/local_index/chunks.json
-  data/local_index/model_info.json  (记录使用的模型)
+  data/minilm_index/index.faiss
+  data/minilm_index/chunks.json
+  data/minilm_index/model_info.json
 
 用法：
     cd astrology_api
-    python build_fastembed_index.py
+    python build_minilm_index.py
 """
 
 import json
@@ -21,7 +21,7 @@ import faiss
 from sentence_transformers import SentenceTransformer
 
 TEXTS_DIR  = pathlib.Path("data/processed_texts")
-INDEX_DIR  = pathlib.Path("data/local_index")
+INDEX_DIR  = pathlib.Path("data/minilm_index")
 CHUNK_SIZE = 600
 OVERLAP    = 100
 SKIP       = {"exemplo_interpretacoes.txt"}

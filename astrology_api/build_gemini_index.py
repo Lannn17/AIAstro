@@ -1,15 +1,15 @@
 """
-build_demo_index.py — 用3本书构建 demo FAISS 索引，支持断点续跑。
+build_gemini_index.py — 把 data/processed_texts/ 里的书切块、向量化，存成 FAISS 索引。
+支持断点续跑：中断后重新运行会从上次进度继续。
 
-选书：
-  1. KeyWordsforAstrology          — 行星/星座关键词
-  2. TheArtofChartInterpretation   — 本命盘综合解读
-  3. AspectsandPersonality         — 相位与性格
+用法：
+    cd astrology_api
+    python build_gemini_index.py
 
 输出：
-  data/demo_index/index.faiss
-  data/demo_index/chunks.json
-  data/demo_index/progress.json   (运行中，完成后自动删除)
+    data/gemini_index/index.faiss   — 向量索引
+    data/gemini_index/chunks.json   — 文本块 + 来源元数据
+    data/gemini_index/progress.json — 进度存档（断点续跑用）
 """
 
 import os
@@ -26,17 +26,11 @@ load_dotenv()
 
 # ── 配置 ────────────────────────────────────────────────────────
 TEXTS_DIR   = pathlib.Path("data/processed_texts")
-INDEX_DIR   = pathlib.Path("data/demo_index")
+INDEX_DIR   = pathlib.Path("data/gemini_index")
 CHUNK_SIZE  = 600
 OVERLAP     = 100
 BATCH_SIZE  = 50
-EMBED_MODEL = "gemini-embedding-001"
-
-DEMO_FILES = [
-    "[EN]KeyWordsforAstrology(HajoBanzhaf,AnnaHaebler).txt",
-    "[EN]TheArtofChartInterpretation(3rdedrevised)(TracyMarks).txt",
-    "[EN]AspectsandPersonality(KarenHamaker-Zondag).txt",
-]
+EMBED_MODEL = "gemini-embedding-2-preview"
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
@@ -65,24 +59,28 @@ def chunk_text(text: str, source: str) -> list[dict]:
     return chunks
 
 
-def load_demo_chunks() -> list[dict]:
+def load_all_chunks() -> list[dict]:
     all_chunks = []
-    for filename in DEMO_FILES:
-        f = TEXTS_DIR / filename
-        if not f.exists():
-            print(f"  [警告] 文件不存在，跳过: {filename}")
+    files = sorted(TEXTS_DIR.glob("*.txt"))
+    skip = {"exemplo_interpretacoes.txt"}
+    print(f"找到 {len(files)} 个文本文件")
+    for f in files:
+        if f.name in skip:
             continue
-        text = f.read_text(encoding="utf-8", errors="ignore")
-        chunks = chunk_text(text, filename)
-        print(f"  {filename[:50]}... → {len(chunks)} 块")
-        all_chunks.extend(chunks)
-    print(f"Demo 总计 {len(all_chunks)} 块")
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            chunks = chunk_text(text, f.name)
+            all_chunks.extend(chunks)
+        except Exception as e:
+            print(f"  跳过 {f.name}: {e}")
+    print(f"总计 {len(all_chunks)} 块")
     return all_chunks
 
 
 # ── 嵌入（带重试 + 断点续跑）────────────────────────────────────
 
 def embed_batch_with_retry(texts: list[str]) -> list[list[float]]:
+    """调用 Gemini 嵌入，失败等 60 秒后重试一次（避免 SDK 内部重试叠加消耗 RPD）。"""
     for attempt in range(2):
         try:
             response = client.models.embed_content(
@@ -93,7 +91,7 @@ def embed_batch_with_retry(texts: list[str]) -> list[list[float]]:
             return [e.values for e in response.embeddings]
         except Exception as e:
             if attempt == 0:
-                print(f"\n  请求失败 ({e.__class__.__name__})，等待 60 秒后重试...")
+                print(f"\n  ⏳ 请求失败，等待 60 秒后重试...")
                 time.sleep(60)
             else:
                 raise
@@ -118,9 +116,10 @@ def embed_all(chunks: list[dict]) -> np.ndarray:
     texts = [c["text"] for c in chunks]
     total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
 
+    # 加载已有向量
     if start_batch > 0 and VECTORS_FILE.exists():
         all_vectors = list(np.load(str(VECTORS_FILE)))
-        print(f"续跑：已完成 {start_batch}/{total_batches} 批，跳过 {len(all_vectors)} 块")
+        print(f"▶ 续跑：已完成 {start_batch}/{total_batches} 批，跳过 {len(all_vectors)} 块")
     else:
         all_vectors = []
 
@@ -131,13 +130,15 @@ def embed_all(chunks: list[dict]) -> np.ndarray:
 
         vectors = embed_batch_with_retry(batch)
         all_vectors.extend(vectors)
-        print("ok")
+        print("✓")
 
+        # 每批保存一次进度
         np.save(str(VECTORS_FILE), np.array(all_vectors, dtype=np.float32))
         save_progress(batch_idx + 1, len(all_vectors))
 
+        # 速率控制：每批后等 2 秒（≈30 RPM，远低于 100 RPM 上限）
         if batch_idx + 1 < total_batches:
-            time.sleep(1)
+            time.sleep(2)
 
     return np.array(all_vectors, dtype=np.float32)
 
@@ -156,32 +157,34 @@ def build_faiss(vectors: np.ndarray) -> faiss.Index:
 # ── 主流程 ───────────────────────────────────────────────────────
 
 def main():
-    print("=== Step 1: 加载并分块 3 本 demo 书 ===")
-    chunks = load_demo_chunks()
+    print("=== 第1步：加载并分块文本 ===")
+    chunks = load_all_chunks()
 
+    # 保存 chunks（只在第一次或块数变化时重写）
     if not CHUNKS_FILE.exists():
         with open(CHUNKS_FILE, "w", encoding="utf-8") as f:
             json.dump(chunks, f, ensure_ascii=False)
-        print(f"chunks.json 已保存 ({len(chunks)} 块)")
+        print(f"chunks.json 已保存")
 
+    print("\n=== 第2步：生成嵌入向量（断点续跑）===")
     total_batches = (len(chunks) + BATCH_SIZE - 1) // BATCH_SIZE
-    print(f"\n=== Step 2: 生成嵌入向量（共 {total_batches} 批）===")
+    est_minutes = total_batches * 32 / 60
+    print(f"预计总时间：约 {est_minutes:.0f} 分钟（速率限制下）\n")
 
     vectors = embed_all(chunks)
 
-    print("\n=== Step 3: 构建并保存 FAISS 索引 ===")
+    print("\n=== 第3步：构建并保存 FAISS 索引 ===")
     index = build_faiss(vectors)
     faiss.write_index(index, str(INDEX_FILE))
     print(f"已保存 {INDEX_FILE}")
 
+    # 清理临时文件
     if VECTORS_FILE.exists():
         VECTORS_FILE.unlink()
     if PROGRESS_FILE.exists():
         PROGRESS_FILE.unlink()
 
-    print("\nDemo 索引构建完成！")
-    print(f"  索引文件: {INDEX_FILE}")
-    print(f"  Chunks:   {CHUNKS_FILE}")
+    print("\n✓ 全部完成！")
 
 
 if __name__ == "__main__":
