@@ -1,7 +1,11 @@
+from datetime import date as date_type
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import Any, Dict, List
 from ..interpretations.text_search import simple_text_search
+
+# 计算结果缓存：(chart_id, date_str, orb) → active_transits list
+_CALC_CACHE: dict[tuple, list] = {}
 
 router = APIRouter(
     prefix="/api",
@@ -98,6 +102,65 @@ async def interpret_transit(body: TransitInterpretRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transit interpretation error: {e}")
+
+
+class TransitsFullRequest(BaseModel):
+    chart_id: int = 0
+    natal_info: Dict[str, Any]   # year/month/day/hour/minute/latitude/longitude/tz_str/house_system
+    natal_chart_data: Dict[str, Any]   # 完整 NatalChartResponse，供 AI 上下文
+    query_date: str              # "YYYY-MM-DD"
+    orb: float = 1.0
+    language: str = "zh"
+
+
+@router.post("/interpret/transits_full")
+async def interpret_transits_full(body: TransitsFullRequest):
+    """
+    活跃行运完整分析：
+    1. 计算当天所有容许度内的行运相位及时间窗口（有缓存）
+    2. 单次 Gemini 调用生成逐相位解读 + 整体报告（有缓存）
+    返回：{active_transits, overall}，其中每条 transit 包含 analysis 字段。
+    """
+    try:
+        from ..core.transit_windows import get_active_transits
+        from ..rag import analyze_active_transits_full
+
+        # ── Step 1: 计算行运窗口（缓存永久有效，行星历表是确定性的）──
+        calc_key = (body.chart_id, body.query_date, round(body.orb, 2))
+        if calc_key not in _CALC_CACHE:
+            q_date = date_type.fromisoformat(body.query_date)
+            active = get_active_transits(
+                natal_data=body.natal_info,
+                query_date=q_date,
+                orb_threshold=body.orb,
+                language=body.language,
+            )
+            _CALC_CACHE[calc_key] = active
+        else:
+            active = list(_CALC_CACHE[calc_key])   # shallow copy
+
+        # ── Step 2: AI 分析（缓存 key = chart_id + date，结果不变）──
+        ai_result = analyze_active_transits_full(
+            natal_chart=body.natal_chart_data,
+            active_transits=active,
+            query_date=body.query_date,
+            chart_id=body.chart_id,
+        )
+
+        # ── 合并：把 AI 分析注入每条行运 ──
+        analysis_map = {a["key"]: a["analysis"] for a in ai_result.get("aspects", [])}
+        for t in active:
+            t["analysis"] = analysis_map.get(t["key"], "")
+
+        return {
+            "active_transits": active,
+            "overall": ai_result.get("overall", ""),
+        }
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transit full analysis error: {e}")
 
 
 @router.post("/interpret/summarize")

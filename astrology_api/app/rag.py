@@ -608,3 +608,97 @@ def analyze_transits(
         "sources":    sources,
         "index_used": _index_source,
     }
+
+
+# ── 活跃行运完整分析（单次 Gemini 调用）────────────────────────────
+
+# 缓存：(chart_id, date_str) → {"aspects": [...], "overall": "..."}
+_TRANSIT_FULL_AI_CACHE: dict[tuple, dict] = {}
+
+
+def analyze_active_transits_full(
+    natal_chart: dict,
+    active_transits: list[dict],
+    query_date: str,
+    chart_id: int = 0,
+) -> dict:
+    """
+    一次 Gemini 调用，为所有活跃行运生成：
+    - 每个相位的独立解读（per-aspect analysis）
+    - 整体行运综述（overall report）
+
+    返回：{"aspects": [{"key": str, "analysis": str}, ...], "overall": str}
+    """
+    cache_key = (chart_id, query_date)
+    if cache_key in _TRANSIT_FULL_AI_CACHE:
+        return _TRANSIT_FULL_AI_CACHE[cache_key]
+
+    if not active_transits:
+        return {"aspects": [], "overall": "当前没有在 1° 容许度内的活跃行运相位。"}
+
+    chart_summary = format_chart_summary(natal_chart, max_aspects=10)
+
+    # 构建行运列表说明
+    transit_lines = []
+    for i, t in enumerate(active_transits, 1):
+        orb_dir = "入相" if t["applying"] else "出相"
+        retro_note = f"（含逆行·{t['pass_count']} 次精确）" if t["retrograde_cycle"] else ""
+        transit_lines.append(
+            f"{i}. key={t['key']}\n"
+            f"   行运 {t['transit_planet_zh']}（{t['transit_planet']}）"
+            f" {t['aspect']} "
+            f"本命 {t['natal_planet_zh']}（{t['natal_planet']}）\n"
+            f"   容许度：{t['current_orb']}°，{orb_dir}\n"
+            f"   时段：{t['start_date']} 至 {t['end_date']}{retro_note}，精确日：{t['exact_date']}"
+        )
+
+    transit_block = "\n\n".join(transit_lines)
+
+    prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
+
+{chart_summary}
+
+━━━ 当前活跃行运（{query_date}，容许度 ≤ 1°） ━━━
+
+{transit_block}
+
+请为每个行运提供深入的中文解读（每段约 150-250 字），并在最后给出一段整体综述（约 300 字）。
+
+以 JSON 格式返回，结构如下：
+{{
+  "aspects": [
+    {{"key": "<与上方 key 完全一致>", "analysis": "<该行运的详细解读>"}},
+    ...
+  ],
+  "overall": "<整体行运综述>"
+}}
+
+解读要求：
+- 结合本命盘中该行星的星座、宫位和尊贵状态
+- 说明此行运可能影响的具体生活领域（事业/感情/内在成长等）
+- 若为逆行周期，说明三次过境的主题演进
+- 整体综述整合所有相位，点出当前最重要的星象主题
+- 语言自然流畅，避免机械罗列术语
+"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.5,
+        ),
+    )
+
+    finish = response.candidates[0].finish_reason if response.candidates else None
+    if finish and str(finish) != "STOP":
+        print(f"[RAG] analyze_active_transits_full finish_reason={finish}")
+
+    try:
+        result = json.loads(response.text)
+    except Exception as e:
+        print(f"[RAG] JSON parse error: {e}")
+        result = {"aspects": [], "overall": response.text}
+
+    _TRANSIT_FULL_AI_CACHE[cache_key] = result
+    return result

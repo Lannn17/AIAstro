@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
-const VALID_LANGS = ['pt', 'en', 'es', 'zh', 'ja']
+// ── 符号表 ──────────────────────────────────────────────────────
 
 const PLANET_SYMBOLS = {
   sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
@@ -10,23 +10,21 @@ const PLANET_SYMBOLS = {
   mean_node: '☊', true_node: '☊', chiron: '⚷', mean_lilith: '⚸',
 }
 
-const SIGN_SYMBOLS = {
-  '白羊座': '♈', '金牛座': '♉', '双子座': '♊', '巨蟹座': '♋',
-  '狮子座': '♌', '处女座': '♍', '天秤座': '♎', '天蝎座': '♏',
-  '射手座': '♐', '摩羯座': '♑', '水瓶座': '♒', '双鱼座': '♓',
-  'Aries': '♈', 'Taurus': '♉', 'Gemini': '♊', 'Cancer': '♋',
-  'Leo': '♌', 'Virgo': '♍', 'Libra': '♎', 'Scorpio': '♏',
-  'Sagittarius': '♐', 'Capricorn': '♑', 'Aquarius': '♒', 'Pisces': '♓',
+const ASPECT_ZH = {
+  Conjunction: '合相', Opposition: '对分相', Square: '刑相',
+  Trine: '三分相', Sextile: '六分相', Quincunx: '梅花相',
 }
 
-// 从翻译后的行星名推断 key（用于查符号）
+const ASPECT_COLOR = {
+  Conjunction: '#ffffff', Opposition: '#ff6666', Square: '#ff9944',
+  Trine: '#66cc88', Sextile: '#44aaff', Quincunx: '#bb88ff',
+}
+
 function planetKey(name) {
   const map = {
     '太阳': 'sun', '月亮': 'moon', '水星': 'mercury', '金星': 'venus',
     '火星': 'mars', '木星': 'jupiter', '土星': 'saturn', '天王星': 'uranus',
     '海王星': 'neptune', '冥王星': 'pluto', '北交点': 'mean_node',
-    '真北交': 'true_node', '凯龙': 'chiron', '黑月': 'mean_lilith',
-    // English fallback
     'Sun': 'sun', 'Moon': 'moon', 'Mercury': 'mercury', 'Venus': 'venus',
     'Mars': 'mars', 'Jupiter': 'jupiter', 'Saturn': 'saturn',
     'Uranus': 'uranus', 'Neptune': 'neptune', 'Pluto': 'pluto',
@@ -34,56 +32,28 @@ function planetKey(name) {
   return map[name] || name.toLowerCase().replace(' ', '_')
 }
 
-const ASPECT_ZH = {
-  Conjunction:    '合相',
-  Opposition:     '对分相',
-  Square:         '刑相',
-  Trine:          '三分相',
-  Sextile:        '六分相',
-  Quincunx:       '梅花相',
-  Semisquare:     '半刑相',
-  Sesquiquadrate: '倍半刑相',
-  Semisextile:    '十二分相',
-}
-
-const ASPECT_COLOR = {
-  Conjunction: '#ffffff',
-  Opposition:  '#ff6666',
-  Square:      '#ff9944',
-  Trine:       '#66cc88',
-  Sextile:     '#44aaff',
-  Quincunx:    '#bb88ff',
-  Semisquare:  '#ffaa44',
-  Sesquiquadrate: '#ff8844',
-}
+// ── 样式常量 ─────────────────────────────────────────────────────
 
 const inputStyle = {
-  width: '100%',
-  background: '#0e0e24',
-  border: '1px solid #2a2a5a',
-  color: '#d0d0e0',
-  borderRadius: '6px',
-  padding: '8px 10px',
-  fontSize: '0.85rem',
-  boxSizing: 'border-box',
+  width: '100%', background: '#0e0e24', border: '1px solid #2a2a5a',
+  color: '#d0d0e0', borderRadius: '6px', padding: '8px 10px',
+  fontSize: '0.85rem', boxSizing: 'border-box',
 }
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
+// ── 组件 ─────────────────────────────────────────────────────────
+
 export default function Transits() {
   const [savedCharts, setSavedCharts]     = useState([])
   const [selectedId, setSelectedId]       = useState('')
   const [selectedChart, setSelectedChart] = useState(null)
-  const [transitDate, setTransitDate]     = useState(todayStr)
-  const [transitTime, setTransitTime]     = useState('12:00')
-  const [result, setResult]               = useState(null)
+  const [queryDate, setQueryDate]         = useState(todayStr)
   const [loading, setLoading]             = useState(false)
   const [error, setError]                 = useState(null)
-  const [interpretation, setInterpretation] = useState(null)
-  const [interpretLoading, setInterpretLoading] = useState(false)
-  const [interpretError, setInterpretError] = useState(null)
+  const [result, setResult]               = useState(null)   // {active_transits, overall}
 
   useEffect(() => {
     fetch(`${API_BASE}/api/charts`)
@@ -96,8 +66,6 @@ export default function Transits() {
     setSelectedId(id)
     setResult(null)
     setError(null)
-    setInterpretation(null)
-    setInterpretError(null)
     if (!id) { setSelectedChart(null); return }
     try {
       const r = await fetch(`${API_BASE}/api/charts/${id}`)
@@ -105,45 +73,40 @@ export default function Transits() {
     } catch { setError('加载星盘失败') }
   }
 
-  async function calculate() {
+  async function generate() {
     if (!selectedChart) return
     setLoading(true)
     setError(null)
     setResult(null)
 
-    const [year, month, day] = transitDate.split('-').map(Number)
-    const [hour, minute]     = transitTime.split(':').map(Number)
-    const lang = VALID_LANGS.includes(selectedChart.language) ? selectedChart.language : 'zh'
+    const c = selectedChart
+    const natalInfo = {
+      year: c.birth_year, month: c.birth_month, day: c.birth_day,
+      hour: c.birth_hour, minute: c.birth_minute,
+      latitude: c.latitude, longitude: c.longitude,
+      tz_str: c.tz_str, house_system: c.house_system,
+    }
+    const natalChartData = c.chart_data
+      ? (typeof c.chart_data === 'string' ? JSON.parse(c.chart_data) : c.chart_data)
+      : {}
 
     try {
-      const r = await fetch(`${API_BASE}/api/transits_to_natal`, {
+      const r = await fetch(`${API_BASE}/api/interpret/transits_full`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          natal: {
-            name:         selectedChart.name || '',
-            year:         selectedChart.birth_year,
-            month:        selectedChart.birth_month,
-            day:          selectedChart.birth_day,
-            hour:         selectedChart.birth_hour,
-            minute:       selectedChart.birth_minute,
-            latitude:     selectedChart.latitude,
-            longitude:    selectedChart.longitude,
-            tz_str:       selectedChart.tz_str,
-            house_system: selectedChart.house_system,
-            language:     lang,
-          },
-          transit: {
-            year, month, day, hour, minute,
-            latitude:     selectedChart.latitude,
-            longitude:    selectedChart.longitude,
-            tz_str:       selectedChart.tz_str,
-            house_system: selectedChart.house_system,
-            language:     lang,
-          },
+          chart_id:        Number(selectedId),
+          natal_info:      natalInfo,
+          natal_chart_data: natalChartData,
+          query_date:      queryDate,
+          orb:             1.0,
+          language:        'zh',
         }),
       })
-      if (!r.ok) throw new Error(`错误 ${r.status}`)
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.detail || `错误 ${r.status}`)
+      }
       setResult(await r.json())
     } catch (e) {
       setError(e.message)
@@ -151,57 +114,6 @@ export default function Transits() {
       setLoading(false)
     }
   }
-
-  async function interpretTransits() {
-    if (!result || !selectedChart) return
-    setInterpretLoading(true)
-    setInterpretError(null)
-    setInterpretation(null)
-
-    // 使用保存的本命盘 chart_data 或从 result 中重建
-    const natalChartData = selectedChart.chart_data
-      ? (typeof selectedChart.chart_data === 'string'
-          ? JSON.parse(selectedChart.chart_data)
-          : selectedChart.chart_data)
-      : {}
-
-    const transitOnlyAspects = result.aspects.filter(a =>
-      (a.p1_owner === 'transit' && a.p2_owner === 'natal') ||
-      (a.p1_owner === 'natal'   && a.p2_owner === 'transit')
-    ).sort((a, b) => a.orbit - b.orbit)
-
-    try {
-      const r = await fetch(`${API_BASE}/api/interpret/transit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          natal_chart:      natalChartData,
-          transit_aspects:  transitOnlyAspects,
-          transit_planets:  result.transit_planets,
-          transit_date:     `${transitDate} ${transitTime}`,
-        }),
-      })
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}))
-        throw new Error(err.detail || `错误 ${r.status}`)
-      }
-      setInterpretation(await r.json())
-    } catch (e) {
-      setInterpretError(e.message)
-    } finally {
-      setInterpretLoading(false)
-    }
-  }
-
-  // 过滤行运-本命相位，按容许度排序
-  const aspects = result
-    ? result.aspects
-        .filter(a =>
-          (a.p1_owner === 'transit' && a.p2_owner === 'natal') ||
-          (a.p1_owner === 'natal'   && a.p2_owner === 'transit')
-        )
-        .sort((a, b) => a.orbit - b.orbit)
-    : []
 
   return (
     <div>
@@ -211,13 +123,14 @@ export default function Transits() {
           ♂ 行运
         </h1>
         <p style={{ color: '#8888aa', fontSize: '0.8rem', marginTop: '4px' }}>
-          计算指定日期的行星对本命盘的影响
+          查看指定日期的活跃行运相位及 AI 解读
         </p>
       </div>
 
       <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+
         {/* ── 左栏：控制面板 ── */}
-        <div style={{ width: '260px', flexShrink: 0 }}>
+        <div style={{ width: '240px', flexShrink: 0 }}>
           <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px' }}>
 
             <Label>选择本命盘</Label>
@@ -237,44 +150,30 @@ export default function Transits() {
               </p>
             )}
 
-            <Label style={{ marginTop: '18px' }}>行运日期</Label>
+            <Label style={{ marginTop: '18px' }}>查询日期</Label>
             <input
               type="date"
-              value={transitDate}
-              onChange={e => setTransitDate(e.target.value)}
+              value={queryDate}
+              onChange={e => setQueryDate(e.target.value)}
               style={inputStyle}
             />
-
-            <Label style={{ marginTop: '12px' }}>行运时间</Label>
-            <input
-              type="time"
-              value={transitTime}
-              onChange={e => setTransitTime(e.target.value)}
-              style={inputStyle}
-            />
-
-            <p style={{ color: '#555577', fontSize: '0.75rem', marginTop: '8px' }}>
-              使用出生地点与时区
+            <p style={{ color: '#555577', fontSize: '0.75rem', marginTop: '6px' }}>
+              默认今天 · 容许度 1°
             </p>
 
             <button
-              onClick={calculate}
+              onClick={generate}
               disabled={!selectedChart || loading}
               style={{
-                width: '100%',
-                marginTop: '18px',
-                padding: '10px',
+                width: '100%', marginTop: '18px', padding: '10px',
                 background: selectedChart && !loading ? '#c9a84c' : '#1e1e3a',
-                color:  selectedChart && !loading ? '#0a0a18' : '#3a3a5a',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: 700,
+                color: selectedChart && !loading ? '#0a0a18' : '#3a3a5a',
+                border: 'none', borderRadius: '8px', fontWeight: 700,
                 cursor: selectedChart && !loading ? 'pointer' : 'not-allowed',
-                fontSize: '0.9rem',
-                transition: 'background 0.2s',
+                fontSize: '0.9rem', transition: 'background 0.2s',
               }}
             >
-              {loading ? '计算中…' : '计算行运'}
+              {loading ? '分析中…' : '生成行运分析'}
             </button>
 
             {error && (
@@ -285,189 +184,72 @@ export default function Transits() {
 
         {/* ── 右栏：结果 ── */}
         <div style={{ flex: 1, minWidth: 0 }}>
+
+          {/* 空态 */}
           {!result && !loading && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               height: '320px', background: '#12122a',
               border: '1px dashed #2a2a5a', borderRadius: '12px', color: '#3a3a6a',
             }}>
-              选择本命盘并设定日期后点击「计算行运」
+              选择本命盘并点击「生成行运分析」
             </div>
           )}
 
+          {/* 加载态 */}
           {loading && (
             <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              height: '320px', color: '#8888aa',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', height: '320px', gap: '16px',
             }}>
-              计算中…
+              <span style={{ fontSize: '2rem', animation: 'spin 1.5s linear infinite', display: 'inline-block' }}>◌</span>
+              <div style={{ color: '#8888aa', fontSize: '0.9rem', textAlign: 'center', lineHeight: '1.7' }}>
+                正在计算行运窗口并生成 AI 解读…<br />
+                <span style={{ color: '#555577', fontSize: '0.8rem' }}>首次请求约需 20-40 秒，相同日期再次查询将立即返回</span>
+              </div>
             </div>
           )}
 
-          {result && (
+          {/* 结果 */}
+          {result && !loading && (
             <>
-              {/* 行运行星位置 */}
-              <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-                <div style={{ color: '#c9a84c', fontSize: '0.9rem', fontWeight: 600, marginBottom: '14px' }}>
-                  行运行星位置
-                  <span style={{ color: '#555577', fontSize: '0.75rem', fontWeight: 400, marginLeft: '10px' }}>
-                    {transitDate} {transitTime}
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
-                  {Object.values(result.transit_planets).map(p => {
-                    const name = p.name
-                    const sign = p.sign
-                    const pSym = PLANET_SYMBOLS[planetKey(name)] || ''
-                    const sSym = SIGN_SYMBOLS[sign] || ''
-                    return (
-                      <div key={name} style={{ background: '#0e0e24', borderRadius: '8px', padding: '8px 12px' }}>
-                        <span style={{ color: '#c9a84c', fontWeight: 600, fontSize: '0.9rem', marginRight: '4px' }}>{pSym}</span>
-                        <span style={{ color: '#c9a84c', fontWeight: 600, fontSize: '0.85rem' }}>{name}</span>
-                        <span style={{ color: '#8888aa', fontSize: '0.85rem', marginLeft: '8px', marginRight: '2px' }}>{sSym}</span>
-                        <span style={{ color: '#d0d0e0', fontSize: '0.85rem' }}>{sign}</span>
-                        {p.retrograde && (
-                          <span style={{ color: '#ff8888', fontSize: '0.75rem', marginLeft: '6px' }}>℞</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+              {/* 摘要行 */}
+              <div style={{ color: '#555577', fontSize: '0.8rem', marginBottom: '16px' }}>
+                {queryDate} · 发现 {result.active_transits.length} 个活跃相位（容许度 ≤ 1°）
               </div>
 
-              {/* 行运-本命相位 */}
-              <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px' }}>
-                <div style={{ color: '#c9a84c', fontSize: '0.9rem', fontWeight: 600, marginBottom: '14px' }}>
-                  行运-本命相位
-                  <span style={{ color: '#555577', fontSize: '0.75rem', fontWeight: 400, marginLeft: '10px' }}>
-                    共 {aspects.length} 个
-                  </span>
+              {result.active_transits.length === 0 && (
+                <div style={{
+                  background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px',
+                  padding: '40px', textAlign: 'center', color: '#555577',
+                }}>
+                  当前日期没有在 1° 容许度内的行运相位
                 </div>
+              )}
 
-                {aspects.length === 0 ? (
-                  <p style={{ color: '#555577', fontSize: '0.85rem' }}>无相位数据</p>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr style={{ color: '#555577', borderBottom: '1px solid #2a2a5a' }}>
-                        <th style={th}>行运行星</th>
-                        <th style={{ ...th, textAlign: 'center' }}>相位</th>
-                        <th style={th}>本命行星</th>
-                        <th style={{ ...th, textAlign: 'right' }}>容许度</th>
-                        <th style={{ ...th, textAlign: 'right' }}>状态</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aspects.map((a, i) => {
-                        const isTP1 = a.p1_owner === 'transit'
-                        const tName  = isTP1 ? a.p1_name : a.p2_name
-                        const nName  = isTP1 ? a.p2_name : a.p1_name
-                        const aspect    = a.aspect_original || a.aspect
-                        const aspectZh  = ASPECT_ZH[aspect] ?? (() => {
-                          console.warn(`[Transits] 未映射的相位名: "${aspect}" — 请在 ASPECT_ZH 中添加中文翻译`)
-                          return aspect
-                        })()
-                        const tSym   = PLANET_SYMBOLS[planetKey(tName)] || ''
-                        const nSym   = PLANET_SYMBOLS[planetKey(nName)] || ''
-                        const color  = ASPECT_COLOR[aspect] || '#d0d0e0'
-                        const tight  = a.orbit <= 2
+              {/* 逐相位卡片 */}
+              {result.active_transits.map(t => (
+                <TransitCard key={t.key} transit={t} />
+              ))}
 
-                        return (
-                          <tr
-                            key={i}
-                            style={{
-                              borderBottom: '1px solid #1a1a3a',
-                              background: tight ? 'rgba(201,168,76,0.06)' : 'transparent',
-                            }}
-                          >
-                            <td style={td}>
-                              <span style={{ color: '#c9a84c', marginRight: '4px' }}>{tSym}</span>{tName}
-                            </td>
-                            <td style={{ ...td, textAlign: 'center', color, fontWeight: 600 }}>{aspectZh}</td>
-                            <td style={{ ...td, color: '#8888aa' }}>
-                              <span style={{ marginRight: '4px' }}>{nSym}</span>{nName}
-                            </td>
-                            <td style={{ ...td, textAlign: 'right', color: tight ? '#c9a84c' : '#555577' }}>
-                              {a.orbit.toFixed(1)}°
-                            </td>
-                            <td style={{ ...td, textAlign: 'right', color: '#555577', fontSize: '0.78rem' }}>
-                              {a.applying ? '入相' : '出相'}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {/* AI 解读区块 */}
-              <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '12px', padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ color: '#e8c96a', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.06em' }}>
-                    ✦ AI 行运解读
+              {/* 整体报告 */}
+              {result.overall && (
+                <div style={{
+                  background: '#12122a', border: '1px solid #3a3a6a',
+                  borderRadius: '12px', padding: '24px', marginTop: '8px',
+                }}>
+                  <div style={{ color: '#c9a84c', fontSize: '0.95rem', fontWeight: 700,
+                    letterSpacing: '0.06em', marginBottom: '16px' }}>
+                    ✦ 整体行运综述
                   </div>
-                  <button
-                    onClick={interpretTransits}
-                    disabled={interpretLoading}
-                    style={{
-                      padding: '8px 20px',
-                      background: interpretLoading ? '#1e1e3a' : '#c9a84c',
-                      color: interpretLoading ? '#3a3a5a' : '#0a0a18',
-                      border: 'none',
-                      borderRadius: '7px',
-                      cursor: interpretLoading ? 'not-allowed' : 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    {interpretLoading ? '解读中…' : (interpretation ? '重新解读' : '生成解读')}
-                  </button>
+                  <div style={{
+                    color: '#d0d0e0', fontSize: '0.9rem', lineHeight: '2',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {result.overall}
+                  </div>
                 </div>
-
-                {interpretError && (
-                  <p style={{ color: '#ff7070', fontSize: '0.95rem' }}>{interpretError}</p>
-                )}
-
-                {interpretLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#9999bb', fontSize: '0.95rem', padding: '24px 0' }}>
-                    <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>◌</span>
-                    正在分析行运相位，AI 解读通常需要 10-20 秒，请稍候…
-                  </div>
-                )}
-
-                {interpretation && !interpretLoading && (
-                  <div>
-                    <div style={{
-                      color: '#e0e0f0',
-                      fontSize: '1rem',
-                      lineHeight: '2',
-                      whiteSpace: 'pre-wrap',
-                      borderTop: '1px solid #2a2a4a',
-                      paddingTop: '18px',
-                    }}>
-                      {interpretation.answer}
-                    </div>
-                    {interpretation.sources && interpretation.sources.some(s => s.cited) && (
-                      <div style={{ marginTop: '20px', borderTop: '1px solid #2a2a4a', paddingTop: '14px' }}>
-                        <div style={{ color: '#6666aa', fontSize: '0.82rem', marginBottom: '8px' }}>参考来源</div>
-                        {interpretation.sources.filter(s => s.cited).map((s, i) => (
-                          <div key={i} style={{ color: '#5a5a8a', fontSize: '0.82rem', marginBottom: '4px' }}>
-                            · {s.source.replace('[EN]', '').split('(')[0].trim()}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!interpretation && !interpretLoading && !interpretError && (
-                  <p style={{ color: '#4a4a7a', fontSize: '0.95rem' }}>
-                    点击「生成解读」，AI 将根据行运相位给出综合解析
-                  </p>
-                )}
-              </div>
+              )}
             </>
           )}
         </div>
@@ -476,13 +258,88 @@ export default function Transits() {
   )
 }
 
-function Label({ children, style }) {
+// ── 单相位卡片 ────────────────────────────────────────────────────
+
+function TransitCard({ transit: t }) {
+  const tSym    = PLANET_SYMBOLS[planetKey(t.transit_planet_zh)] || PLANET_SYMBOLS[planetKey(t.transit_planet)] || ''
+  const nSym    = PLANET_SYMBOLS[planetKey(t.natal_planet_zh)]   || PLANET_SYMBOLS[planetKey(t.natal_planet)]   || ''
+  const aspZh   = ASPECT_ZH[t.aspect] ?? (() => {
+    console.warn(`[Transits] 未映射的相位名: "${t.aspect}" — 请在 ASPECT_ZH 中添加中文翻译`)
+    return t.aspect
+  })()
+  const aspColor = ASPECT_COLOR[t.aspect] || '#d0d0e0'
+
+  const days    = Math.round((new Date(t.end_date) - new Date(t.start_date)) / 86400000)
+  const elapsed = Math.round((new Date() - new Date(t.start_date)) / 86400000)
+  const retro   = t.retrograde_cycle ? `含逆行·${t.pass_count} 次精确` : null
+
   return (
-    <div style={{ color: '#c9a84c', fontSize: '0.82rem', fontWeight: 600, marginBottom: '8px', ...style }}>
-      {children}
+    <div style={{
+      background: '#12122a', border: '1px solid #2a2a5a',
+      borderRadius: '12px', marginBottom: '12px', overflow: 'hidden',
+    }}>
+      {/* 卡片头 */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a3a' }}>
+        {/* 行星 + 相位行 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ color: '#c9a84c', fontSize: '1.1rem' }}>{tSym}</span>
+          <span style={{ color: '#e0e0f0', fontWeight: 600 }}>{t.transit_planet_zh}</span>
+          <span style={{ color: aspColor, fontWeight: 700, padding: '1px 8px',
+            background: aspColor + '18', borderRadius: '4px', fontSize: '0.85rem' }}>
+            {aspZh}
+          </span>
+          <span style={{ color: '#8888aa', fontSize: '1rem' }}>{nSym}</span>
+          <span style={{ color: '#d0d0e0' }}>{t.natal_planet_zh}</span>
+
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span style={{
+              color: t.current_orb <= 0.3 ? '#c9a84c' : '#8888aa',
+              fontSize: '0.82rem', fontWeight: 600,
+            }}>
+              {t.current_orb.toFixed(2)}°
+            </span>
+            <span style={{
+              color: t.applying ? '#66cc88' : '#8888aa',
+              fontSize: '0.78rem',
+            }}>
+              {t.applying ? '⬆ 入相' : '⬇ 出相'}
+            </span>
+          </span>
+        </div>
+
+        {/* 时间行 */}
+        <div style={{ marginTop: '8px', display: 'flex', gap: '12px', flexWrap: 'wrap',
+          color: '#555577', fontSize: '0.78rem' }}>
+          <span>{t.start_date} — {t.end_date}</span>
+          <span>·</span>
+          <span>精确日：{t.exact_date}</span>
+          <span>·</span>
+          <span>共 {days} 天（已过 {Math.max(0, elapsed)} 天）</span>
+          {retro && <><span>·</span><span style={{ color: '#bb88ff' }}>{retro}</span></>}
+        </div>
+      </div>
+
+      {/* AI 分析 */}
+      {t.analysis && (
+        <div style={{
+          padding: '16px 20px',
+          color: '#c8c8e0', fontSize: '0.87rem', lineHeight: '1.95',
+          whiteSpace: 'pre-wrap',
+        }}>
+          {t.analysis}
+        </div>
+      )}
     </div>
   )
 }
 
-const th = { textAlign: 'left', padding: '6px 10px', fontWeight: 400 }
-const td = { padding: '8px 10px', color: '#d0d0e0' }
+// ── 辅助组件 ─────────────────────────────────────────────────────
+
+function Label({ children, style }) {
+  return (
+    <div style={{ color: '#c9a84c', fontSize: '0.82rem', fontWeight: 600,
+      marginBottom: '8px', ...style }}>
+      {children}
+    </div>
+  )
+}
