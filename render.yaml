@@ -1,18 +1,13 @@
 services:
-  # ── Single service: FastAPI serves both API and React frontend ─────────
+  # ── Single service: Docker builds frontend + runs FastAPI ──────────────
   - type: web
     name: aieastro
-    env: python
-    rootDir: astrology_api
-    buildCommand: >
-      pip install -r requirements.txt &&
-      cd ../frontend &&
-      npm install &&
-      npm run build &&
-      cp -r dist ../astrology_api/dist
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    env: docker
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: TURSO_DATABASE_URL
         sync: false
       - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: GOOGLE_API_KEY
         sync: false
