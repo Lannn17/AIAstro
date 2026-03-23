@@ -24,6 +24,16 @@ export default function NatalChart() {
   const [chatLoading, setChatLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
 
+  const [rectifyOpen, setRectifyOpen] = useState(false)
+  const [rectifyEvents, setRectifyEvents] = useState([
+    { year: '', month: '', day: '', event_type: 'marriage', weight: 2 }
+  ])
+  const [approxHour, setApproxHour] = useState('')
+  const [timeRangeHours, setTimeRangeHours] = useState('')
+  const [rectifyLoading, setRectifyLoading] = useState(false)
+  const [rectifyResult, setRectifyResult] = useState(null)
+  const [rectifyError, setRectifyError] = useState(null)
+
   useEffect(() => { fetchSavedCharts() }, [])
 
   async function fetchSavedCharts() {
@@ -199,6 +209,43 @@ export default function NatalChart() {
     }
   }
 
+  async function handleRectify() {
+    if (!lastFormData) return
+    const events = rectifyEvents
+      .filter(e => e.year && e.month && e.day)
+      .map(e => ({ year: Number(e.year), month: Number(e.month), day: Number(e.day), event_type: e.event_type, weight: Number(e.weight) }))
+    if (events.length === 0) { setRectifyError('请至少填写一个完整事件'); return }
+    setRectifyLoading(true)
+    setRectifyError(null)
+    setRectifyResult(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/rectify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          birth_year: lastFormData.year, birth_month: lastFormData.month, birth_day: lastFormData.day,
+          latitude: lastFormData.latitude, longitude: lastFormData.longitude,
+          tz_str: lastFormData.tz_str, house_system: lastFormData.house_system,
+          events,
+          approx_hour: approxHour !== '' ? Number(approxHour) : null,
+          approx_minute: null,
+          time_range_hours: timeRangeHours !== '' ? Number(timeRangeHours) : null,
+          natal_chart_data: result || {},
+        }),
+      })
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `错误 ${res.status}`) }
+      setRectifyResult(await res.json())
+    } catch (e) { setRectifyError(e.message) }
+    finally { setRectifyLoading(false) }
+  }
+
+  function addEvent() {
+    if (rectifyEvents.length >= 5) return
+    setRectifyEvents(prev => [...prev, { year: '', month: '', day: '', event_type: 'other', weight: 1 }])
+  }
+  function removeEvent(i) { setRectifyEvents(prev => prev.filter((_, idx) => idx !== i)) }
+  function updateEvent(i, field, value) { setRectifyEvents(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e)) }
+
   async function handleDelete(id, e) {
     e.stopPropagation()
     if (!window.confirm('确认删除该星盘？此操作无法撤销。')) return
@@ -211,6 +258,9 @@ export default function NatalChart() {
     }
     await fetchSavedCharts()
   }
+
+  const labelStyle = { color: '#9a8acc', fontSize: '0.78rem', fontWeight: 600, marginBottom: '6px' }
+  const inputSm = { background: '#0e0e24', border: '1px solid #2a2a5a', color: '#d0d0e0', borderRadius: '5px', padding: '6px 8px', fontSize: '0.82rem', boxSizing: 'border-box' }
 
   return (
     <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
@@ -328,7 +378,7 @@ export default function NatalChart() {
           {result && svgContent && (
             <button
               className="mt-4 w-full py-2 rounded-lg tracking-wider"
-              onClick={() => setChatOpen(o => !o)}
+              onClick={() => { setChatOpen(o => !o); setRectifyOpen(false) }}
               style={{
                 backgroundColor: chatOpen ? '#c9a84c' : 'transparent',
                 border: '1px solid #c9a84c',
@@ -339,6 +389,24 @@ export default function NatalChart() {
               }}
             >
               ✦ 占星对话
+            </button>
+          )}
+
+          {/* Rectify toggle button */}
+          {result && (
+            <button
+              className="mt-2 w-full py-2 rounded-lg tracking-wider"
+              onClick={() => { setRectifyOpen(o => !o); setChatOpen(false) }}
+              style={{
+                backgroundColor: rectifyOpen ? '#7a6aaa' : 'transparent',
+                border: '1px solid #7a6aaa',
+                color: rectifyOpen ? '#ffffff' : '#9a8acc',
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                fontWeight: rectifyOpen ? 600 : 400,
+              }}
+            >
+              ◈ 校对出生时间
             </button>
           )}
         </div>
@@ -495,6 +563,109 @@ export default function NatalChart() {
                   发送
                 </button>
               </form>
+            </div>
+          )}
+          {/* Rectification panel */}
+          {rectifyOpen && result && (
+            <div style={{ backgroundColor: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '24px' }}>
+              <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '20px' }}>
+                ◈ 出生时间校对
+              </div>
+
+              {/* 大致时间（可选） */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={labelStyle}>大致出生时间（可选）</div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input type="number" min="0" max="23" placeholder="小时 0-23"
+                    value={approxHour} onChange={e => setApproxHour(e.target.value)}
+                    style={{ ...inputSm, width: '110px' }} />
+                  <input type="number" min="0.5" max="12" step="0.5" placeholder="范围 ± 小时"
+                    value={timeRangeHours} onChange={e => setTimeRangeHours(e.target.value)}
+                    style={{ ...inputSm, width: '110px' }} />
+                  <span style={{ color: '#555577', fontSize: '0.75rem' }}>不填 = 全天扫描</span>
+                </div>
+              </div>
+
+              {/* 事件列表 */}
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ ...labelStyle, marginBottom: '10px' }}>重大人生事件（最多 5 条）</div>
+                {rectifyEvents.map((ev, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input type="number" placeholder="年" value={ev.year} onChange={e => updateEvent(i, 'year', e.target.value)}
+                      style={{ ...inputSm, width: '62px' }} />
+                    <input type="number" placeholder="月" min="1" max="12" value={ev.month} onChange={e => updateEvent(i, 'month', e.target.value)}
+                      style={{ ...inputSm, width: '46px' }} />
+                    <input type="number" placeholder="日" min="1" max="31" value={ev.day} onChange={e => updateEvent(i, 'day', e.target.value)}
+                      style={{ ...inputSm, width: '46px' }} />
+                    <select value={ev.event_type} onChange={e => updateEvent(i, 'event_type', e.target.value)}
+                      style={{ ...inputSm, flex: 1, minWidth: '100px' }}>
+                      <option value="marriage">结婚</option>
+                      <option value="divorce">离婚</option>
+                      <option value="career_up">升职/突破</option>
+                      <option value="career_down">失业/受挫</option>
+                      <option value="bereavement">亲人离世</option>
+                      <option value="illness">重大疾病</option>
+                      <option value="relocation">搬迁</option>
+                      <option value="accident">意外事故</option>
+                      <option value="other">其他</option>
+                    </select>
+                    <select value={ev.weight} onChange={e => updateEvent(i, 'weight', e.target.value)}
+                      style={{ ...inputSm, width: '78px' }}>
+                      <option value={1}>一般</option>
+                      <option value={2}>重要</option>
+                      <option value={3}>非常重要</option>
+                    </select>
+                    {rectifyEvents.length > 1 && (
+                      <button onClick={() => removeEvent(i)}
+                        style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.85rem', padding: '0 4px' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✕</button>
+                    )}
+                  </div>
+                ))}
+                {rectifyEvents.length < 5 && (
+                  <button onClick={addEvent}
+                    style={{ color: '#7a6aaa', background: 'none', border: '1px dashed #4a4a7a', borderRadius: '6px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', marginTop: '4px' }}>
+                    + 添加事件
+                  </button>
+                )}
+              </div>
+
+              <button onClick={handleRectify} disabled={rectifyLoading}
+                style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: rectifyLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
+              </button>
+
+              {rectifyError && <p style={{ color: '#ff7070', fontSize: '0.88rem', marginTop: '10px' }}>{rectifyError}</p>}
+
+              {rectifyResult && !rectifyLoading && (
+                <div style={{ marginTop: '20px', borderTop: '1px solid #2a2a4a', paddingTop: '20px' }}>
+                  <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                    Top 3 候选时间
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                    {rectifyResult.top3.map((t, i) => (
+                      <div key={i} style={{ flex: '1 1 130px', background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '14px 16px' }}>
+                        <div style={{ color: i === 0 ? '#c9a84c' : '#7a6aaa', fontSize: '0.7rem', marginBottom: '6px' }}>
+                          {i === 0 ? '★ 推荐' : `候选 ${i + 1}`}
+                        </div>
+                        <div style={{ color: '#e0e0f0', fontSize: '1.3rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                          {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
+                        </div>
+                        {t.asc_sign && (
+                          <div style={{ color: '#8888aa', fontSize: '0.78rem', marginTop: '4px' }}>上升 {t.asc_sign}</div>
+                        )}
+                        <div style={{ color: '#555577', fontSize: '0.72rem', marginTop: '4px' }}>评分 {t.score}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {rectifyResult.analysis && (
+                    <div style={{ color: '#d0d0e8', fontSize: '0.95rem', lineHeight: '1.9', whiteSpace: 'pre-wrap' }}>
+                      {rectifyResult.analysis}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -715,3 +715,93 @@ def analyze_active_transits_full(
 
     _TRANSIT_FULL_AI_CACHE[cache_key] = result
     return result
+
+
+# ── 出生时间校对解读 ───────────────────────────────────────────────
+
+_EVENT_TYPE_ZH = {
+    'marriage':    '结婚',
+    'divorce':     '离婚',
+    'career_up':   '升职/事业突破',
+    'career_down': '失业/事业受挫',
+    'bereavement': '亲人离世',
+    'illness':     '重大疾病',
+    'relocation':  '搬迁',
+    'accident':    '意外事故',
+    'other':       '其他重大事件',
+}
+
+
+def analyze_rectification(
+    natal_chart: dict,
+    top3: list[dict],
+    events: list[dict],
+) -> dict:
+    """
+    AI解读出生时间校对结果：
+    - 每个候选时间的上升星座特征与事件模式是否相符
+    - 算法选出这些时间的占星依据
+    - 推荐哪个候选，以及如何进一步验证
+    """
+    _load_index()
+
+    chart_summary = format_chart_summary(natal_chart, max_aspects=5) if natal_chart else "（无本命盘数据）"
+
+    event_lines = []
+    for ev in events:
+        etype = _EVENT_TYPE_ZH.get(ev.get('event_type', 'other'), ev.get('event_type', ''))
+        w = int(ev.get('weight', 1))
+        wlabel = ['', '一般', '重要', '非常重要'][min(w, 3)]
+        event_lines.append(
+            f"  {ev['year']}/{ev['month']:02d}/{ev['day']:02d}  {etype}（{wlabel}）"
+        )
+
+    top3_lines = []
+    for i, t in enumerate(top3, 1):
+        asc = t.get('asc_sign', '')
+        asc_str = f"，上升 {asc}" if asc else ''
+        top3_lines.append(
+            f"  候选{i}：{t['hour']:02d}:{t['minute']:02d}{asc_str}  评分 {t['score']}"
+        )
+
+    query = "birth time rectification ascendant secondary progressions life events"
+    chunks = retrieve(query, k=3)
+    rag_section = ""
+    if chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(chunks, 1)
+        ]
+        rag_section = (
+            "\n\n---\n以下为相关占星书籍参考（可按需引用，注明书名）：\n\n"
+            + "\n\n".join(parts)
+        )
+
+    prompt = f"""出生时间校对结果：
+
+{chart_summary}
+
+用户提供的重大人生事件：
+{chr(10).join(event_lines)}
+
+算法评分 Top3 候选出生时间：
+{chr(10).join(top3_lines)}
+
+---
+请从占星角度解读校对结果：
+1. 每个候选时间对应的上升星座特征，与用户事件模式是否吻合
+2. 这些时间被算法选出的占星依据（哪些宫位或角点在事件日期被激活）
+3. 你最推荐哪个候选时间，具体理由
+4. 建议用户如何用其他已知事件进一步验证{rag_section}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            temperature=0.5,
+        ),
+    )
+
+    sources = _detect_citations(response.text, chunks) if chunks else []
+    return {"answer": response.text, "sources": sources}
