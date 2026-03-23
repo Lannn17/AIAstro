@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] - 2026-03-23
+
+### Added
+- **行运 AI 解读**：行运页新增「✦ AI 行运解读」区块，点击「生成解读」后调用 RAG + Gemini 对当日行运相位进行四维分析（整体能量、重点相位、机遇与挑战、建议事项），并展示引用书名
+- `rag.py` 新增 `analyze_transits()` 函数，专门处理行运场景的摘要格式化与 Gemini 生成
+- `interpret_router.py` 新增 `POST /api/interpret/transit` 端点
+
+### Changed
+- 导航栏移除「解释」tab（RAG 问答已整合入行运解读）
+- `format_chart_summary()` 新增 `max_aspects` 参数，行运场景下截断至 10 条相位以控制 prompt 大小
+
+### Fixed
+- **云端部署**：修复 Render 部署时根路由 `/` 返回 JSON 而非前端页面的问题（`dist/` 存在时优先 serve `index.html`）
+
+---
+
 ## [0.2.0] - 2026-03-19
 
 ### Added

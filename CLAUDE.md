@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.2.0** — RAG 解读引擎上线；部署改为单 Render 服务，FastAPI serve 前端。
+**v0.3.0** — 行运 AI 解读上线；移除独立解释 tab；修复 Render 根路由 404。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---
