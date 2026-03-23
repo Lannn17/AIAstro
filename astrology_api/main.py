@@ -54,24 +54,20 @@ app.include_router(direction_router)
 app.include_router(interpret_router)
 app.include_router(charts_router)
 
-@app.get("/")
-async def read_root():
-    """
-    Endpoint raiz da API.
-    """
-    return {
-        "message": "Bem-vindo à AstroAPI",
-        "version": "1.0.0",
-        "docs": "/docs",
-    }
-
-
 # ── Serve frontend static files in production ──────────────────────────────
 DIST_DIR = Path(__file__).parent / "dist"
 if DIST_DIR.exists():
     app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 
+    @app.get("/")
+    async def serve_root():
+        return FileResponse(DIST_DIR / "index.html")
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """SPA catch-all: serve index.html for all non-API routes."""
         return FileResponse(DIST_DIR / "index.html")
+else:
+    @app.get("/")
+    async def read_root():
+        return {"message": "Bem-vindo à AstroAPI", "version": "1.0.0", "docs": "/docs"}
