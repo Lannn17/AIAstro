@@ -381,7 +381,7 @@ export default function Transits() {
                 {interpretLoading && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8888aa', fontSize: '0.85rem', padding: '20px 0' }}>
                     <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>◌</span>
-                    正在分析行运相位，请稍候…
+                    正在分析行运相位，AI 解读通常需要 10-20 秒，请稍候…
                   </div>
                 )}
 

@@ -217,7 +217,7 @@ def _get_dignity(planet_en: str, sign_en: str) -> str | None:
 
 # ── 星盘摘要格式化 ────────────────────────────────────────────────
 
-def format_chart_summary(chart_data: dict) -> str:
+def format_chart_summary(chart_data: dict, max_aspects: int | None = None) -> str:
     """把 NatalChartResponse dict 转成可读文本，作为 LLM 上下文。"""
     lines = []
 
@@ -324,11 +324,13 @@ def format_chart_summary(chart_data: dict) -> str:
     if stelliums:
         lines.append(f"  群星(Stellium): {'; '.join(stelliums)}")
 
-    # ── 相位（全部输出）──
+    # ── 相位 ──
     aspects = chart_data.get("aspects", [])
     if aspects:
-        lines.append("\n【相位列表】")
-        for asp in aspects:
+        shown = aspects[:max_aspects] if max_aspects else aspects
+        truncated = max_aspects and len(aspects) > max_aspects
+        lines.append(f"\n【相位列表】{'（仅显示最紧密的10条）' if truncated else ''}")
+        for asp in shown:
             p1     = asp.get("p1_name_original") or asp.get("p1_name")
             p2     = asp.get("p2_name_original") or asp.get("p2_name")
             aspect = asp.get("aspect_original") or asp.get("aspect")
@@ -532,8 +534,8 @@ def analyze_transits(
 
     chunks = retrieve(query, k=5)
 
-    # 本命盘摘要
-    chart_summary = format_chart_summary(natal_chart) if natal_chart else "（无本命盘数据）"
+    # 本命盘摘要（保留行星位置+宫位主星，仅截断相位列表以控制 prompt 大小）
+    chart_summary = format_chart_summary(natal_chart, max_aspects=10) if natal_chart else "（无本命盘数据）"
 
     # 行运行星位置
     planet_lines = []
