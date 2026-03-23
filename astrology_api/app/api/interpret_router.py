@@ -20,11 +20,17 @@ class RagRequest(BaseModel):
     k: int = 5
 
 
+class HistoryMessage(BaseModel):
+    role: str   # "user" or "assistant"
+    text: str
+
+
 class ChatRequest(BaseModel):
     query: str
     chart_data: Dict[str, Any]
     k: int = 5
     mode: str = "interpret"  # "rag" = RAG测试版, "interpret" = AI解读版
+    history: List[HistoryMessage] = []
 
 
 @router.post("/interpret/rag")
@@ -53,12 +59,13 @@ async def interpret_chat(body: ChatRequest):
     星盘对话。mode="rag": RAG测试版（片段主导）；mode="interpret": AI解读版（AI主导，RAG补充）。
     """
     try:
+        history = [{"role": m.role, "text": m.text} for m in body.history]
         if body.mode == "rag":
             from ..rag import rag_query_with_chart
-            result = rag_query_with_chart(body.query, body.chart_data, k=body.k)
+            result = rag_query_with_chart(body.query, body.chart_data, k=body.k, history=history)
         else:
             from ..rag import interpret_with_chart
-            result = interpret_with_chart(body.query, body.chart_data, k=body.k)
+            result = interpret_with_chart(body.query, body.chart_data, k=body.k, history=history)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))

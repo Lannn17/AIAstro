@@ -197,6 +197,21 @@ def format_chart_summary(chart_data: dict) -> str:
     return "\n".join(lines)
 
 
+# ── 多轮对话辅助 ──────────────────────────────────────────────────
+
+def _build_contents(history: list[dict], current_prompt: str) -> list:
+    """
+    将对话历史 + 当前 prompt 转成 Gemini multi-turn contents 格式。
+    history 格式: [{role: "user"|"assistant", text: str}, ...]
+    """
+    contents = []
+    for msg in history:
+        role = "model" if msg["role"] == "assistant" else "user"
+        contents.append(types.Content(role=role, parts=[types.Part(text=msg["text"])]))
+    contents.append(types.Content(role="user", parts=[types.Part(text=current_prompt)]))
+    return contents
+
+
 # ── 完整 RAG 流程 ─────────────────────────────────────────────────
 
 def rag_query(query: str, k: int = 5) -> dict:
@@ -228,8 +243,8 @@ def rag_query(query: str, k: int = 5) -> dict:
     }
 
 
-def rag_query_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
-    """带星盘上下文的 RAG：把星盘数据注入 prompt，再检索+生成。"""
+def rag_query_with_chart(query: str, chart_data: dict, k: int = 5, history: list[dict] = None) -> dict:
+    """带星盘上下文的 RAG：把星盘数据注入 prompt，再检索+生成。支持多轮对话。"""
     _load_index()
     chunks = retrieve(query, k=k)
     chart_summary = format_chart_summary(chart_data)
@@ -254,9 +269,10 @@ def rag_query_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
 
 请结合用户的本命盘数据和书籍片段，给出具体、有针对性的占星解读。"""
 
+    contents = _build_contents(history or [], prompt)
     response = client.models.generate_content(
         model=GENERATE_MODEL,
-        contents=prompt,
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_RAG,
             temperature=0.4,
@@ -277,7 +293,7 @@ def rag_query_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
 _RELEVANCE_THRESHOLD = 0.3
 
 
-def interpret_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
+def interpret_with_chart(query: str, chart_data: dict, k: int = 5, history: list[dict] = None) -> dict:
     """
     版本B — AI解读版：AI用自身知识主导解读，RAG片段作可选补充。
     若检索片段相关性低，不影响AI主体答案质量。
@@ -307,9 +323,10 @@ def interpret_with_chart(query: str, chart_data: dict, k: int = 5) -> dict:
 
 请基于你的占星学专业知识，结合本命盘数据给出深入解读。"""
 
+    contents = _build_contents(history or [], prompt)
     response = client.models.generate_content(
         model=GENERATE_MODEL,
-        contents=prompt,
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_INTERPRET,
             temperature=0.5,
