@@ -4,6 +4,36 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 const VALID_LANGS = ['pt', 'en', 'es', 'zh', 'ja']
 
+const PLANET_SYMBOLS = {
+  sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
+  jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
+  mean_node: '☊', true_node: '☊', chiron: '⚷', mean_lilith: '⚸',
+}
+
+const SIGN_SYMBOLS = {
+  '白羊座': '♈', '金牛座': '♉', '双子座': '♊', '巨蟹座': '♋',
+  '狮子座': '♌', '处女座': '♍', '天秤座': '♎', '天蝎座': '♏',
+  '射手座': '♐', '摩羯座': '♑', '水瓶座': '♒', '双鱼座': '♓',
+  'Aries': '♈', 'Taurus': '♉', 'Gemini': '♊', 'Cancer': '♋',
+  'Leo': '♌', 'Virgo': '♍', 'Libra': '♎', 'Scorpio': '♏',
+  'Sagittarius': '♐', 'Capricorn': '♑', 'Aquarius': '♒', 'Pisces': '♓',
+}
+
+// 从翻译后的行星名推断 key（用于查符号）
+function planetKey(name) {
+  const map = {
+    '太阳': 'sun', '月亮': 'moon', '水星': 'mercury', '金星': 'venus',
+    '火星': 'mars', '木星': 'jupiter', '土星': 'saturn', '天王星': 'uranus',
+    '海王星': 'neptune', '冥王星': 'pluto', '北交点': 'mean_node',
+    '真北交': 'true_node', '凯龙': 'chiron', '黑月': 'mean_lilith',
+    // English fallback
+    'Sun': 'sun', 'Moon': 'moon', 'Mercury': 'mercury', 'Venus': 'venus',
+    'Mars': 'mars', 'Jupiter': 'jupiter', 'Saturn': 'saturn',
+    'Uranus': 'uranus', 'Neptune': 'neptune', 'Pluto': 'pluto',
+  }
+  return map[name] || name.toLowerCase().replace(' ', '_')
+}
+
 const ASPECT_COLOR = {
   Conjunction: '#ffffff',
   Opposition:  '#ff6666',
@@ -274,12 +304,16 @@ export default function Transits() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
                   {Object.values(result.transit_planets).map(p => {
-                    const name = p.name_original || p.name
-                    const sign = p.sign_original || p.sign
+                    const name = p.name
+                    const sign = p.sign
+                    const pSym = PLANET_SYMBOLS[planetKey(name)] || ''
+                    const sSym = SIGN_SYMBOLS[sign] || ''
                     return (
                       <div key={name} style={{ background: '#0e0e24', borderRadius: '8px', padding: '8px 12px' }}>
+                        <span style={{ color: '#c9a84c', fontWeight: 600, fontSize: '0.9rem', marginRight: '4px' }}>{pSym}</span>
                         <span style={{ color: '#c9a84c', fontWeight: 600, fontSize: '0.85rem' }}>{name}</span>
-                        <span style={{ color: '#d0d0e0', fontSize: '0.85rem', marginLeft: '8px' }}>{sign}</span>
+                        <span style={{ color: '#8888aa', fontSize: '0.85rem', marginLeft: '8px', marginRight: '2px' }}>{sSym}</span>
+                        <span style={{ color: '#d0d0e0', fontSize: '0.85rem' }}>{sign}</span>
                         {p.retrograde && (
                           <span style={{ color: '#ff8888', fontSize: '0.75rem', marginLeft: '6px' }}>℞</span>
                         )}
@@ -314,15 +348,13 @@ export default function Transits() {
                     <tbody>
                       {aspects.map((a, i) => {
                         const isTP1 = a.p1_owner === 'transit'
-                        const tPlanet = isTP1
-                          ? (a.p1_name_original || a.p1_name)
-                          : (a.p2_name_original || a.p2_name)
-                        const nPlanet = isTP1
-                          ? (a.p2_name_original || a.p2_name)
-                          : (a.p1_name_original || a.p1_name)
-                        const aspect  = a.aspect_original || a.aspect
-                        const color   = ASPECT_COLOR[aspect] || '#d0d0e0'
-                        const tight   = a.orbit <= 2
+                        const tName  = isTP1 ? a.p1_name : a.p2_name
+                        const nName  = isTP1 ? a.p2_name : a.p1_name
+                        const aspect = a.aspect_original || a.aspect
+                        const tSym   = PLANET_SYMBOLS[planetKey(tName)] || ''
+                        const nSym   = PLANET_SYMBOLS[planetKey(nName)] || ''
+                        const color  = ASPECT_COLOR[aspect] || '#d0d0e0'
+                        const tight  = a.orbit <= 2
 
                         return (
                           <tr
@@ -332,9 +364,13 @@ export default function Transits() {
                               background: tight ? 'rgba(201,168,76,0.06)' : 'transparent',
                             }}
                           >
-                            <td style={td}>{tPlanet}</td>
+                            <td style={td}>
+                              <span style={{ color: '#c9a84c', marginRight: '4px' }}>{tSym}</span>{tName}
+                            </td>
                             <td style={{ ...td, textAlign: 'center', color, fontWeight: 600 }}>{aspect}</td>
-                            <td style={{ ...td, color: '#8888aa' }}>{nPlanet}</td>
+                            <td style={{ ...td, color: '#8888aa' }}>
+                              <span style={{ marginRight: '4px' }}>{nSym}</span>{nName}
+                            </td>
                             <td style={{ ...td, textAlign: 'right', color: tight ? '#c9a84c' : '#555577' }}>
                               {a.orbit.toFixed(1)}°
                             </td>
