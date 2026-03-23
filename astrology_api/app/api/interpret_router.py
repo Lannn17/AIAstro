@@ -29,8 +29,13 @@ class ChatRequest(BaseModel):
     query: str
     chart_data: Dict[str, Any]
     k: int = 5
-    mode: str = "interpret"  # "rag" = RAG测试版, "interpret" = AI解读版
     history: List[HistoryMessage] = []
+    summary: str = ""  # compressed summary of earlier turns
+
+
+class SummarizeRequest(BaseModel):
+    messages: List[HistoryMessage]
+    chart_name: str = ""
 
 
 @router.post("/interpret/rag")
@@ -59,15 +64,48 @@ async def interpret_chat(body: ChatRequest):
     星盘对话。mode="rag": RAG测试版（片段主导）；mode="interpret": AI解读版（AI主导，RAG补充）。
     """
     try:
+        from ..rag import chat_with_chart
         history = [{"role": m.role, "text": m.text} for m in body.history]
-        if body.mode == "rag":
-            from ..rag import rag_query_with_chart
-            result = rag_query_with_chart(body.query, body.chart_data, k=body.k, history=history)
-        else:
-            from ..rag import interpret_with_chart
-            result = interpret_with_chart(body.query, body.chart_data, k=body.k, history=history)
+        result = chat_with_chart(body.query, body.chart_data, k=body.k,
+                                 history=history, summary=body.summary)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {e}")
+
+
+class TransitInterpretRequest(BaseModel):
+    natal_chart: Dict[str, Any]
+    transit_aspects: List[Dict[str, Any]]
+    transit_planets: Dict[str, Any]
+    transit_date: str
+
+
+@router.post("/interpret/transit")
+async def interpret_transit(body: TransitInterpretRequest):
+    """行运解读：AI分析行运相位对本命盘的影响。"""
+    try:
+        from ..rag import analyze_transits
+        result = analyze_transits(
+            natal_chart=body.natal_chart,
+            transit_aspects=body.transit_aspects,
+            transit_planets=body.transit_planets,
+            transit_date=body.transit_date,
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transit interpretation error: {e}")
+
+
+@router.post("/interpret/summarize")
+async def summarize_chat(body: SummarizeRequest):
+    """将一段对话历史压缩为简洁摘要，用于滚动窗口记忆。"""
+    try:
+        from ..rag import summarize_messages
+        result = summarize_messages(body.messages, body.chart_name)
+        return {"summary": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Summarize error: {e}")

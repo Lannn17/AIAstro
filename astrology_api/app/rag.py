@@ -340,17 +340,48 @@ def format_chart_summary(chart_data: dict) -> str:
 
 # ── 多轮对话辅助 ──────────────────────────────────────────────────
 
-def _build_contents(history: list[dict], current_prompt: str) -> list:
+def _build_contents(history: list[dict], current_prompt: str, summary: str = "") -> list:
     """
-    将对话历史 + 当前 prompt 转成 Gemini multi-turn contents 格式。
-    history 格式: [{role: "user"|"assistant", text: str}, ...]
+    将摘要 + 对话历史 + 当前 prompt 转成 Gemini multi-turn contents 格式。
+    summary: 早期对话的压缩摘要（可为空）
+    history: 最近几轮原始对话 [{role: "user"|"assistant", text: str}, ...]
     """
     contents = []
+    if summary:
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=f"[早期对话摘要]\n{summary}")],
+        ))
+        contents.append(types.Content(
+            role="model",
+            parts=[types.Part(text="已了解早期对话内容，继续为您解答。")],
+        ))
     for msg in history:
         role = "model" if msg["role"] == "assistant" else "user"
         contents.append(types.Content(role=role, parts=[types.Part(text=msg["text"])]))
     contents.append(types.Content(role="user", parts=[types.Part(text=current_prompt)]))
     return contents
+
+
+def summarize_messages(messages: list, chart_name: str = "") -> str:
+    """将一组对话消息压缩成简洁的中文摘要。"""
+    dialog = "\n".join(
+        f"{'用户' if m.role == 'user' else 'AI'}：{m.text}"
+        for m in messages
+    )
+    subject = f"（星盘主人：{chart_name}）" if chart_name else ""
+    prompt = (
+        f"以下是一段占星解读对话{subject}，"
+        "请将其压缩为简洁摘要（不超过200字），"
+        "保留用户问过的主要问题和AI给出的关键结论：\n\n"
+        f"{dialog}\n\n请输出摘要："
+    )
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.2),
+    )
+    return response.text
 
 
 # ── 完整 RAG 流程 ─────────────────────────────────────────────────
@@ -384,102 +415,194 @@ def rag_query(query: str, k: int = 5) -> dict:
     }
 
 
-def rag_query_with_chart(query: str, chart_data: dict, k: int = 5, history: list[dict] = None) -> dict:
-    """带星盘上下文的 RAG：把星盘数据注入 prompt，再检索+生成。支持多轮对话。"""
+_SYSTEM_PROMPT_UNIFIED = """你是一位经验丰富的职业占星师，精通西方占星学。
+请基于你深厚的专业知识，结合用户本命盘数据给出深入、具体的解读。
+若提供的参考书籍片段与问题相关，可在解读中引用作为佐证并注明书名；
+解读质量以你自身的占星学知识为主，书籍片段是可选补充而非限制。
+用中文回答。"""
+
+
+def _clean_source_name(raw: str) -> str:
+    """提取书名关键部分，用于引用检测。"""
+    return raw.replace("[EN]", "").split("(")[0].strip()
+
+
+def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
+    """
+    检测 AI 回答中是否引用了各 chunk 的来源书名。
+    用书名中长度>2的词做子串匹配，属启发式检测，非精确。
+    """
+    answer_lower = answer.lower()
+    result = []
+    for c in chunks:
+        name = _clean_source_name(c["source"])
+        words = [w for w in name.replace("·", " ").split() if len(w) > 2]
+        cited = any(w.lower() in answer_lower for w in words)
+        result.append({
+            "source": c["source"],
+            "score":  round(c["score"], 3),
+            "cited":  cited,
+        })
+    return result
+
+
+def chat_with_chart(query: str, chart_data: dict, k: int = 5,
+                    history: list[dict] = None, summary: str = "") -> dict:
+    """
+    统一对话：AI 知识为主，RAG 书籍片段为可选佐证。
+    prompt 顺序：星盘 → 问题 → 书籍参考（可选）
+    始终返回来源及引用检测结果，供前端评估 RAG 质量。
+    """
     _load_index()
     chunks = retrieve(query, k=k)
     chart_summary = format_chart_summary(chart_data)
 
     context_parts = []
     for i, c in enumerate(chunks, 1):
-        source = c["source"].replace("[EN]", "").split("(")[0].strip()
-        context_parts.append(f"[片段{i} · 来源: {source}]\n{c['text']}")
-    context = "\n\n".join(context_parts)
-
-    prompt = f"""以下是用户的本命盘信息：
-
-{chart_summary}
-
----
-以下是来自占星书籍的相关片段：
-
-{context}
-
----
-用户问题：{query}
-
-请结合用户的本命盘数据和书籍片段，给出具体、有针对性的占星解读。"""
-
-    contents = _build_contents(history or [], prompt)
-    response = client.models.generate_content(
-        model=GENERATE_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT_RAG,
-            temperature=0.4,
-        ),
-    )
-
-    return {
-        "answer": response.text,
-        "sources": [
-            {"text": c["text"], "source": c["source"], "score": c["score"]}
-            for c in chunks
-        ],
-        "index_used": _index_source,
-    }
-
-
-# 相关性阈值：低于此分数的片段不纳入补充引用
-_RELEVANCE_THRESHOLD = 0.3
-
-
-def interpret_with_chart(query: str, chart_data: dict, k: int = 5, history: list[dict] = None) -> dict:
-    """
-    版本B — AI解读版：AI用自身知识主导解读，RAG片段作可选补充。
-    若检索片段相关性低，不影响AI主体答案质量。
-    """
-    _load_index()
-    chunks = retrieve(query, k=k)
-    chart_summary = format_chart_summary(chart_data)
-
-    # 过滤相关性足够高的片段
-    relevant_chunks = [c for c in chunks if c["score"] >= _RELEVANCE_THRESHOLD]
-
-    if relevant_chunks:
-        context_parts = []
-        for i, c in enumerate(relevant_chunks, 1):
-            source = c["source"].replace("[EN]", "").split("(")[0].strip()
-            context_parts.append(f"[参考{i} · {source}]\n{c['text']}")
-        rag_section = "以下是来自占星书籍的参考片段（可作为佐证）：\n\n" + "\n\n".join(context_parts) + "\n\n---\n"
-    else:
-        rag_section = ""
+        name = _clean_source_name(c["source"])
+        context_parts.append(f"[参考{i} · {name}]\n{c['text']}")
+    rag_section = "\n\n".join(context_parts)
 
     prompt = f"""用户本命盘：
 
 {chart_summary}
 
 ---
-{rag_section}用户问题：{query}
+用户问题：{query}
 
-请基于你的占星学专业知识，结合本命盘数据给出深入解读。"""
+---
+以下是检索到的占星书籍片段，若与问题相关可引用作为佐证（请注明书名），不相关可忽略：
 
-    contents = _build_contents(history or [], prompt)
+{rag_section}"""
+
+    contents = _build_contents(history or [], prompt, summary=summary)
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=contents,
         config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT_INTERPRET,
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
             temperature=0.5,
         ),
     )
 
+    finish = response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN"
+    if finish != "STOP":
+        print(f"[RAG] chat_with_chart finish_reason={finish} — output may be truncated")
+
+    sources = _detect_citations(response.text, chunks)
     return {
-        "answer": response.text,
-        "sources": [
-            {"text": c["text"], "source": c["source"], "score": c["score"]}
-            for c in relevant_chunks
-        ],
-        "rag_used": len(relevant_chunks) > 0,
+        "answer":     response.text,
+        "sources":    sources,
+        "index_used": _index_source,
+    }
+
+
+# ── 行运解读 ───────────────────────────────────────────────────────
+
+def analyze_transits(
+    natal_chart: dict,
+    transit_aspects: list[dict],
+    transit_planets: dict,
+    transit_date: str,
+) -> dict:
+    """
+    行运解读：分析行运-本命相位对当事人的影响。
+
+    返回:
+    {
+        "answer": str,
+        "sources": [{source, score, cited}, ...],
+        "index_used": str
+    }
+    """
+    _load_index()
+
+    # 取最紧密的相位构造检索 query
+    tight = sorted(transit_aspects, key=lambda a: a.get("orbit", 99))[:3]
+    desc_parts = []
+    for a in tight:
+        is_tp1   = a.get("p1_owner") == "transit"
+        t_planet = (a.get("p1_name_original") or a.get("p1_name", "")) if is_tp1 \
+                   else (a.get("p2_name_original") or a.get("p2_name", ""))
+        n_planet = (a.get("p2_name_original") or a.get("p2_name", "")) if is_tp1 \
+                   else (a.get("p1_name_original") or a.get("p1_name", ""))
+        aspect   = a.get("aspect_original") or a.get("aspect", "")
+        desc_parts.append(f"{t_planet} {aspect} natal {n_planet}")
+    query = "transit " + ", ".join(desc_parts) if desc_parts else "transit aspects interpretation"
+
+    chunks = retrieve(query, k=5)
+
+    # 本命盘摘要
+    chart_summary = format_chart_summary(natal_chart) if natal_chart else "（无本命盘数据）"
+
+    # 行运行星位置
+    planet_lines = []
+    for _, p in transit_planets.items():
+        pname = p.get("name_original") or p.get("name", "")
+        sign  = p.get("sign_original") or p.get("sign", "")
+        retro = " ℞" if p.get("retrograde") else ""
+        planet_lines.append(f"  {pname}: {sign}{retro}")
+
+    # 行运相位列表（按容许度排序）
+    sorted_aspects = sorted(transit_aspects, key=lambda a: a.get("orbit", 99))
+    aspect_lines = []
+    for a in sorted_aspects:
+        is_tp1   = a.get("p1_owner") == "transit"
+        t_planet = (a.get("p1_name_original") or a.get("p1_name", "")) if is_tp1 \
+                   else (a.get("p2_name_original") or a.get("p2_name", ""))
+        n_planet = (a.get("p2_name_original") or a.get("p2_name", "")) if is_tp1 \
+                   else (a.get("p1_name_original") or a.get("p1_name", ""))
+        aspect   = a.get("aspect_original") or a.get("aspect", "")
+        orb      = a.get("orbit", 0)
+        applying = "入相" if a.get("applying") else "出相"
+        t_retro  = " (逆行)" if (a.get("p1_retrograde") if is_tp1 else a.get("p2_retrograde")) else ""
+        aspect_lines.append(
+            f"  行运{t_planet}{t_retro} {aspect} 本命{n_planet}"
+            f" (容许度{orb:.1f}° {applying})"
+        )
+
+    # RAG 书籍参考
+    rag_section = ""
+    if chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(chunks, 1)
+        ]
+        rag_section = (
+            "\n\n---\n以下是检索到的占星书籍参考片段，若与当前行运相关可引用作为佐证"
+            "（注明书名），不相关可忽略：\n\n"
+            + "\n\n".join(parts)
+        )
+
+    prompt = f"""行运日期：{transit_date}
+
+{chart_summary}
+
+【行运行星位置】
+{chr(10).join(planet_lines) or '（无数据）'}
+
+【行运-本命相位】（按容许度排序）
+{chr(10).join(aspect_lines) or '（无相位）'}
+
+---
+请根据以上数据，对当日行运给出综合解读：
+1. 整体能量与基调
+2. 重点相位的具体影响（优先分析容许度≤2°的相位）
+3. 机遇与挑战
+4. 建议关注的事项{rag_section}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            temperature=0.5,
+        ),
+    )
+
+    sources = _detect_citations(response.text, chunks) if chunks else []
+    return {
+        "answer":     response.text,
+        "sources":    sources,
         "index_used": _index_source,
     }

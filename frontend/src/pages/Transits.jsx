@@ -39,6 +39,9 @@ export default function Transits() {
   const [result, setResult]               = useState(null)
   const [loading, setLoading]             = useState(false)
   const [error, setError]                 = useState(null)
+  const [interpretation, setInterpretation] = useState(null)
+  const [interpretLoading, setInterpretLoading] = useState(false)
+  const [interpretError, setInterpretError] = useState(null)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/charts`)
@@ -51,6 +54,8 @@ export default function Transits() {
     setSelectedId(id)
     setResult(null)
     setError(null)
+    setInterpretation(null)
+    setInterpretError(null)
     if (!id) { setSelectedChart(null); return }
     try {
       const r = await fetch(`${API_BASE}/api/charts/${id}`)
@@ -102,6 +107,47 @@ export default function Transits() {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function interpretTransits() {
+    if (!result || !selectedChart) return
+    setInterpretLoading(true)
+    setInterpretError(null)
+    setInterpretation(null)
+
+    // 使用保存的本命盘 chart_data 或从 result 中重建
+    const natalChartData = selectedChart.chart_data
+      ? (typeof selectedChart.chart_data === 'string'
+          ? JSON.parse(selectedChart.chart_data)
+          : selectedChart.chart_data)
+      : {}
+
+    const transitOnlyAspects = result.aspects.filter(a =>
+      (a.p1_owner === 'transit' && a.p2_owner === 'natal') ||
+      (a.p1_owner === 'natal'   && a.p2_owner === 'transit')
+    ).sort((a, b) => a.orbit - b.orbit)
+
+    try {
+      const r = await fetch(`${API_BASE}/api/interpret/transit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          natal_chart:      natalChartData,
+          transit_aspects:  transitOnlyAspects,
+          transit_planets:  result.transit_planets,
+          transit_date:     `${transitDate} ${transitTime}`,
+        }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.detail || `错误 ${r.status}`)
+      }
+      setInterpretation(await r.json())
+    } catch (e) {
+      setInterpretError(e.message)
+    } finally {
+      setInterpretLoading(false)
     }
   }
 
@@ -300,6 +346,74 @@ export default function Transits() {
                       })}
                     </tbody>
                   </table>
+                )}
+              </div>
+
+              {/* AI 解读区块 */}
+              <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ color: '#c9a84c', fontSize: '0.9rem', fontWeight: 600 }}>
+                    ✦ AI 行运解读
+                  </div>
+                  <button
+                    onClick={interpretTransits}
+                    disabled={interpretLoading}
+                    style={{
+                      padding: '6px 16px',
+                      background: interpretLoading ? '#1e1e3a' : '#1a1a40',
+                      color: interpretLoading ? '#3a3a5a' : '#c9a84c',
+                      border: '1px solid #c9a84c44',
+                      borderRadius: '6px',
+                      cursor: interpretLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {interpretLoading ? '解读中…' : (interpretation ? '重新解读' : '生成解读')}
+                  </button>
+                </div>
+
+                {interpretError && (
+                  <p style={{ color: '#ff6666', fontSize: '0.82rem' }}>{interpretError}</p>
+                )}
+
+                {interpretLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8888aa', fontSize: '0.85rem', padding: '20px 0' }}>
+                    <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>◌</span>
+                    正在分析行运相位，请稍候…
+                  </div>
+                )}
+
+                {interpretation && !interpretLoading && (
+                  <div>
+                    <div style={{
+                      color: '#d0d0e0',
+                      fontSize: '0.88rem',
+                      lineHeight: '1.9',
+                      whiteSpace: 'pre-wrap',
+                      borderTop: '1px solid #1a1a3a',
+                      paddingTop: '14px',
+                    }}>
+                      {interpretation.answer}
+                    </div>
+                    {interpretation.sources && interpretation.sources.some(s => s.cited) && (
+                      <div style={{ marginTop: '16px', borderTop: '1px solid #1a1a3a', paddingTop: '12px' }}>
+                        <div style={{ color: '#555577', fontSize: '0.75rem', marginBottom: '6px' }}>参考来源</div>
+                        {interpretation.sources.filter(s => s.cited).map((s, i) => (
+                          <div key={i} style={{ color: '#4a4a7a', fontSize: '0.75rem', marginBottom: '2px' }}>
+                            · {s.source.replace('[EN]', '').split('(')[0].trim()}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!interpretation && !interpretLoading && !interpretError && (
+                  <p style={{ color: '#3a3a6a', fontSize: '0.83rem' }}>
+                    点击「生成解读」，AI 将根据行运相位给出综合解析
+                  </p>
                 )}
               </div>
             </>
