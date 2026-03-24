@@ -7,6 +7,7 @@ os routers, middleware, e outras configurações globais.
 from dotenv import load_dotenv
 load_dotenv()  # Must be first — app.db reads env vars at import time
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -27,13 +28,19 @@ from app.api.charts_router import router as charts_router
 from app.api.auth_router import router as auth_router
 from app.db import create_tables
 
-create_tables()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_tables()
+    yield
+
 
 # Criar aplicação FastAPI
 app = FastAPI(
     title="AstroAPI",
     description="API para cálculos astrológicos, mapas natais, trânsitos e interpretações.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configurar CORS
