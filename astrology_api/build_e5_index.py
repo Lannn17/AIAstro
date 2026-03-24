@@ -19,7 +19,7 @@ import json
 import pathlib
 import numpy as np
 import faiss
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 TEXTS_DIR  = pathlib.Path("data/processed_texts")
 INDEX_DIR  = pathlib.Path("data/e5_index")
@@ -27,15 +27,11 @@ CHUNK_SIZE = 600
 OVERLAP    = 100
 SKIP       = {"exemplo_interpretacoes.txt"}
 MODEL_NAME = "intfloat/multilingual-e5-small"
-BATCH_SIZE = 32
-SAVE_EVERY = 50
 
 INDEX_DIR.mkdir(parents=True, exist_ok=True)
 CHUNKS_FILE     = INDEX_DIR / "chunks.json"
 INDEX_FILE      = INDEX_DIR / "index.faiss"
 MODEL_INFO_FILE = INDEX_DIR / "model_info.json"
-VECTORS_FILE    = INDEX_DIR / "vectors.npy"
-PROGRESS_FILE   = INDEX_DIR / "progress.json"
 
 
 def chunk_text(text: str, source: str) -> list[dict]:
@@ -75,39 +71,15 @@ def main():
 
     print(f"\n=== Step 2: Loading model: {MODEL_NAME} ===")
     print("(First run: auto-downloading model ~120MB)")
-    model = SentenceTransformer(MODEL_NAME)
+    model = TextEmbedding(MODEL_NAME)
 
     print(f"\n=== Step 3: Generating embeddings (batch_size={BATCH_SIZE}) ===")
     # e5 requires "passage: " prefix for documents
     texts = [f"passage: {c['text']}" for c in chunks]
     total = len(texts)
-    total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
 
-    # Resume support
-    start_batch = 0
-    all_vectors = []
-    if PROGRESS_FILE.exists() and VECTORS_FILE.exists():
-        prog = json.loads(PROGRESS_FILE.read_text())
-        start_batch = prog["completed_batches"]
-        all_vectors = list(np.load(str(VECTORS_FILE)))
-        print(f"Resuming from batch {start_batch}/{total_batches} ({len(all_vectors)} vectors done)")
-
-    for i in range(start_batch, total_batches):
-        batch_texts = texts[i * BATCH_SIZE : (i + 1) * BATCH_SIZE]
-        batch_vecs = model.encode(
-            batch_texts,
-            batch_size=BATCH_SIZE,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype(np.float32)
-        all_vectors.extend(batch_vecs)
-        print(f"  Batch {i+1}/{total_batches} ({len(all_vectors)}/{total})", end="\r")
-
-        if (i + 1) % SAVE_EVERY == 0 or i + 1 == total_batches:
-            np.save(str(VECTORS_FILE), np.array(all_vectors, dtype=np.float32))
-            PROGRESS_FILE.write_text(json.dumps({"completed_batches": i + 1}))
-
+    # fastembed returns a generator; collect all at once (handles batching internally)
+    all_vectors = list(model.embed(texts))
     vectors = np.array(all_vectors, dtype=np.float32)
     print(f"\nDone: {vectors.shape}")
 
@@ -122,10 +94,6 @@ def main():
     with open(MODEL_INFO_FILE, "w") as f:
         json.dump({"model": MODEL_NAME, "dim": dim, "total": index.ntotal, "prefix": "query: "}, f)
 
-    if VECTORS_FILE.exists():
-        VECTORS_FILE.unlink()
-    if PROGRESS_FILE.exists():
-        PROGRESS_FILE.unlink()
 
     print("\nAll done!")
 
