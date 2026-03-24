@@ -338,16 +338,7 @@ export default function ChartForm({ onSubmit, loading }) {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{
-              backgroundColor: '#12122a',
-              border: '1px solid #2a2a5a',
-              borderRadius: '12px',
-              padding: '28px',
-              maxWidth: '560px',
-              width: '100%',
-              maxHeight: '80vh',
-              overflowY: 'auto',
-            }}
+            className="house-modal-inner"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ color: '#c9a84c', fontSize: '1rem', fontWeight: 600, letterSpacing: '0.08em', margin: 0 }}>

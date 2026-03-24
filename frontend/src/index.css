@@ -1,5 +1,174 @@
 @import "tailwindcss";
 
+/* ─── Responsive layout utilities ───────────────────────────── */
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 48px;
+}
+
+.app-nav {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  padding: 0 32px;
+}
+
+.app-main {
+  padding: 32px 48px;
+}
+
+.page-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.page-sidebar {
+  flex: 0 0 200px;
+  min-width: 160px;
+}
+
+.page-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.page-form-col {
+  flex: 0 0 380px;
+  min-width: 280px;
+}
+
+.page-result-col {
+  flex: 1 1 400px;
+  min-width: 300px;
+}
+
+.transits-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.transits-control {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.transits-results {
+  flex: 1;
+  min-width: 0;
+}
+
+.house-modal-inner {
+  background-color: #12122a;
+  border: 1px solid #2a2a5a;
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.chat-panel {
+  background-color: #12122a;
+  border: 1px solid #2a2a5a;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding: 8px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .app-nav {
+    flex: none;
+    flex-basis: 100%;
+    padding: 0 0 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-nav a {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    font-size: 0.85rem !important;
+    padding: 6px 10px !important;
+    min-width: max-content;
+  }
+
+  .app-main {
+    padding: 16px;
+  }
+
+  .page-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .page-sidebar {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .page-main {
+    width: 100%;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .page-form-col {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .page-result-col {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transits-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .transits-control {
+    width: 100%;
+    flex-shrink: unset;
+  }
+
+  .house-modal-inner {
+    padding: 16px;
+    border-radius: 8px;
+    max-height: 90vh;
+  }
+
+  .chat-panel {
+    min-height: 400px;
+  }
+}
+
 body {
   margin: 0;
   min-height: 100vh;

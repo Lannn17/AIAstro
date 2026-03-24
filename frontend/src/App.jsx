@@ -41,7 +41,7 @@ export default function App() {
           backgroundColor: '#0d0d22',
           borderBottom: '1px solid #2a2a5a',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 48px' }}>
+          <div className="app-header-inner">
             {/* Logo */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
               <span style={{ color: '#c9a84c', fontSize: '1.3rem' }}>✦</span>
@@ -51,7 +51,7 @@ export default function App() {
             </div>
 
             {/* Nav tabs */}
-            <nav style={{ display: 'flex', flex: 1, gap: '4px', padding: '0 32px' }}>
+            <nav className="app-nav">
               {NAV_ITEMS.map(({ path, label }) => (
                 <NavLink
                   key={path}
@@ -67,7 +67,7 @@ export default function App() {
         </header>
 
         {/* Page content */}
-        <main style={{ padding: '32px 48px' }}>
+        <main className="app-main">
           <Routes>
             <Route path="/"              element={<NatalChart />} />
             <Route path="/transits"      element={<Transits />} />

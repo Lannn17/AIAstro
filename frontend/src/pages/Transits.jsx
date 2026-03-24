@@ -136,10 +136,10 @@ export default function Transits() {
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+      <div className="transits-layout">
 
         {/* ── 左栏：控制面板 ── */}
-        <div style={{ width: '240px', flexShrink: 0 }}>
+        <div className="transits-control">
           <div style={{ background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px', padding: '20px' }}>
 
             <Label>选择本命盘</Label>
@@ -209,7 +209,7 @@ export default function Transits() {
         </div>
 
         {/* ── 右栏：结果 ── */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="transits-results">
 
           {/* 空态 */}
           {!result && !loading && (

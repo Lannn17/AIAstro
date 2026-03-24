@@ -263,10 +263,10 @@ export default function NatalChart() {
   const inputSm = { background: '#0e0e24', border: '1px solid #2a2a5a', color: '#d0d0e0', borderRadius: '5px', padding: '6px 8px', fontSize: '0.82rem', boxSizing: 'border-box' }
 
   return (
-    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
+    <div className="page-layout">
 
       {/* Saved charts sidebar */}
-      <div style={{ flex: '0 0 200px', minWidth: '160px' }}>
+      <div className="page-sidebar">
         <div style={{
           backgroundColor: '#12122a',
           border: '1px solid #2a2a5a',
@@ -337,10 +337,10 @@ export default function NatalChart() {
       </div>
 
       {/* Main area */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div className="page-main">
 
         {/* Left column: form */}
-        <div style={{ flex: '0 0 380px', minWidth: '280px' }}>
+        <div className="page-form-col">
           <ChartForm onSubmit={handleSubmit} loading={loading} />
 
           {error && (
@@ -412,7 +412,7 @@ export default function NatalChart() {
         </div>
 
         {/* Right column: results or chat */}
-        <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+        <div className="page-result-col">
 
           {/* Chart results */}
           {!chatOpen && (
@@ -440,13 +440,7 @@ export default function NatalChart() {
 
           {/* Chat panel */}
           {chatOpen && result && (
-            <div style={{
-              backgroundColor: '#12122a',
-              border: '1px solid #2a2a5a',
-              borderRadius: '12px',
-              display: 'flex', flexDirection: 'column',
-              minHeight: '600px',
-            }}>
+            <div className="chat-panel">
               {/* Header */}
               <div style={{
                 padding: '12px 16px', borderBottom: '1px solid #2a2a5a',
