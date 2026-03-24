@@ -37,6 +37,20 @@ const PLANET_NAMES = {
   },
 }
 
+// Fallback translations for signs stored untranslated in old saved charts (keyed by English sign_original)
+const SIGN_NAMES = {
+  zh: {
+    Aries: '白羊座', Taurus: '金牛座', Gemini: '双子座', Cancer: '巨蟹座',
+    Leo: '狮子座', Virgo: '处女座', Libra: '天秤座', Scorpio: '天蝎座',
+    Sagittarius: '射手座', Capricorn: '摩羯座', Aquarius: '水瓶座', Pisces: '双鱼座',
+  },
+  ja: {
+    Aries: '牡羊座', Taurus: '牡牛座', Gemini: '双子座', Cancer: '蟹座',
+    Leo: '獅子座', Virgo: '乙女座', Libra: '天秤座', Scorpio: '蠍座',
+    Sagittarius: '射手座', Capricorn: '山羊座', Aquarius: '水瓶座', Pisces: '魚座',
+  },
+}
+
 const UI_LABELS = {
   zh: { title: '✦ 行星', planet: '行星', sign: '星座', degree: '度数', house: '宫位', retro: '逆行', houseCell: n => `第${n}宫` },
   ja: { title: '✦ 惑星', planet: '惑星', sign: '星座', degree: '度数', house: 'ハウス', retro: '逆行', houseCell: n => `第${n}H` },
@@ -96,8 +110,13 @@ export default function PlanetTable({ planets, language = 'zh' }) {
                   {PLANET_NAMES[language]?.[planet.name_original] || planet.name}
                 </td>
                 <td className="px-4 py-2">
-                  <span className="mr-1">{SIGN_SYMBOLS[planet.sign] || ''}</span>
-                  {planet.sign}
+                  {(() => {
+                    const signDisplay = SIGN_NAMES[language]?.[planet.sign_original] || planet.sign
+                    return <>
+                      <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || ''}</span>
+                      {signDisplay}
+                    </>
+                  })()}
                 </td>
                 <td className="px-4 py-2" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
                   {formatDegree(planet.longitude)}
