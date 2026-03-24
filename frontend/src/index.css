@@ -11,3 +11,19 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Markdown rendering for rectification and chat */
+.rectify-reason, .rectify-overall {
+  color: #b0b0cc;
+  font-size: 0.88rem;
+  line-height: 1.9;
+}
+.rectify-overall {
+  color: #d0d0e8;
+  font-size: 0.9rem;
+}
+.rectify-reason p, .rectify-overall p { margin: 0 0 0.6em; }
+.rectify-reason strong, .rectify-overall strong { color: #e0d0ff; font-weight: 600; }
+.rectify-reason em, .rectify-overall em { color: #c9a84c; font-style: normal; }
+.rectify-reason ul, .rectify-overall ul { padding-left: 1.2em; margin: 0.4em 0; }
+.rectify-reason li, .rectify-overall li { margin-bottom: 0.3em; }

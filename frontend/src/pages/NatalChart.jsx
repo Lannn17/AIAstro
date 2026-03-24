@@ -643,11 +643,11 @@ export default function NatalChart() {
                   <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
                     Top 3 候选时间
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
                     {rectifyResult.top3.map((t, i) => (
                       <div key={i} style={{ background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '16px 18px' }}>
                         {/* 头部：时间 + 标签 */}
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: t.reason ? '12px' : '0' }}>
                           <span style={{ color: '#e0e0f0', fontSize: '1.4rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                             {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
                           </span>
@@ -659,20 +659,22 @@ export default function NatalChart() {
                           </span>
                           <span style={{ color: '#555577', fontSize: '0.72rem' }}>评分 {t.score}</span>
                         </div>
-                        {/* 理由 */}
+                        {/* 分析理由（Markdown） */}
                         {t.reason && (
-                          <div style={{ color: '#b0b0cc', fontSize: '0.88rem', lineHeight: '1.8', borderTop: '1px solid #2a2a4a', paddingTop: '10px' }}>
-                            {t.reason}
+                          <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '10px' }}
+                            className="rectify-reason">
+                            <ReactMarkdown>{t.reason}</ReactMarkdown>
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
+                  {/* 综合分析（Markdown） */}
                   {rectifyResult.overall && (
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
                       <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>综合推荐与验证建议</div>
-                      <div style={{ color: '#d0d0e8', fontSize: '0.95rem', lineHeight: '1.9', whiteSpace: 'pre-wrap' }}>
-                        {rectifyResult.overall}
+                      <div className="rectify-overall">
+                        <ReactMarkdown>{rectifyResult.overall}</ReactMarkdown>
                       </div>
                     </div>
                   )}
