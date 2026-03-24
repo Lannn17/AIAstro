@@ -3,10 +3,13 @@ import ReactMarkdown from 'react-markdown'
 import ChartForm from '../components/ChartForm'
 import PlanetTable from '../components/PlanetTable'
 import ChartWheel from '../components/ChartWheel'
+import GuestSaveConfirmModal from '../components/GuestSaveConfirmModal'
+import { useAuth } from '../contexts/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 export default function NatalChart() {
+  const { isGuest, isAuthenticated, authHeaders } = useAuth()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -50,11 +53,13 @@ export default function NatalChart() {
   const [confidenceResult, setConfidenceResult] = useState(null)
   const [confidenceLoading, setConfidenceLoading] = useState(false)
 
-  useEffect(() => { fetchSavedCharts() }, [])
+  const [showGuestConfirm, setShowGuestConfirm] = useState(false)
+
+  useEffect(() => { if (isAuthenticated) fetchSavedCharts() }, [isAuthenticated])
 
   async function fetchSavedCharts() {
     try {
-      const res = await fetch(`${API_BASE}/api/charts`)
+      const res = await fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       if (res.ok) setSavedCharts(await res.json())
     } catch { /* network error, keep empty list */ }
   }
@@ -102,6 +107,11 @@ export default function NatalChart() {
 
   async function handleSave() {
     if (!result || !lastFormData) return
+    if (isGuest) { setShowGuestConfirm(true); return }
+    await doSave()
+  }
+
+  async function doSave() {
     setSaving(true)
     try {
       const label = lastFormData.name
@@ -146,7 +156,7 @@ export default function NatalChart() {
     setMessages([])
     setChatSummary('')
     try {
-      const res = await fetch(`${API_BASE}/api/charts/${summary.id}`)
+      const res = await fetch(`${API_BASE}/api/charts/${summary.id}`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const chart = await res.json()
       setLastFormData({
@@ -163,7 +173,12 @@ export default function NatalChart() {
         language: chart.language,
       })
       setLastLocationName(chart.location_name)
-      if (chart.chart_data) setResult(chart.chart_data)
+      if (chart.chart_data) {
+        setResult(chart.chart_data)
+        setPlanetAnalyses({})
+        // 静默查缓存：命中→自动显示；未命中→静默（按钮出现等用户点击）
+        fetchPlanetCache(chart.chart_data, id)
+      }
       if (chart.svg_data) setSvgContent(chart.svg_data)
     } catch {
       setError('加载失败')
@@ -226,18 +241,44 @@ export default function NatalChart() {
     }
   }
 
-  async function handleInterpretPlanets() {
-    if (!result) return
+  async function fetchPlanetCache(chartData, chartId) {
+    if (!chartData || !chartId) return
+    try {
+      const res = await fetch(`${API_BASE}/api/interpret_planets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          natal_chart: chartData,
+          language: chartData.input_data?.language || 'zh',
+          chart_id: chartId,
+          cache_only: true,
+        }),
+      })
+      if (res.ok) {
+        const resp = await res.json()
+        if (resp.analyses) setPlanetAnalyses(resp.analyses)
+      }
+    } catch (e) { /* 静默失败 */ }
+  }
+
+  async function handleInterpretPlanets(chartData, chartId) {
+    const data = chartData || result
+    const id = chartId !== undefined ? chartId : savedId
+    if (!data) return
     setAnalysesLoading(true)
     try {
       const res = await fetch(`${API_BASE}/api/interpret_planets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ natal_chart: result, language: result.input_data?.language || 'zh' }),
+        body: JSON.stringify({
+          natal_chart: data,
+          language: data.input_data?.language || 'zh',
+          chart_id: id || null,
+        }),
       })
       if (res.ok) {
-        const data = await res.json()
-        setPlanetAnalyses(data.analyses || {})
+        const resp = await res.json()
+        setPlanetAnalyses(resp.analyses || {})
       }
     } catch (e) { console.error(e) }
     finally { setAnalysesLoading(false) }
@@ -347,7 +388,7 @@ export default function NatalChart() {
   async function handleDelete(id, e) {
     e.stopPropagation()
     if (!window.confirm('确认删除该星盘？此操作无法撤销。')) return
-    await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE' })
+    await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
     if (savedId === id) {
       setSavedId(null)
       setResult(null)

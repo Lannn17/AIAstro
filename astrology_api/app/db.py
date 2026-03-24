@@ -41,6 +41,23 @@ CREATE TABLE IF NOT EXISTS transit_overall_cache (
 )
 """
 
+_CREATE_PLANET_CACHE = """
+CREATE TABLE IF NOT EXISTS planet_analysis_cache (
+    chart_id INTEGER PRIMARY KEY,
+    analyses TEXT NOT NULL,
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
+_CREATE_PLANET_CACHE = """
+CREATE TABLE IF NOT EXISTS planet_analysis_cache (
+    chart_id INTEGER PRIMARY KEY,
+    chart_hash TEXT NOT NULL,
+    analyses TEXT NOT NULL,
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,9 +76,13 @@ CREATE TABLE IF NOT EXISTS saved_charts (
     language TEXT NOT NULL,
     chart_data TEXT,
     svg_data TEXT,
+    is_guest INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 )
 """
+
+# Migration: add is_guest to tables that predate this column
+_MIGRATE_IS_GUEST = "ALTER TABLE saved_charts ADD COLUMN is_guest INTEGER DEFAULT 0"
 
 
 # ── Turso HTTP helpers ───────────────────────────────────────────
@@ -138,22 +159,49 @@ def _sqlite_write(sql: str, params: list = None) -> int:
 # ── Public API ───────────────────────────────────────────────────
 
 def create_tables():
-    for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL]:
+    for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL, _CREATE_PLANET_CACHE]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(ddl)
+    # Migrate existing tables: add is_guest column if absent
+    try:
+        if USE_TURSO:
+            _turso_exec(_MIGRATE_IS_GUEST)
+        else:
+            with sqlite3.connect(_db_path) as conn:
+                conn.execute(_MIGRATE_IS_GUEST)
+    except Exception:
+        pass  # Column already exists
 
 
 def db_list_charts() -> list[dict]:
     sql = (
         "SELECT id, label, name, birth_year, birth_month, birth_day, "
-        "location_name, created_at FROM saved_charts ORDER BY created_at DESC"
+        "location_name, created_at FROM saved_charts WHERE is_guest = 0 ORDER BY created_at DESC"
     )
     if USE_TURSO:
         return _to_dicts(_turso_exec(sql))
     return _sqlite_fetchall(sql)
+
+
+def db_list_pending_charts() -> list[dict]:
+    sql = (
+        "SELECT id, label, name, birth_year, birth_month, birth_day, "
+        "location_name, created_at FROM saved_charts WHERE is_guest = 1 ORDER BY created_at DESC"
+    )
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql))
+    return _sqlite_fetchall(sql)
+
+
+def db_approve_chart(chart_id: int):
+    sql = "UPDATE saved_charts SET is_guest = 0 WHERE id = ?"
+    if USE_TURSO:
+        _turso_exec(sql, [chart_id])
+    else:
+        _sqlite_write(sql, [chart_id])
 
 
 def db_save_chart(data: dict) -> dict:
@@ -161,8 +209,8 @@ def db_save_chart(data: dict) -> dict:
         INSERT INTO saved_charts
             (label, name, birth_year, birth_month, birth_day, birth_hour, birth_minute,
              location_name, latitude, longitude, tz_str, house_system, language,
-             chart_data, svg_data, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             chart_data, svg_data, is_guest, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     from datetime import datetime, timezone
     params = [
@@ -173,6 +221,7 @@ def db_save_chart(data: dict) -> dict:
         data["latitude"], data["longitude"],
         data["tz_str"], data["house_system"], data["language"],
         data.get("chart_data"), data.get("svg_data"),
+        1 if data.get("is_guest") else 0,
         datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     ]
     if USE_TURSO:
@@ -251,3 +300,27 @@ def db_save_overall_cache(chart_id: int, transit_set_hash: str, overall: str):
         _turso_exec(sql, [chart_id, transit_set_hash, overall])
     else:
         _sqlite_write(sql, [chart_id, transit_set_hash, overall])
+
+
+# ── Planet analysis cache ─────────────────────────────────────────
+
+def db_get_planet_cache(chart_id: int, chart_hash: str) -> str | None:
+    """Returns cached analyses JSON if chart_hash matches, else None."""
+    sql = "SELECT analyses FROM planet_analysis_cache WHERE chart_id = ? AND chart_hash = ?"
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [chart_id, chart_hash]))
+        return rows[0]["analyses"] if rows else None
+    row = _sqlite_fetchone(sql, [chart_id, chart_hash])
+    return row["analyses"] if row else None
+
+
+def db_save_planet_cache(chart_id: int, chart_hash: str, analyses_json: str):
+    sql = """
+        INSERT OR REPLACE INTO planet_analysis_cache
+            (chart_id, chart_hash, analyses)
+        VALUES (?, ?, ?)
+    """
+    if USE_TURSO:
+        _turso_exec(sql, [chart_id, chart_hash, analyses_json])
+    else:
+        _sqlite_write(sql, [chart_id, chart_hash, analyses_json])

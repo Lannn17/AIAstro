@@ -103,15 +103,43 @@ async def calculate_natal_chart(request: NatalChartRequest):
 class InterpretPlanetsRequest(BaseModel):
     natal_chart: Dict[str, Any]
     language: str = 'zh'
+    chart_id: Optional[int] = None   # 已保存星盘的 ID，用于缓存
+    cache_only: bool = False          # True = 只读缓存，未命中时返回空而非调 AI
 
 
 @router.post("/interpret_planets")
 async def interpret_planets(body: InterpretPlanetsRequest):
-    """为本命盘每颗行星生成解读，并附综合概述。返回 {analyses: {sun:..., overall:...}}"""
+    """为本命盘每颗行星生成解读，并附综合概述。有 chart_id 时读写缓存。"""
+    import hashlib, json as _json
+    from ..db import db_get_planet_cache, db_save_planet_cache
+
+    # 计算 chart_hash：基于决定星盘内容的输入参数
+    input_data = body.natal_chart.get("input_data", {})
+    hash_src = _json.dumps({
+        k: input_data.get(k)
+        for k in ("year","month","day","hour","minute","latitude","longitude","tz_str","house_system")
+    }, sort_keys=True)
+    chart_hash = hashlib.md5(hash_src.encode()).hexdigest()
+
+    # 有 chart_id → 检查缓存
+    if body.chart_id:
+        cached = db_get_planet_cache(body.chart_id, chart_hash)
+        if cached:
+            return {"analyses": _json.loads(cached), "from_cache": True}
+
+    # 只读缓存模式：未命中时返回空，不调 AI
+    if body.cache_only:
+        return {"analyses": None, "from_cache": False}
+
     try:
         from ..rag import analyze_planets
         result = analyze_planets(body.natal_chart, body.language)
-        return {"analyses": result}
+
+        # 有 chart_id → 写入缓存
+        if body.chart_id and result:
+            db_save_planet_cache(body.chart_id, chart_hash, _json.dumps(result, ensure_ascii=False))
+
+        return {"analyses": result, "from_cache": False}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
