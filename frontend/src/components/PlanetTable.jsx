@@ -1,7 +1,7 @@
 const PLANET_SYMBOLS = {
   sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
   jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
-  mean_node: '☊', true_node: '☊', chiron: '⚷', mean_lilith: '⚸',
+  mean_node: '☊', true_node: '☊', mean_south_node: '☋', true_south_node: '☋', chiron: '⚷', mean_lilith: '⚸',
 }
 
 const SIGN_SYMBOLS = {

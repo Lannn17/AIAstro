@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 const PLANET_SYMBOLS = {
   sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
   jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
-  mean_node: '☊', true_node: '☊', chiron: '⚷', mean_lilith: '⚸',
+  mean_node: '☊', true_node: '☊', mean_south_node: '☋', true_south_node: '☋', chiron: '⚷', mean_lilith: '⚸',
 }
 
 const ASPECT_ZH = {
@@ -30,7 +30,8 @@ function planetKey(name) {
   const map = {
     '太阳': 'sun', '月亮': 'moon', '水星': 'mercury', '金星': 'venus',
     '火星': 'mars', '木星': 'jupiter', '土星': 'saturn', '天王星': 'uranus',
-    '海王星': 'neptune', '冥王星': 'pluto', '北交点': 'mean_node',
+    '海王星': 'neptune', '冥王星': 'pluto', '北交点': 'mean_node', '南交点': 'mean_south_node',
+    '凯龙星': 'chiron', '黑月莉莉丝': 'mean_lilith',
     'Sun': 'sun', 'Moon': 'moon', 'Mercury': 'mercury', 'Venus': 'venus',
     'Mars': 'mars', 'Jupiter': 'jupiter', 'Saturn': 'saturn',
     'Uranus': 'uranus', 'Neptune': 'neptune', 'Pluto': 'pluto',
