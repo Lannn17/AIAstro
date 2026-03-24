@@ -24,6 +24,7 @@ from app.api.direction_router import router as direction_router
 from app.api.interpret_router import router as interpret_router
 from app.api.rectification_router import router as rectification_router
 from app.api.charts_router import router as charts_router
+from app.api.auth_router import router as auth_router
 from app.db import create_tables
 
 create_tables()
@@ -55,6 +56,7 @@ app.include_router(direction_router)
 app.include_router(interpret_router)
 app.include_router(rectification_router)
 app.include_router(charts_router)
+app.include_router(auth_router)
 
 # ── Serve frontend static files in production ──────────────────────────────
 DIST_DIR = Path(__file__).parent / "dist"

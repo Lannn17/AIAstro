@@ -18,6 +18,7 @@ export default function NatalChart() {
   const [lastLocationName, setLastLocationName] = useState(null)
 
   const [savedCharts, setSavedCharts] = useState([])
+  const [pendingCharts, setPendingCharts] = useState([])
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState(null)  // id of currently loaded saved chart
 
@@ -55,13 +56,40 @@ export default function NatalChart() {
 
   const [showGuestConfirm, setShowGuestConfirm] = useState(false)
 
-  useEffect(() => { if (isAuthenticated) fetchSavedCharts() }, [isAuthenticated])
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSavedCharts()
+      fetchPendingCharts()
+    }
+  }, [isAuthenticated])
 
   async function fetchSavedCharts() {
     try {
       const res = await fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       if (res.ok) setSavedCharts(await res.json())
-    } catch { /* network error, keep empty list */ }
+    } catch { /* keep empty list */ }
+  }
+
+  async function fetchPendingCharts() {
+    try {
+      const res = await fetch(`${API_BASE}/api/charts/pending`, { headers: authHeaders() })
+      if (res.ok) setPendingCharts(await res.json())
+    } catch { /* keep empty list */ }
+  }
+
+  async function handleApprove(id, e) {
+    e.stopPropagation()
+    await fetch(`${API_BASE}/api/charts/pending/${id}/approve`, {
+      method: 'POST', headers: authHeaders(),
+    })
+    await Promise.all([fetchSavedCharts(), fetchPendingCharts()])
+  }
+
+  async function handleRejectPending(id, e) {
+    e.stopPropagation()
+    if (!window.confirm('删除此待审核记录？')) return
+    await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
+    await fetchPendingCharts()
   }
 
   async function handleSubmit(formData, locationName) {
@@ -404,8 +432,94 @@ export default function NatalChart() {
   return (
     <div className="page-layout">
 
-      {/* Saved charts sidebar */}
-      <div className="page-sidebar">
+      {showGuestConfirm && (
+        <GuestSaveConfirmModal
+          onConfirm={() => { setShowGuestConfirm(false); doSave() }}
+          onCancel={() => setShowGuestConfirm(false)}
+        />
+      )}
+
+      {/* Sidebar: only visible when logged in */}
+      <div className="page-sidebar" style={{ display: isAuthenticated ? undefined : 'none' }}>
+
+        {/* Pending charts (guest submissions awaiting approval) */}
+        {pendingCharts.length > 0 && (
+          <div style={{
+            backgroundColor: '#1a1208',
+            border: '1px solid #4a3a1a',
+            borderRadius: '10px',
+            overflow: 'hidden',
+            marginBottom: '12px',
+          }}>
+            <div style={{
+              padding: '10px 14px',
+              borderBottom: '1px solid #4a3a1a',
+              color: '#c9a84c',
+              fontSize: '0.7rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              待审核
+              <span style={{
+                backgroundColor: '#c9a84c', color: '#0a0a1a',
+                borderRadius: '10px', fontSize: '0.65rem',
+                padding: '1px 6px', fontWeight: 700,
+              }}>
+                {pendingCharts.length}
+              </span>
+            </div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {pendingCharts.map(c => (
+                <li key={c.id} style={{
+                  padding: '10px 14px',
+                  borderBottom: '1px solid #2a1a08',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: '6px',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: '#c8b888', fontSize: '0.78rem', fontWeight: 500,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {c.name || '无名'}
+                    </div>
+                    <div style={{ color: '#7a6a4a', fontSize: '0.68rem', marginTop: '2px' }}>
+                      {c.birth_year}/{c.birth_month}/{c.birth_day}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button
+                      onClick={(e) => handleApprove(c.id, e)}
+                      title="批准"
+                      style={{
+                        background: 'none', border: '1px solid #4a6a3a',
+                        color: '#6aaa5a', cursor: 'pointer',
+                        fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px',
+                      }}
+                    >✓</button>
+                    <button
+                      onClick={(e) => handleRejectPending(c.id, e)}
+                      title="删除"
+                      style={{
+                        background: 'none', border: 'none', color: '#4a3a3a',
+                        cursor: 'pointer', fontSize: '0.75rem', padding: '2px',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
+                      onMouseLeave={e => e.currentTarget.style.color = '#4a3a3a'}
+                    >✕</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Saved charts */}
         <div style={{
           backgroundColor: '#12122a',
           border: '1px solid #2a2a5a',

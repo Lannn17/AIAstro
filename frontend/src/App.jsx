@@ -6,6 +6,9 @@ import Synastry from './pages/Synastry'
 import Progressions from './pages/Progressions'
 import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import LoginModal from './components/LoginModal'
+
 const NAV_ITEMS = [
   { path: '/',              label: '星盘' },
   { path: '/transits',     label: '行运' },
@@ -30,9 +33,60 @@ const navLinkStyle = ({ isActive }) => ({
   whiteSpace: 'nowrap',
 })
 
-export default function App() {
+function UserBadge() {
+  const { isAuthenticated, isGuest, logout, setShowLoginModal } = useAuth()
+
+  if (isAuthenticated) {
+    return (
+      <button
+        onClick={logout}
+        title="退出登录"
+        style={{
+          flexShrink: 0,
+          padding: '5px 12px',
+          backgroundColor: 'transparent',
+          border: '1px solid #3a3a6a',
+          borderRadius: '6px',
+          color: '#8888aa',
+          fontSize: '0.78rem',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        退出
+      </button>
+    )
+  }
+
+  if (isGuest) {
+    return (
+      <button
+        onClick={() => setShowLoginModal(true)}
+        title="点击登录"
+        style={{
+          flexShrink: 0,
+          padding: '5px 12px',
+          backgroundColor: 'transparent',
+          border: '1px solid #4a3a1a',
+          borderRadius: '6px',
+          color: '#c9a84c',
+          fontSize: '0.78rem',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        访客 · 登录
+      </button>
+    )
+  }
+
+  return null
+}
+
+function AppInner() {
   return (
     <BrowserRouter>
+      <LoginModal />
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a1a' }}>
 
         {/* Sticky header */}
@@ -63,6 +117,9 @@ export default function App() {
                 </NavLink>
               ))}
             </nav>
+
+            {/* User badge */}
+            <UserBadge />
           </div>
         </header>
 
@@ -80,5 +137,13 @@ export default function App() {
 
       </div>
     </BrowserRouter>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   )
 }
