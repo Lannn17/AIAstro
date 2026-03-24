@@ -13,7 +13,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.5.0** — 校正 Phase 2/3（ASC 性格问卷 + 生命主题置信度）、太阳弧评分；部署迁移至 HuggingFace Spaces；向量检索迁移至 Qdrant Cloud；移动端全站响应式布局。
+**v0.6.0** — JWT 登录 + 访客模式 + 待审核队列（云端数据隔离）；`is_guest` 列自动迁移；移除旧 `verify_api_key` stub。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---

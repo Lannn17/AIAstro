@@ -8,6 +8,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] - 2026-03-24
+
+### Added
+- **云端数据隔离 / Cloud data isolation** — JWT 登录系统，凭据通过环境变量配置（`AUTH_USERNAME`、`AUTH_PASSWORD`、`JWT_SECRET`），令牌有效期 30 天
+- **访客模式** — 未登录用户可使用全部计算功能，但无法查看已保存星盘；访客点击「计算」时强制弹出数据提交确认框，确认后数据自动进入待审核队列
+- **待审核队列** — 访客提交的星盘以 `is_guest=1` 标记写入数据库，与所有者数据完全隔离；所有者登录后在侧边栏看到「待审核」区域（含数量徽章），可逐条批准或删除
+- 新增端点：`POST /api/auth/login`、`GET /api/auth/me`、`GET /api/charts/pending`、`POST /api/charts/pending/{id}/approve`
+- `saved_charts` 表新增 `is_guest` 列（含零停机迁移，启动时自动 `ALTER TABLE`）
+
+### Changed
+- `GET /api/charts`、`GET /api/charts/{id}`、`DELETE /api/charts/{id}` 均需有效 JWT 令牌（401 拒绝未登录请求）
+- `POST /api/charts` 保持开放；后端根据请求是否携带有效令牌自动设置 `is_guest` 标志
+- 前端新增 `AuthContext`、`LoginModal`（首次访问自动弹出）、顶栏用户状态徽章（访客可点击切换至登录）
+
+### Fixed
+- 移除各计算路由（natal chart、SVG、transits 等 7 个）中已失效的 `verify_api_key` stub import，解决云端启动 `ImportError`
+
+---
+
 ## [0.5.0] - 2026-03-24
 
 ### Added
