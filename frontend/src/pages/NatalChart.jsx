@@ -300,7 +300,7 @@ export default function NatalChart() {
         setResult(chart.chart_data)
         setPlanetAnalyses({})
         // 静默查缓存：命中→自动显示；未命中→静默（按钮出现等用户点击）
-        fetchPlanetCache(chart.chart_data, id)
+        fetchPlanetCache(chart.chart_data, summary.id)
       }
       if (chart.svg_data) setSvgContent(chart.svg_data)
     } catch {
