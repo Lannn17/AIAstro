@@ -1032,13 +1032,13 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     为本命盘每颗行星生成简洁解读（单次 Gemini 调用，返回全部结果）。
     返回: {"sun": "解读文字", "moon": "...", ...}
     """
-    _load()
     planets = natal_chart.get('planets', {})
     asc = natal_chart.get('ascendant', {})
     asc_sign = asc.get('sign_original') or asc.get('sign', '')
 
-    # 行星列表（含逆行标注）
+    # 行星列表（含逆行标注），同时记录 key 顺序用于生成 JSON 模板
     lines = []
+    planet_keys = []
     for key, p in planets.items():
         if key in _SKIP_PLANETS:
             continue
@@ -1046,8 +1046,22 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
         sign = p.get('sign_original') or p.get('sign', '')
         house = p.get('house', '')
         retro = '（逆行）' if p.get('retrograde') else ''
-        lines.append(f"{name}: {sign} 第{house}宫{retro}")
+        lines.append(f"{name}（key: {key}）: {sign} 第{house}宫{retro}")
+        planet_keys.append(key)
     planet_list = '\n'.join(lines)
+    # 动态生成 JSON 模板，确保 AI 为每颗行星（包括小行星）返回分析
+    planet_entries = ',\n  '.join(f'"{k}": "..."' for k in planet_keys)
+    json_template = (
+        '{\n  ' + planet_entries + ',\n'
+        '  "overall": {\n'
+        '    "tags": ["...", "..."],\n'
+        '    "summary": "...",\n'
+        '    "career": "...",\n'
+        '    "love": "...",\n'
+        '    "wealth": "...",\n'
+        '    "health": "..."\n'
+        '  }\n}'
+    )
 
     # 宫位守星表（第N宫所在星座 → 该星座守护星）
     houses = natal_chart.get('houses', {})
@@ -1103,14 +1117,18 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 
 每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
 
-综合概述（overall）：基于整张盘的格局，概括此人主要的人生命题、核心潜力、以及可能面临的挑战与成长方向，150-200 字。
+综合概述（overall）为结构化对象，包含以下字段：
+- tags: 字符串数组，标注本命盘的突出特征，如「群星天蝎座」「第10宫强势」「多火象行星」「大三角格局」「命主星逆行」等，3-6 个标签
+- summary: 主要人生命题、核心潜力与成长方向，100-150 字
+- career: 学业与事业领域分析，列出支持该结论的具体行星/宫位依据，80-100 字
+- love: 恋爱与家庭领域分析，附占星依据，80-100 字
+- wealth: 财富与物质领域分析，附占星依据，80-100 字
+- health: 健康与身体领域分析，附占星依据，60-80 字
 
-以 JSON 格式返回：
-{{
-  "sun": "...", "moon": "...", "mercury": "...",
-  ...,
-  "overall": "综合概述文字"
-}}{rag_section}"""
+**必须为以上列出的每一颗行星（包括凯龙、北交点、南交点、莉莉丝等小行星）生成解读，不得遗漏任何一个。**
+
+以 JSON 格式返回（严格使用以下 key，每个 key 对应一段解读文字，overall 为嵌套对象）：
+{json_template}{rag_section}"""
 
     response = client.models.generate_content(
         model=GENERATE_MODEL,

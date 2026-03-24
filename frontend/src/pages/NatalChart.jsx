@@ -546,16 +546,36 @@ export default function NatalChart() {
                     </button>
                   ) : planetAnalyses.overall ? (
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
-                      <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>本命盘综合概述</div>
-                      <div style={{ color: '#d0d0e8', fontSize: '0.9rem', lineHeight: 1.85 }}>
-                        <ReactMarkdown components={{
-                          p: ({children}) => <p style={{ margin: '0 0 0.6em', color: '#d0d0e8' }}>{children}</p>,
-                          strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
-                          em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
-                          ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
-                          li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#d0d0e8' }}>{children}</li>,
-                        }}>{planetAnalyses.overall}</ReactMarkdown>
-                      </div>
+                      <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px' }}>本命盘综合概述</div>
+                      {/* 特征标签 */}
+                      {planetAnalyses.overall.tags?.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                          {planetAnalyses.overall.tags.map((tag, i) => (
+                            <span key={i} style={{
+                              padding: '3px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600,
+                              background: '#1e1a38', border: '1px solid #7a6aaa', color: '#c9a84c',
+                            }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                      {/* 主要命题 */}
+                      {planetAnalyses.overall.summary && (
+                        <p style={{ color: '#d0d0e8', fontSize: '0.9rem', lineHeight: 1.85, marginBottom: '16px' }}>
+                          {planetAnalyses.overall.summary}
+                        </p>
+                      )}
+                      {/* 分领域详述 */}
+                      {[
+                        { key: 'career', label: '✦ 学业与事业' },
+                        { key: 'love',   label: '✦ 恋爱与家庭' },
+                        { key: 'wealth', label: '✦ 财富与物质' },
+                        { key: 'health', label: '✦ 健康与身体' },
+                      ].map(({ key, label }) => planetAnalyses.overall[key] ? (
+                        <div key={key} style={{ marginBottom: '12px' }}>
+                          <div style={{ color: '#8888aa', fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '4px' }}>{label}</div>
+                          <p style={{ color: '#b8b8d8', fontSize: '0.86rem', lineHeight: 1.8, margin: 0 }}>{planetAnalyses.overall[key]}</p>
+                        </div>
+                      ) : null)}
                     </div>
                   ) : null}
                 </div>
