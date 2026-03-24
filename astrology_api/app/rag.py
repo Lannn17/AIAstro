@@ -1,16 +1,11 @@
 """
 app/rag.py — RAG 核心模块
 
-流程：query → Gemini embedding → FAISS检索 → Gemini生成答案
-
-优先加载 demo_index，若不存在则加载完整 faiss_index。
+流程：query → e5 embedding → Qdrant检索 → Gemini生成答案
 """
 
 import os
-import json
-import pathlib
 import numpy as np
-import faiss
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -21,61 +16,33 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
+QDRANT_URL     = os.getenv("QDRANT_URL", "")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+if not QDRANT_URL or not QDRANT_API_KEY:
+    raise RuntimeError("请在 .env 中设置 QDRANT_URL 和 QDRANT_API_KEY")
+
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
-EMBED_MODEL    = "gemini-embedding-001"
-GENERATE_MODEL = "gemini-3.1-flash-lite-preview"
-
-# 索引优先级: e5_index → minilm_index → gemini_demo_index → gemini_index
-_BASE     = pathlib.Path(__file__).parent.parent / "data"
-_E5_DIR   = _BASE / "e5_index"
-_MINILM_DIR = _BASE / "minilm_index"
-_DEMO_DIR = _BASE / "gemini_demo_index"
-_FULL_DIR = _BASE / "gemini_index"
-
+GENERATE_MODEL  = "gemini-2.0-flash-lite"
+COLLECTION_NAME = "astro_chunks"
+E5_MODEL        = "intfloat/multilingual-e5-small"
+E5_PREFIX       = "query: "
 
 # ── 懒加载（首次查询时初始化）────────────────────────────────────
 
-_index: faiss.Index | None = None
-_chunks: list[dict] | None = None
-_index_source: str = ""
+_qdrant = None          # QdrantClient
+_e5_model = None        # SentenceTransformer
 
 
-_local_model = None        # SentenceTransformer or None (Gemini)
-_query_prefix: str = ""    # "query: " for e5_index, "" for all others
-
-
-def _pick_index_dir():
-    for d in [_E5_DIR, _MINILM_DIR, _DEMO_DIR, _FULL_DIR]:
-        if (d / "index.faiss").exists():
-            return d
-    raise RuntimeError(
-        "找不到 FAISS 索引文件。请先运行 build_e5_index.py / build_minilm_index.py / build_gemini_index.py。"
-    )
-
-
-def _load_index():
-    global _index, _chunks, _index_source, _local_model
-
-    if _index is not None:
+def _load():
+    global _qdrant, _e5_model
+    if _qdrant is not None:
         return
-
-    index_dir = _pick_index_dir()
-    _index = faiss.read_index(str(index_dir / "index.faiss"))
-    with open(index_dir / "chunks.json", encoding="utf-8") as f:
-        _chunks = json.load(f)
-
-    _index_source = index_dir.name
-
-    # sentence-transformers 索引（e5 或 minilm）
-    if index_dir in (_E5_DIR, _MINILM_DIR):
-        from sentence_transformers import SentenceTransformer
-        mi = json.loads((index_dir / "model_info.json").read_text())
-        _local_model = SentenceTransformer(mi["model"])
-        _query_prefix = mi.get("prefix", "")   # "query: " for e5, "" for minilm
-        print(f"[RAG] using sentence-transformers: {mi['model']} (prefix='{_query_prefix}')")
-
-    print(f"[RAG] index: {_index_source}, {_index.ntotal} vectors")
+    from qdrant_client import QdrantClient
+    from sentence_transformers import SentenceTransformer
+    _qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30)
+    _e5_model = SentenceTransformer(E5_MODEL)
+    print(f"[RAG] Qdrant connected, e5 model loaded")
 
 
 # ── Retrieval ─────────────────────────────────────────────────────
@@ -85,31 +52,30 @@ def retrieve(query: str, k: int = 5) -> list[dict]:
     向量检索，返回 top-k 相关 chunks。
     每条结果格式: {text, source, start, score}
     """
-    _load_index()
+    _load()
 
-    if _local_model is not None:
-        # sentence-transformers (e5: prepend "query: ", minilm: no prefix)
-        encoded = _query_prefix + query
-        query_vec = _local_model.encode([encoded], convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)
-    else:
-        # Gemini 嵌入
-        response = client.models.embed_content(
-            model=EMBED_MODEL,
-            contents=[query],
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
-        )
-        query_vec = np.array([response.embeddings[0].values], dtype=np.float32)
-        faiss.normalize_L2(query_vec)
+    query_vec = _e5_model.encode(
+        [E5_PREFIX + query],
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )[0].tolist()
 
-    scores, indices = _index.search(query_vec, k)
+    response = _qdrant.query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_vec,
+        limit=k,
+        with_payload=True,
+    )
 
     results = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0:
-            continue
-        chunk = dict(_chunks[idx])
-        chunk["score"] = round(float(score), 4)
-        results.append(chunk)
+    for hit in response.points:
+        p = hit.payload or {}
+        results.append({
+            "text":   p.get("text", ""),
+            "source": p.get("source", ""),
+            "start":  p.get("start", 0),
+            "score":  round(float(hit.score), 4),
+        })
 
     return results
 
