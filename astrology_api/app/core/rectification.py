@@ -42,6 +42,36 @@ def _score_transits(natal: AstrologicalSubject,
     return score
 
 
+def _score_solar_arc(natal: AstrologicalSubject,
+                     birth_date: date,
+                     event_date: date,
+                     event_weight: float) -> float:
+    """太阳弧方向打分：SA-ASC 命中本命行星（容许度 1.5°，权重高于行运）"""
+    try:
+        years = (event_date - birth_date).days / 365.25
+        sa_asc = (natal.first_house.abs_pos + years) % 360
+        planet_attrs = ['sun', 'moon', 'mercury', 'venus', 'mars',
+                        'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']
+        score = 0.0
+        for attr in planet_attrs:
+            if not hasattr(natal, attr):
+                continue
+            p = getattr(natal, attr)
+            if p is None:
+                continue
+            diff = abs(sa_asc - p.abs_pos)
+            if diff > 180:
+                diff = 360 - diff
+            for target in (0, 180, 90, 120, 60):
+                orbit = abs(diff - target)
+                if orbit <= 1.5:
+                    score += (1.5 - orbit) * 4.0 * event_weight
+                    break
+        return score
+    except Exception:
+        return 0.0
+
+
 def _score_progressions(natal: AstrologicalSubject,
                         birth_date: date,
                         event_date: date,
@@ -98,6 +128,7 @@ def _score_candidate(h: int, m: int,
             pass
         if include_progressions:
             total += _score_progressions(natal, birth_date, ev_date, h, m, lat, lng, tz_str, ew)
+        total += _score_solar_arc(natal, birth_date, ev_date, ew)
     return total
 
 

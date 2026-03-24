@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] - 2026-03-24
+
+### Added
+- **移动端响应式布局**：全站适配手机屏幕（`@media max-width: 768px`）
+  - 导航栏在手机端变为全宽横向滚动行，隐藏滚动条
+  - 星盘页：侧栏、表单、结果区竖向堆叠；主内容区 padding 从 48px 缩至 16px
+  - 行运页：控制面板叠加在结果区上方
+  - 宫位说明弹窗 padding 在手机端缩小（28px → 16px）
+  - 占星对话面板 min-height 在手机端缩至 400px
+
+---
+
 ## [0.4.0] - 2026-03-23
 
 ### Added

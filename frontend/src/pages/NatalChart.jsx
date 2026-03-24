@@ -34,6 +34,18 @@ export default function NatalChart() {
   const [rectifyResult, setRectifyResult] = useState(null)
   const [rectifyError, setRectifyError] = useState(null)
 
+  // Phase 2: ASC quiz
+  const [ascQuizData, setAscQuizData] = useState(null)
+  const [ascQuizLoading, setAscQuizLoading] = useState(false)
+  const [ascQuizAnswers, setAscQuizAnswers] = useState({})
+  const [recommendedIdx, setRecommendedIdx] = useState(null)
+
+  // Phase 3: theme quiz + confidence
+  const [themeQuizData, setThemeQuizData] = useState(null)
+  const [themeAnswers, setThemeAnswers] = useState({})
+  const [confidenceResult, setConfidenceResult] = useState(null)
+  const [confidenceLoading, setConfidenceLoading] = useState(false)
+
   useEffect(() => { fetchSavedCharts() }, [])
 
   async function fetchSavedCharts() {
@@ -234,9 +246,75 @@ export default function NatalChart() {
         }),
       })
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `错误 ${res.status}`) }
-      setRectifyResult(await res.json())
+      const data = await res.json()
+      setRectifyResult(data)
+      // Reset phase 2/3 states for new run
+      setAscQuizData(null); setAscQuizAnswers({}); setRecommendedIdx(null)
+      setThemeQuizData(null); setThemeAnswers({}); setConfidenceResult(null)
+      // Auto-load ASC quiz
+      if (data.top3?.length > 0) handleLoadAscQuiz(data.top3)
     } catch (e) { setRectifyError(e.message) }
     finally { setRectifyLoading(false) }
+  }
+
+  async function handleLoadAscQuiz(top3) {
+    setAscQuizLoading(true)
+    try {
+      const signs = top3.map(t => t.asc_sign).filter(Boolean)
+      const res = await fetch(`${API_BASE}/api/rectify/asc_quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asc_signs: signs }),
+      })
+      if (res.ok) setAscQuizData((await res.json()).questions)
+    } catch {}
+    finally { setAscQuizLoading(false) }
+  }
+
+  function handleAscAnswer(qId, option) {
+    setAscQuizAnswers(prev => ({ ...prev, [qId]: option }))
+  }
+
+  function handleSubmitAscQuiz() {
+    if (!rectifyResult?.top3) return
+    const top3 = rectifyResult.top3
+    const signScores = {}
+    top3.forEach(t => { signScores[t.asc_sign] = 0 })
+    Object.values(ascQuizAnswers).forEach(opt => {
+      (opt.signs || []).forEach(s => { if (s in signScores) signScores[s]++ })
+    })
+    const best = top3.reduce((a, b) =>
+      (signScores[b.asc_sign] || 0) > (signScores[a.asc_sign] || 0) ? b : a
+    )
+    setRecommendedIdx(top3.indexOf(best))
+    // Load theme quiz
+    fetch(`${API_BASE}/api/rectify/theme_quiz`)
+      .then(r => r.json()).then(d => setThemeQuizData(d.questions)).catch(() => {})
+  }
+
+  async function handleSubmitThemeQuiz() {
+    if (!rectifyResult?.top3 || recommendedIdx === null) return
+    const candidate = rectifyResult.top3[recommendedIdx]
+    const answers = themeQuizData?.map(q => ({
+      question: q.text,
+      answer: themeAnswers[q.id]?.text || '未作答',
+    })) || []
+    setConfidenceLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/rectify/confidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate,
+          birth_year: lastFormData.year, birth_month: lastFormData.month, birth_day: lastFormData.day,
+          latitude: lastFormData.latitude, longitude: lastFormData.longitude,
+          tz_str: lastFormData.tz_str,
+          theme_answers: answers,
+        }),
+      })
+      if (res.ok) setConfidenceResult(await res.json())
+    } catch {}
+    finally { setConfidenceLoading(false) }
   }
 
   function addEvent() {
@@ -674,6 +752,137 @@ export default function NatalChart() {
                   )}
                 </div>
               )}
+
+              {/* ── Phase 2: 上升星座性格问卷 ── */}
+              {(ascQuizLoading || ascQuizData) && (
+                <div style={{ marginTop: '24px', borderTop: '1px solid #2a2a4a', paddingTop: '20px' }}>
+                  <div style={{ color: '#c9a84c', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                    第二阶段 · 上升星座性格验证
+                  </div>
+                  {ascQuizLoading ? (
+                    <div style={{ color: '#5a5a8a', fontSize: '0.85rem' }}>正在生成问卷…</div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {ascQuizData.map(q => (
+                          <div key={q.id}>
+                            <div style={{ color: '#d0d0e8', fontSize: '0.88rem', marginBottom: '8px', fontWeight: 500 }}>{q.text}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {q.options.map(opt => (
+                                <label key={opt.id} style={{
+                                  display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                  padding: '8px 12px', borderRadius: '7px',
+                                  background: ascQuizAnswers[q.id]?.id === opt.id ? '#1e1a38' : '#0e0e22',
+                                  border: `1px solid ${ascQuizAnswers[q.id]?.id === opt.id ? '#7a6aaa' : '#2a2a4a'}`,
+                                  fontSize: '0.83rem', color: '#c0c0e0',
+                                }}>
+                                  <input type="radio" name={q.id} value={opt.id}
+                                    checked={ascQuizAnswers[q.id]?.id === opt.id}
+                                    onChange={() => handleAscAnswer(q.id, opt)}
+                                    style={{ accentColor: '#7a6aaa' }} />
+                                  {opt.text}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {ascQuizData.length > 0 && (
+                        <button
+                          onClick={handleSubmitAscQuiz}
+                          disabled={Object.keys(ascQuizAnswers).length < ascQuizData.length}
+                          style={{
+                            marginTop: '16px', width: '100%', padding: '10px',
+                            background: Object.keys(ascQuizAnswers).length < ascQuizData.length ? '#1e1e3a' : '#7a6aaa',
+                            color: Object.keys(ascQuizAnswers).length < ascQuizData.length ? '#3a3a5a' : '#fff',
+                            border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem',
+                          }}>
+                          提交 → 确定推荐时间
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ── Phase 2 结果：推荐候选 ── */}
+              {recommendedIdx !== null && rectifyResult?.top3 && (
+                <div style={{ marginTop: '16px', background: '#1a2a1a', border: '1px solid #3a6a3a', borderRadius: '10px', padding: '14px 16px' }}>
+                  <div style={{ color: '#88cc88', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>性格匹配推荐</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                    <span style={{ color: '#e0f0e0', fontSize: '1.3rem', fontWeight: 700 }}>
+                      {String(rectifyResult.top3[recommendedIdx].hour).padStart(2, '0')}:{String(rectifyResult.top3[recommendedIdx].minute).padStart(2, '0')}
+                    </span>
+                    <span style={{ color: '#88aa88', fontSize: '0.82rem' }}>上升 {rectifyResult.top3[recommendedIdx].asc_sign}</span>
+                    <span style={{ marginLeft: 'auto', color: '#66bb66', fontSize: '0.72rem', fontWeight: 600 }}>✓ 性格最匹配</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Phase 3: 生命主题问卷 ── */}
+              {themeQuizData && recommendedIdx !== null && (
+                <div style={{ marginTop: '24px', borderTop: '1px solid #2a2a4a', paddingTop: '20px' }}>
+                  <div style={{ color: '#c9a84c', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                    第三阶段 · 生命主题置信度验证
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {themeQuizData.map(q => (
+                      <div key={q.id}>
+                        <div style={{ color: '#d0d0e8', fontSize: '0.88rem', marginBottom: '8px', fontWeight: 500 }}>{q.text}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {q.options.map(opt => (
+                            <label key={opt.id} style={{
+                              display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                              padding: '8px 12px', borderRadius: '7px',
+                              background: themeAnswers[q.id]?.id === opt.id ? '#1a1e30' : '#0e0e22',
+                              border: `1px solid ${themeAnswers[q.id]?.id === opt.id ? '#4a6aaa' : '#2a2a4a'}`,
+                              fontSize: '0.83rem', color: '#c0c0e0',
+                            }}>
+                              <input type="radio" name={`theme_${q.id}`} value={opt.id}
+                                checked={themeAnswers[q.id]?.id === opt.id}
+                                onChange={() => setThemeAnswers(prev => ({ ...prev, [q.id]: opt }))}
+                                style={{ accentColor: '#4a6aaa' }} />
+                              {opt.text}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleSubmitThemeQuiz}
+                    disabled={confidenceLoading || Object.keys(themeAnswers).length < themeQuizData.length}
+                    style={{
+                      marginTop: '16px', width: '100%', padding: '10px',
+                      background: confidenceLoading || Object.keys(themeAnswers).length < themeQuizData.length ? '#1e1e3a' : '#4a6aaa',
+                      color: confidenceLoading || Object.keys(themeAnswers).length < themeQuizData.length ? '#3a3a5a' : '#fff',
+                      border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem',
+                    }}>
+                    {confidenceLoading ? '评估中…' : '提交 → 计算置信度'}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Phase 3 结果：置信度 ── */}
+              {confidenceResult && (
+                <div style={{ marginTop: '20px', background: '#0f0f28', border: '1px solid #3a4a6a', borderRadius: '10px', padding: '16px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>置信度评估</div>
+                    <div style={{
+                      marginLeft: 'auto', padding: '4px 14px', borderRadius: '20px', fontWeight: 700, fontSize: '0.9rem',
+                      background: confidenceResult.score >= 70 ? '#1a3a1a' : confidenceResult.score >= 40 ? '#2a2a1a' : '#2a1a1a',
+                      color: confidenceResult.score >= 70 ? '#66cc66' : confidenceResult.score >= 40 ? '#ccaa44' : '#cc6666',
+                      border: `1px solid ${confidenceResult.score >= 70 ? '#3a6a3a' : confidenceResult.score >= 40 ? '#5a5a2a' : '#5a2a2a'}`,
+                    }}>
+                      {confidenceResult.label} · {confidenceResult.score}分
+                    </div>
+                  </div>
+                  <div className="rectify-overall">
+                    <ReactMarkdown>{confidenceResult.analysis}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>

@@ -880,3 +880,132 @@ def analyze_rectification(
 
     print(f"[rectify] candidates: {len(parsed.get('candidates', []))}, overall len: {len(parsed.get('overall', ''))}")
     return {"candidates": parsed.get("candidates", []), "overall": parsed.get("overall", "")}
+
+
+# ── 上升星座性格问卷生成 ─────────────────────────────────────────
+
+def generate_asc_quiz(asc_signs: list[str]) -> list[dict]:
+    """
+    根据 Top3 的上升星座动态生成 5 道鉴别性选择题。
+    返回: [{id, text, options: [{id, text, signs: [...]}]}]
+    """
+    _load()
+    signs_str = "、".join(asc_signs)
+    prompt = f"""你是一位专业占星师，需要设计一套用于区分以下三种上升星座的性格/外貌选择题：{signs_str}
+
+请生成5道选择题，每道题4个选项（A/B/C/D），从以下5个维度各出1题：
+1. 外貌与体态特征
+2. 他人对你的第一印象
+3. 面对压力或冲突时的本能反应
+4. 日常行为与做事风格
+5. 最能描述你早年经历的模式
+
+要求：
+- 选项必须能有效区分这3个上升星座
+- 描述具体生动，不直接提及星座名称
+- 每个选项标注它最符合哪个/哪些上升星座（用英文名，如 Aries）
+- 可以有一个"都不太符合"选项，signs 为空数组
+
+以JSON格式返回（只返回JSON，不要其他文字）：
+{{
+  "questions": [
+    {{
+      "id": "q1",
+      "text": "题目",
+      "options": [
+        {{"id": "a", "text": "选项描述", "signs": ["Aries"]}},
+        {{"id": "b", "text": "选项描述", "signs": ["Taurus"]}},
+        {{"id": "c", "text": "选项描述", "signs": ["Gemini"]}},
+        {{"id": "d", "text": "以上都不太符合", "signs": []}}
+      ]
+    }}
+  ]
+}}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.6,
+        ),
+    )
+    try:
+        data = json.loads(response.text)
+        return data.get("questions", [])
+    except Exception:
+        return []
+
+
+# ── 生命主题置信度评分 ───────────────────────────────────────────
+
+def calc_confidence(
+    candidate: dict,
+    birth_year: int, birth_month: int, birth_day: int,
+    lat: float, lng: float, tz_str: str,
+    theme_answers: list[dict],
+) -> dict:
+    """
+    根据生命主题问卷答案，评估候选出生时间的置信度。
+    返回: {score: 0-100, label: "高/中/低", analysis: str}
+    """
+    _load()
+
+    h, m = candidate["hour"], candidate["minute"]
+    try:
+        from kerykeion import AstrologicalSubject
+        subj = AstrologicalSubject(
+            "conf", birth_year, birth_month, birth_day,
+            h, m, lng=lng, lat=lat, tz_str=tz_str,
+        )
+        natal_data = {
+            "asc_sign": candidate.get("asc_sign", ""),
+            "sun_sign": subj.sun.sign,
+            "moon_sign": subj.moon.sign,
+            "mc_sign": subj.tenth_house.sign,
+            "stelliums": [],
+        }
+        # 简单统计各宫的行星数（找聚集宫位）
+        house_count = {}
+        for attr in ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto']:
+            if hasattr(subj, attr):
+                p = getattr(subj, attr)
+                if p:
+                    house_count[p.house] = house_count.get(p.house, 0) + 1
+        for house, cnt in house_count.items():
+            if cnt >= 3:
+                natal_data["stelliums"].append(f"{house}宫{cnt}星")
+    except Exception:
+        natal_data = {"asc_sign": candidate.get("asc_sign", ""), "error": "chart calc failed"}
+
+    answers_text = "\n".join(
+        f"Q{i+1}（{a['question']}）→ {a['answer']}" for i, a in enumerate(theme_answers)
+    )
+
+    prompt = f"""候选出生时间：{h:02d}:{m:02d}，上升星座：{natal_data.get('asc_sign','')}
+太阳星座：{natal_data.get('sun_sign','')}，月亮星座：{natal_data.get('moon_sign','')}，天顶：{natal_data.get('mc_sign','')}
+宫位聚集：{natal_data.get('stelliums', []) or '无明显聚集'}
+
+用户生命主题问卷回答：
+{answers_text}
+
+请综合评估以上出生时间与用户生命主题的匹配程度，给出：
+1. 置信度分数（0-100整数）
+2. 置信度标签（高 ≥70 / 中 40-69 / 低 <40）
+3. 简短分析（150字以内）：哪些宫位/行星配置与回答吻合，哪些存在出入
+
+以JSON返回（只返回JSON）：
+{{"score": 75, "label": "中", "analysis": "..."}}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.4,
+        ),
+    )
+    try:
+        return json.loads(response.text)
+    except Exception:
+        return {"score": 0, "label": "低", "analysis": response.text}

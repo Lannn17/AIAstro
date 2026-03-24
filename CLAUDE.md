@@ -13,7 +13,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.4.0** — 出生时间校正（Rectification）上线；行运增强：分级容许度、主相位优先、DB 缓存、tone/theme 标签、force_refresh；行星修复：过滤 true_node/true_lilith 重复项，新增 Mean_Lilith 翻译。
+**v0.5.0** — 移动端响应式布局：导航横向滚动、星盘/行运页竖向堆叠、弹窗与间距适配手机屏幕。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---
