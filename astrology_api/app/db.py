@@ -158,6 +158,17 @@ def _sqlite_write(sql: str, params: list = None) -> int:
 
 # ── Public API ───────────────────────────────────────────────────
 
+def _has_column(table: str, column: str) -> bool:
+    """Check whether a column exists in a table."""
+    sql = f"PRAGMA table_info({table})"
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql))
+        return any(r.get("name") == column for r in rows)
+    with sqlite3.connect(_db_path) as conn:
+        rows = conn.execute(sql).fetchall()
+        return any(r[1] == column for r in rows)
+
+
 def create_tables():
     for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL, _CREATE_PLANET_CACHE]:
         if USE_TURSO:
@@ -165,15 +176,14 @@ def create_tables():
         else:
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(ddl)
-    # Migrate existing tables: add is_guest column if absent
-    try:
+    # Migrate: add is_guest column only if it doesn't already exist
+    if not _has_column("saved_charts", "is_guest"):
+        print("[DB] Adding is_guest column to saved_charts")
         if USE_TURSO:
             _turso_exec(_MIGRATE_IS_GUEST)
         else:
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(_MIGRATE_IS_GUEST)
-    except Exception:
-        pass  # Column already exists
 
 
 def db_list_charts() -> list[dict]:
