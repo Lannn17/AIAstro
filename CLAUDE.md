@@ -5,6 +5,12 @@ This file provides guidance to Claude Code when working with this repository.
 
 ---
 
+## Hard rules / 硬性规则
+
+- **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
+
+---
+
 ## Current version / 当前版本
 
 **v0.4.0** — 出生时间校正（Rectification）上线；行运增强：分级容许度、主相位优先、DB 缓存、tone/theme 标签、force_refresh；行星修复：过滤 true_node/true_lilith 重复项，新增 Mean_Lilith 翻译。

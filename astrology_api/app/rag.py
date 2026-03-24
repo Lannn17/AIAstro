@@ -23,7 +23,7 @@ if not QDRANT_URL or not QDRANT_API_KEY:
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
-GENERATE_MODEL  = "gemini-2.0-flash-lite"
+GENERATE_MODEL  = "gemini-3.1-flash-lite-preview"
 COLLECTION_NAME = "astro_chunks"
 E5_MODEL        = "intfloat/multilingual-e5-small"
 E5_PREFIX       = "query: "

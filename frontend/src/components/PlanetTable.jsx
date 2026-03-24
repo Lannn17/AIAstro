@@ -38,7 +38,8 @@ export default function PlanetTable({ planets, language = 'zh' }) {
   if (!planets) return null
 
   const L = UI_LABELS[language] || UI_LABELS['en']
-  const rows = Object.entries(planets)
+  const SKIP_PLANETS = new Set(['true_node', 'true_lilith', 'true_south_node'])
+  const rows = Object.entries(planets).filter(([k]) => !SKIP_PLANETS.has(k))
 
   return (
     <div className="rounded-xl overflow-hidden"
