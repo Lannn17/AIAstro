@@ -108,11 +108,11 @@ def get_planet_data(subject: AstrologicalSubject, language: LanguageType = "pt")
         house_num = HOUSE_NAME_TO_NUM.get(str(planet.house), 0)
 
         planets_data[name.lower()] = PlanetData(
-            name=translate_planet(name, language),
+            name=name,
             name_original=name,
             longitude=planet.abs_pos,
             latitude=0.0,
-            sign=translate_sign(sign_full, language),
+            sign=sign_full,
             sign_original=sign_full,
             sign_num=planet.sign_num,
             house=house_num,
@@ -147,7 +147,7 @@ def get_houses_data(subject: AstrologicalSubject, language: LanguageType = "pt")
 
         houses_data[str(i)] = HouseCuspData(
             number=i,
-            sign=translate_sign(sign_full, language),
+            sign=sign_full,
             sign_original=sign_full,
             sign_num=house.sign_num,
             longitude=house.abs_pos

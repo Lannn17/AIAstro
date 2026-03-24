@@ -107,13 +107,14 @@ export default function PlanetTable({ planets, language = 'zh' }) {
                   <span className="mr-2 text-base" style={{ color: '#c9a84c' }}>
                     {PLANET_SYMBOLS[key] || '·'}
                   </span>
-                  {PLANET_NAMES[language]?.[planet.name_original] || planet.name}
+                  {PLANET_NAMES[language]?.[planet.name_original || planet.name] || planet.name}
                 </td>
                 <td className="px-4 py-2">
                   {(() => {
-                    const signDisplay = SIGN_NAMES[language]?.[planet.sign_original] || planet.sign
+                    const signEn = planet.sign_original || planet.sign
+                    const signDisplay = SIGN_NAMES[language]?.[signEn] || planet.sign
                     return <>
-                      <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || ''}</span>
+                      <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
                       {signDisplay}
                     </>
                   })()}
