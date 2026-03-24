@@ -31,7 +31,7 @@ E5_PREFIX       = "query: "
 # ── 懒加载（首次查询时初始化）────────────────────────────────────
 
 _qdrant = None          # QdrantClient
-_e5_model = None        # fastembed TextEmbedding
+_e5_model = None        # SentenceTransformer
 
 
 def _load():
@@ -39,10 +39,10 @@ def _load():
     if _qdrant is not None:
         return
     from qdrant_client import QdrantClient
-    from fastembed import TextEmbedding
+    from sentence_transformers import SentenceTransformer
     _qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30)
-    _e5_model = TextEmbedding(E5_MODEL)
-    print(f"[RAG] Qdrant connected, fastembed e5 model loaded")
+    _e5_model = SentenceTransformer(E5_MODEL)
+    print(f"[RAG] Qdrant connected, e5 model loaded")
 
 
 # ── Retrieval ─────────────────────────────────────────────────────
@@ -54,7 +54,11 @@ def retrieve(query: str, k: int = 5) -> list[dict]:
     """
     _load()
 
-    query_vec = next(_e5_model.embed([E5_PREFIX + query])).tolist()
+    query_vec = _e5_model.encode(
+        [E5_PREFIX + query],
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )[0].tolist()
 
     response = _qdrant.query_points(
         collection_name=COLLECTION_NAME,
