@@ -55,6 +55,8 @@ export default function NatalChart() {
   const [confidenceLoading, setConfidenceLoading] = useState(false)
 
   const [showGuestConfirm, setShowGuestConfirm] = useState(false)
+  const [pendingFormData, setPendingFormData] = useState(null)
+  const [pendingLocationName, setPendingLocationName] = useState(null)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -93,6 +95,18 @@ export default function NatalChart() {
   }
 
   async function handleSubmit(formData, locationName) {
+    // Guests must confirm data submission before seeing any results
+    if (isGuest) {
+      setPendingFormData(formData)
+      setPendingLocationName(locationName)
+      setShowGuestConfirm(true)
+      return
+    }
+    await doCalculate(formData, locationName)
+  }
+
+  // Calculate chart (owner path — no auto-save)
+  async function doCalculate(formData, locationName) {
     setLoading(true)
     setError(null)
     setResult(null)
@@ -133,22 +147,97 @@ export default function NatalChart() {
     }
   }
 
-  async function handleSave() {
-    if (!result || !lastFormData) return
-    if (isGuest) { setShowGuestConfirm(true); return }
-    await doSave()
+  // Guest confirmed: calculate + auto-save to pending queue
+  async function doGuestSubmit() {
+    const formData = pendingFormData
+    const locationName = pendingLocationName
+    setShowGuestConfirm(false)
+    setPendingFormData(null)
+    setPendingLocationName(null)
+
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    setSvgContent(null)
+    setSavedId(null)
+    setPlanetAnalyses({})
+    setLastFormData(formData)
+    setLastLocationName(locationName)
+    setMessages([])
+    setChatSummary('')
+
+    let chartData = null
+    let svgData = null
+    try {
+      const res = await fetch(`${API_BASE}/api/natal_chart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+      if (!res.ok) throw new Error(`错误 ${res.status}`)
+      chartData = await res.json()
+      setResult(chartData)
+
+      const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          natal_chart: formData,
+          chart_type: 'natal',
+          show_aspects: true,
+          language: formData.language || 'zh',
+          theme: 'dark',
+        }),
+      })
+      if (svgRes.ok) { svgData = await svgRes.text(); setSvgContent(svgData) }
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+      return
+    } finally {
+      setLoading(false)
+    }
+
+    // Auto-save to pending queue (no auth token → backend marks is_guest=1)
+    try {
+      const label = formData.name
+        ? `${formData.name} · ${formData.year}/${formData.month}/${formData.day}`
+        : `星盘 ${formData.year}/${formData.month}/${formData.day}`
+      await fetch(`${API_BASE}/api/charts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label,
+          name: formData.name || null,
+          birth_year: formData.year,
+          birth_month: formData.month,
+          birth_day: formData.day,
+          birth_hour: formData.hour,
+          birth_minute: formData.minute,
+          location_name: locationName || null,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          tz_str: formData.tz_str,
+          house_system: formData.house_system,
+          language: formData.language,
+          chart_data: chartData,
+          svg_data: svgData || null,
+        }),
+      })
+    } catch { /* silent — results still shown even if queue save fails */ }
   }
 
-  async function doSave() {
+  async function handleSave() {
+    if (!result || !lastFormData) return
     setSaving(true)
     try {
       const label = lastFormData.name
-        ? `${lastFormData.name} · ${lastFormData.birth_year}/${lastFormData.birth_month}/${lastFormData.birth_day}`
-        : `星盘 ${lastFormData.birth_year}/${lastFormData.birth_month}/${lastFormData.birth_day}`
+        ? `${lastFormData.name} · ${lastFormData.year}/${lastFormData.month}/${lastFormData.day}`
+        : `星盘 ${lastFormData.year}/${lastFormData.month}/${lastFormData.day}`
 
       const res = await fetch(`${API_BASE}/api/charts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           label,
           name: lastFormData.name || null,
@@ -434,7 +523,7 @@ export default function NatalChart() {
 
       {showGuestConfirm && (
         <GuestSaveConfirmModal
-          onConfirm={() => { setShowGuestConfirm(false); doSave() }}
+          onConfirm={doGuestSubmit}
           onCancel={() => setShowGuestConfirm(false)}
         />
       )}
@@ -603,7 +692,7 @@ export default function NatalChart() {
             </div>
           )}
 
-          {result && !savedId && !loading && svgContent && (
+          {result && !savedId && !loading && svgContent && !isGuest && (
             <button
               onClick={handleSave}
               disabled={saving}

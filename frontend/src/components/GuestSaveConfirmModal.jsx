@@ -15,18 +15,19 @@ export default function GuestSaveConfirmModal({ onConfirm, onCancel }) {
         maxWidth: '380px',
       }}>
         <div style={{ color: '#c9a84c', fontSize: '1.4rem', textAlign: 'center', marginBottom: '14px' }}>
-          ⚠
+          ✦
         </div>
         <div style={{ color: '#e8e0f0', fontSize: '0.95rem', fontWeight: 600, textAlign: 'center', marginBottom: '12px' }}>
-          提交前请确认
+          访客须知
         </div>
         <div style={{ color: '#8888aa', fontSize: '0.85rem', lineHeight: 1.75, marginBottom: '22px' }}>
           您正以<span style={{ color: '#c9a84c' }}>访客身份</span>使用本应用。
-          提交后，您的星盘数据将进入<strong style={{ color: '#e8e0f0' }}>待审核队列</strong>，
-          由所有者确认后才会正式保存。
+          继续后，您填写的出生数据将自动提交至
+          <strong style={{ color: '#e8e0f0' }}>待审核队列</strong>，
+          由所有者确认后正式保存。
           <br /><br />
-          审核通过前，数据不会出现在任何星盘列表中。
-          如需保存并自行管理，请先登录。
+          确认提交后，星盘计算结果将立即显示。
+          若需自行管理星盘，请返回并登录。
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
@@ -39,7 +40,7 @@ export default function GuestSaveConfirmModal({ onConfirm, onCancel }) {
               fontSize: '0.9rem', cursor: 'pointer',
             }}
           >
-            取消
+            返回
           </button>
           <button
             onClick={onConfirm}
@@ -51,7 +52,7 @@ export default function GuestSaveConfirmModal({ onConfirm, onCancel }) {
               fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
             }}
           >
-            提交审核
+            确认并计算
           </button>
         </div>
       </div>
