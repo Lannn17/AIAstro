@@ -4,7 +4,8 @@ Router para os endpoints de mapa natal.
 Este módulo contém os endpoints relacionados ao cálculo de mapas natais.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from typing import Any, Dict, Optional
+from pydantic import BaseModel
 
 from ..schemas.models import NatalChartRequest, NatalChartResponse
 from ..core.calculations import (
@@ -94,3 +95,24 @@ async def calculate_natal_chart(request: NatalChartRequest):
             status_code=500,
             detail=f"Erro ao calcular mapa natal: {str(e)}"
         )
+
+
+
+# ── 行星逐一解读 ──────────────────────────────────────────────────
+
+class InterpretPlanetsRequest(BaseModel):
+    natal_chart: Dict[str, Any]
+    language: str = 'zh'
+
+
+@router.post("/interpret_planets")
+async def interpret_planets(body: InterpretPlanetsRequest):
+    """为本命盘每颗行星生成解读，并附综合概述。返回 {analyses: {sun:..., overall:...}}"""
+    try:
+        from ..rag import analyze_planets
+        result = analyze_planets(body.natal_chart, body.language)
+        return {"analyses": result}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interpret planets error: {e}")

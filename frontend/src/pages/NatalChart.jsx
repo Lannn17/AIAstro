@@ -24,6 +24,10 @@ export default function NatalChart() {
   const [chatLoading, setChatLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
 
+  // Planet interpretations
+  const [planetAnalyses, setPlanetAnalyses] = useState({})
+  const [analysesLoading, setAnalysesLoading] = useState(false)
+
   const [rectifyOpen, setRectifyOpen] = useState(false)
   const [rectifyEvents, setRectifyEvents] = useState([
     { year: '', month: '', day: '', event_type: 'marriage', weight: 2 }
@@ -61,6 +65,7 @@ export default function NatalChart() {
     setResult(null)
     setSvgContent(null)
     setSavedId(null)
+    setPlanetAnalyses({})
     setLastFormData(formData)
     setLastLocationName(locationName)
     setMessages([])
@@ -219,6 +224,23 @@ export default function NatalChart() {
     } finally {
       setChatLoading(false)
     }
+  }
+
+  async function handleInterpretPlanets() {
+    if (!result) return
+    setAnalysesLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/interpret_planets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ natal_chart: result, language: result.input_data?.language || 'zh' }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPlanetAnalyses(data.analyses || {})
+      }
+    } catch (e) { console.error(e) }
+    finally { setAnalysesLoading(false) }
   }
 
   async function handleRectify() {
@@ -508,7 +530,34 @@ export default function NatalChart() {
               {result && (
                 <div className="space-y-6">
                   {svgContent && <ChartWheel svgContent={svgContent} language={result.input_data?.language} />}
-                  <PlanetTable planets={result.planets} language={result.input_data?.language} />
+                  <PlanetTable planets={result.planets} language={result.input_data?.language} analyses={planetAnalyses} />
+                  {/* 行星解读按钮 / 综合概述 */}
+                  {!Object.keys(planetAnalyses).length ? (
+                    <button onClick={handleInterpretPlanets} disabled={analysesLoading}
+                      style={{
+                        width: '100%', padding: '11px',
+                        background: analysesLoading ? '#1e1e3a' : 'linear-gradient(135deg, #2a1a4a, #1a1a3a)',
+                        border: '1px solid #7a6aaa', borderRadius: '8px',
+                        color: analysesLoading ? '#5a5a8a' : '#c9a84c',
+                        fontWeight: 700, fontSize: '0.88rem', cursor: analysesLoading ? 'not-allowed' : 'pointer',
+                        letterSpacing: '0.05em',
+                      }}>
+                      {analysesLoading ? '✦ 解读生成中… 约 10-20 秒' : '✦ 生成行星解读'}
+                    </button>
+                  ) : planetAnalyses.overall ? (
+                    <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
+                      <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>本命盘综合概述</div>
+                      <div style={{ color: '#d0d0e8', fontSize: '0.9rem', lineHeight: 1.85 }}>
+                        <ReactMarkdown components={{
+                          p: ({children}) => <p style={{ margin: '0 0 0.6em', color: '#d0d0e8' }}>{children}</p>,
+                          strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
+                          em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
+                          ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
+                          li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#d0d0e8' }}>{children}</li>,
+                        }}>{planetAnalyses.overall}</ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </>

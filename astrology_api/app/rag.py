@@ -1021,3 +1021,108 @@ def calc_confidence(
         return _parse_json(response.text)
     except Exception:
         return {"score": 0, "label": "低", "analysis": response.text}
+
+
+# ── 本命盘行星逐一解读 ────────────────────────────────────────────
+
+_SKIP_PLANETS = {'true_node', 'true_lilith', 'true_south_node'}
+
+def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
+    """
+    为本命盘每颗行星生成简洁解读（单次 Gemini 调用，返回全部结果）。
+    返回: {"sun": "解读文字", "moon": "...", ...}
+    """
+    _load()
+    planets = natal_chart.get('planets', {})
+    asc = natal_chart.get('ascendant', {})
+    asc_sign = asc.get('sign_original') or asc.get('sign', '')
+
+    # 行星列表（含逆行标注）
+    lines = []
+    for key, p in planets.items():
+        if key in _SKIP_PLANETS:
+            continue
+        name = p.get('name_original') or p.get('name', key)
+        sign = p.get('sign_original') or p.get('sign', '')
+        house = p.get('house', '')
+        retro = '（逆行）' if p.get('retrograde') else ''
+        lines.append(f"{name}: {sign} 第{house}宫{retro}")
+    planet_list = '\n'.join(lines)
+
+    # 宫位守星表（第N宫所在星座 → 该星座守护星）
+    houses = natal_chart.get('houses', {})
+    house_lines = []
+    for num in range(1, 13):
+        h = houses.get(str(num), {})
+        hsign = h.get('sign_original') or h.get('sign', '')
+        if hsign:
+            house_lines.append(f"第{num}宫: {hsign}")
+    house_summary = '\n'.join(house_lines)
+
+    # 主要相位摘要（合/对/四分/三分/六分，容许度<6°）
+    aspects = natal_chart.get('aspects', [])
+    aspect_lines = []
+    for a in aspects:
+        p1 = a.get('p1_name', '')
+        p2 = a.get('p2_name', '')
+        asp = a.get('aspect', '')
+        orbit = a.get('orbit', 99)
+        if orbit < 6 and p1 and p2 and asp:
+            aspect_lines.append(f"{p1} {asp} {p2}（容许度{round(orbit,1)}°）")
+    aspect_summary = '\n'.join(aspect_lines) if aspect_lines else '（无数据）'
+
+    # 尝试从 Qdrant 检索相关片段作为参考
+    try:
+        chunks = retrieve(f"行星星座宫位解读 {asc_sign}上升", k=3)
+        rag_section = ''
+        if chunks:
+            parts = [f"[参考{i} · {c['source']}]\n{c['text']}" for i, c in enumerate(chunks, 1)]
+            rag_section = '\n\n---\n参考书籍片段（可选引用）：\n' + '\n\n'.join(parts)
+    except Exception:
+        rag_section = ''
+
+    prompt = f"""请为以下本命盘行星位置分别生成占星解读，并在最后给出一个综合概述。
+
+上升星座：{asc_sign}
+
+行星位置：
+{planet_list}
+
+宫位起点星座（用于推算飞星/守护星落位）：
+{house_summary}
+
+主要相位：
+{aspect_summary}
+
+分析要求——每颗行星必须同时结合以下维度：
+1. 【星座特质】该行星在此星座的表达方式与能量底色
+2. 【宫位主题】该宫位代表的人生领域，以及行星如何在此显化
+3. 【飞星影响】该行星所在星座的守护星落在哪个宫位，形成何种能量流向；若行星本身也是某宫主星，一并说明其飞入他宫的含义
+4. 若有重要相位（容许度<4°），简述其对该行星能量的加强或挑战
+5. 逆行行星需特别说明内化/重新审视的主题
+
+每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
+
+综合概述（overall）：基于整张盘的格局，概括此人主要的人生命题、核心潜力、以及可能面临的挑战与成长方向，150-200 字。
+
+以 JSON 格式返回：
+{{
+  "sun": "...", "moon": "...", "mercury": "...",
+  ...,
+  "overall": "综合概述文字"
+}}{rag_section}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            response_mime_type="application/json",
+            temperature=0.6,
+        ),
+    )
+    try:
+        return _parse_json(response.text)
+    except Exception as e:
+        print(f"[planets] JSON parse error: {e}")
+        return {}

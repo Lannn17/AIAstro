@@ -1,3 +1,5 @@
+import React from 'react'
+
 const PLANET_SYMBOLS = {
   sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
   jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
@@ -67,7 +69,7 @@ function formatDegree(longitude) {
   return `${deg}°${String(min).padStart(2, '0')}'`
 }
 
-export default function PlanetTable({ planets, language = 'zh' }) {
+export default function PlanetTable({ planets, language = 'zh', analyses = {} }) {
   if (!planets) return null
 
   const L = UI_LABELS[language] || UI_LABELS['en']
@@ -96,46 +98,58 @@ export default function PlanetTable({ planets, language = 'zh' }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(([key, planet]) => (
-              <tr key={key}
-                className="transition-colors"
-                style={{ borderBottom: '1px solid #1a1a3a' }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1a1a35'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <td className="px-4 py-2 font-medium">
-                  <span className="mr-2 text-base" style={{ color: '#c9a84c' }}>
-                    {PLANET_SYMBOLS[key] || '·'}
-                  </span>
-                  {PLANET_NAMES[language]?.[planet.name_original || planet.name] || planet.name}
-                </td>
-                <td className="px-4 py-2">
-                  {(() => {
-                    const signEn = planet.sign_original || planet.sign
-                    const signDisplay = SIGN_NAMES[language]?.[signEn] || planet.sign
-                    return <>
-                      <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
-                      {signDisplay}
-                    </>
-                  })()}
-                </td>
-                <td className="px-4 py-2" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
-                  {formatDegree(planet.longitude)}
-                </td>
-                <td className="px-4 py-2">
-                  <span className="px-2 py-0.5 rounded text-xs"
-                    style={{ backgroundColor: '#1e1e40', color: '#a07de0' }}
+            {rows.map(([key, planet]) => {
+              const analysis = analyses[key]
+              return (
+                <React.Fragment key={key}>
+                  <tr
+                    className="transition-colors"
+                    style={{ borderBottom: analysis ? 'none' : '1px solid #1a1a3a' }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1a1a35'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    {L.houseCell(planet.house)}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {planet.retrograde && (
-                    <span style={{ color: '#ff8888', fontSize: '0.75rem' }}>℞</span>
+                    <td className="px-4 py-2 font-medium">
+                      <span className="mr-2 text-base" style={{ color: '#c9a84c' }}>
+                        {PLANET_SYMBOLS[key] || '·'}
+                      </span>
+                      {PLANET_NAMES[language]?.[planet.name_original || planet.name] || planet.name}
+                    </td>
+                    <td className="px-4 py-2">
+                      {(() => {
+                        const signEn = planet.sign_original || planet.sign
+                        const signDisplay = SIGN_NAMES[language]?.[signEn] || planet.sign
+                        return <>
+                          <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
+                          {signDisplay}
+                        </>
+                      })()}
+                    </td>
+                    <td className="px-4 py-2" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
+                      {formatDegree(planet.longitude)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="px-2 py-0.5 rounded text-xs"
+                        style={{ backgroundColor: '#1e1e40', color: '#a07de0' }}
+                      >
+                        {L.houseCell(planet.house)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {planet.retrograde && (
+                        <span style={{ color: '#ff8888', fontSize: '0.75rem' }}>℞</span>
+                      )}
+                    </td>
+                  </tr>
+                  {analysis && (
+                    <tr style={{ borderBottom: '1px solid #1a1a3a' }}>
+                      <td colSpan={5} style={{ padding: '6px 16px 12px', color: '#9090b8', fontSize: '0.82rem', lineHeight: 1.8, background: '#0e0e1e' }}>
+                        {analysis}
+                      </td>
+                    </tr>
                   )}
-                </td>
-              </tr>
-            ))}
+                </React.Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
