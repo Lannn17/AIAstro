@@ -256,12 +256,15 @@ export default function NatalChart() {
           svg_data: svgContent || null,
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(`${res.status} ${body.detail || ''}`)
+      }
       const saved = await res.json()
       setSavedId(saved.id)
       await fetchSavedCharts()
-    } catch {
-      setError('保存失败')
+    } catch (e) {
+      setError(`保存失败: ${e.message}`)
     } finally {
       setSaving(false)
     }
