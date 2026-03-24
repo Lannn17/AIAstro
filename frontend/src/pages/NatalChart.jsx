@@ -251,8 +251,6 @@ export default function NatalChart() {
       // Reset phase 2/3 states for new run
       setAscQuizData(null); setAscQuizAnswers({}); setRecommendedIdx(null)
       setThemeQuizData(null); setThemeAnswers({}); setConfidenceResult(null)
-      // Auto-load ASC quiz
-      if (data.top3?.length > 0) handleLoadAscQuiz(data.top3)
     } catch (e) { setRectifyError(e.message) }
     finally { setRectifyLoading(false) }
   }
@@ -760,6 +758,20 @@ export default function NatalChart() {
                         }}>{rectifyResult.overall}</ReactMarkdown>
                       </div>
                     </div>
+                  )}
+                  {/* 进入第二阶段按钮 */}
+                  {!ascQuizData && !ascQuizLoading && (
+                    <button
+                      onClick={() => handleLoadAscQuiz(rectifyResult.top3)}
+                      style={{
+                        marginTop: '16px', width: '100%', padding: '11px',
+                        background: 'linear-gradient(135deg, #2a1a4a, #1a1a3a)',
+                        border: '1px solid #7a6aaa', borderRadius: '8px',
+                        color: '#c9a84c', fontWeight: 700, fontSize: '0.88rem',
+                        cursor: 'pointer', letterSpacing: '0.05em',
+                      }}>
+                      ✦ 进入第二阶段：上升星座性格验证 →
+                    </button>
                   )}
                 </div>
               )}
