@@ -361,7 +361,7 @@ def rag_query(query: str, k: int = 5) -> dict:
         "index_used": str   # "demo_index" 或 "faiss_index"
     }
     """
-    _load_index()
+    _load()
     chunks = retrieve(query, k=k)
     answer = generate(query, chunks)
 
@@ -417,7 +417,7 @@ def chat_with_chart(query: str, chart_data: dict, k: int = 5,
     prompt 顺序：星盘 → 问题 → 书籍参考（可选）
     始终返回来源及引用检测结果，供前端评估 RAG 质量。
     """
-    _load_index()
+    _load()
     chunks = retrieve(query, k=k)
     chart_summary = format_chart_summary(chart_data)
 
@@ -479,7 +479,7 @@ def analyze_transits(
         "index_used": str
     }
     """
-    _load_index()
+    _load()
 
     # 取最紧密的相位构造检索 query
     tight = sorted(transit_aspects, key=lambda a: a.get("orbit", 99))[:3]
@@ -793,7 +793,7 @@ def analyze_rectification(
     - 算法选出这些时间的占星依据
     - 推荐哪个候选，以及如何进一步验证
     """
-    _load_index()
+    _load()
 
     chart_summary = format_chart_summary(natal_chart, max_aspects=5) if natal_chart else "（无本命盘数据）"
 
