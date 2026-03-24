@@ -11,12 +11,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [0.5.0] - 2026-03-24
 
 ### Added
-- **移动端响应式布局**：全站适配手机屏幕（`@media max-width: 768px`）
-  - 导航栏在手机端变为全宽横向滚动行，隐藏滚动条
-  - 星盘页：侧栏、表单、结果区竖向堆叠；主内容区 padding 从 48px 缩至 16px
+- **校正 Phase 2：上升星座性格问卷** — 校正完成后自动调用 AI，针对 Top3 上升星座动态生成 5 道鉴别题（外貌 / 第一印象 / 应激反应 / 行为风格 / 早年模式），用户作答后自动筛选性格最匹配的候选时间（`POST /api/rectify/asc_quiz`）
+- **校正 Phase 3：生命主题置信度验证** — 6 道固定生命主题问卷（事业 / 感情 / 家庭 / 早年经历 / 挑战类型 / 意义感来源），结合候选时间的宫位格局由 AI 评分 0–100 并给出简短分析（`GET /api/rectify/theme_quiz`、`POST /api/rectify/confidence`）
+- **校正算法：太阳弧方向评分** — 候选时间打分新增 SA-ASC 命中本命行星权重（容许度 1.5°，贡献高于行运）
+- **移动端响应式布局** — 全站适配手机屏幕（`@media max-width: 768px`）
+  - 导航栏变为全宽横向滚动行，隐藏滚动条
+  - 星盘页：侧栏 / 表单 / 结果区竖向堆叠
   - 行运页：控制面板叠加在结果区上方
-  - 宫位说明弹窗 padding 在手机端缩小（28px → 16px）
-  - 占星对话面板 min-height 在手机端缩至 400px
+  - 宫位说明弹窗、占星对话面板均缩减内边距
+
+### Changed
+- **部署平台：Render → HuggingFace Spaces**（端口 7860，新增 `README.md` 满足 HF 元数据要求）
+- **向量检索：FAISS → Qdrant Cloud**（`rag.py` 检索层全面改写，支持云端向量库）
+- **依赖回退**：fastembed 试用后恢复至 sentence-transformers（稳定性与兼容性）
+
+### Fixed
+- 校正结果卡片 `reason` / `overall` 字段改为 Markdown 渲染，支持标题、加粗、列表格式
+- 前端 PlanetTable 行星名称新增多语言 fallback，避免未知 key 显示为空
+- 翻译文件补全 `Mean_South_Node` 七语言条目，同步前端符号表
+- Vite 开发代理端口修正为 8001
+- RAG 模块 `_load_index()` 旧调用替换为 `_load()`
+- `main.py` 中 `load_dotenv()` 移至 app 导入之前，确保环境变量优先加载
 
 ---
 

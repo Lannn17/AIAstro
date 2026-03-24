@@ -97,6 +97,8 @@ export default function ChartForm({ onSubmit, loading }) {
   const [locationQuery, setLocationQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [searching, setSearching] = useState(false)
+  const [searchFailed, setSearchFailed] = useState(false)
+  const [showManual, setShowManual] = useState(false)
   const [showHouseInfo, setShowHouseInfo] = useState(false)
   const debounceRef = useRef(null)
 
@@ -116,6 +118,7 @@ export default function ChartForm({ onSubmit, loading }) {
     set('latitude', '')
     set('longitude', '')
     setSuggestions([])
+    setSearchFailed(false)
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (value.length < 2) return
@@ -129,8 +132,9 @@ export default function ChartForm({ onSubmit, loading }) {
         )
         const data = await res.json()
         setSuggestions(data)
+        if (data.length === 0) setSearchFailed(true)
       } catch {
-        // network error — suggestions stay empty
+        setSearchFailed(true)
       } finally { setSearching(false) }
     }, 500)
   }

@@ -13,7 +13,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.5.0** — 移动端响应式布局：导航横向滚动、星盘/行运页竖向堆叠、弹窗与间距适配手机屏幕。
+**v0.5.0** — 校正 Phase 2/3（ASC 性格问卷 + 生命主题置信度）、太阳弧评分；部署迁移至 HuggingFace Spaces；向量检索迁移至 Qdrant Cloud；移动端全站响应式布局。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---
