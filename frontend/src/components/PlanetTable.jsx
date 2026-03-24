@@ -18,6 +18,25 @@ const SIGN_SYMBOLS = {
   '獅子座': '♌', '乙女座': '♍', '蠍座': '♏', '山羊座': '♑', '魚座': '♓',
 }
 
+// Fallback translations for planets stored untranslated in old saved charts
+const PLANET_NAMES = {
+  zh: {
+    Sun: '太阳', Moon: '月亮', Mercury: '水星', Venus: '金星', Mars: '火星',
+    Jupiter: '木星', Saturn: '土星', Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星',
+    Mean_Node: '北交点', True_Node: '北交点', Mean_South_Node: '南交点', True_South_Node: '南交点',
+    Chiron: '凯龙星', Lilith: '黑月莉莉丝', Mean_Lilith: '黑月莉莉丝',
+    Ascendant: '上升点', Midheaven: '天顶',
+  },
+  ja: {
+    Sun: '太陽', Moon: '月', Mercury: '水星', Venus: '金星', Mars: '火星',
+    Jupiter: '木星', Saturn: '土星', Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星',
+    Mean_Node: '平均ノースノード', True_Node: 'ノースノード',
+    Mean_South_Node: '平均サウスノード', True_South_Node: 'サウスノード',
+    Chiron: 'カイロン', Lilith: 'リリス', Mean_Lilith: 'リリス',
+    Ascendant: 'アセンダント', Midheaven: 'MC',
+  },
+}
+
 const UI_LABELS = {
   zh: { title: '✦ 行星', planet: '行星', sign: '星座', degree: '度数', house: '宫位', retro: '逆行', houseCell: n => `第${n}宫` },
   ja: { title: '✦ 惑星', planet: '惑星', sign: '星座', degree: '度数', house: 'ハウス', retro: '逆行', houseCell: n => `第${n}H` },
@@ -74,7 +93,7 @@ export default function PlanetTable({ planets, language = 'zh' }) {
                   <span className="mr-2 text-base" style={{ color: '#c9a84c' }}>
                     {PLANET_SYMBOLS[key] || '·'}
                   </span>
-                  {planet.name}
+                  {PLANET_NAMES[language]?.[planet.name_original] || planet.name}
                 </td>
                 <td className="px-4 py-2">
                   <span className="mr-1">{SIGN_SYMBOLS[planet.sign] || ''}</span>
