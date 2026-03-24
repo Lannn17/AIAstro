@@ -13,7 +13,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Current version / 当前版本
 
-**v0.6.0** — JWT 登录 + 访客模式 + 待审核队列（云端数据隔离）；`is_guest` 列自动迁移；移除旧 `verify_api_key` stub。
+**v0.6.1** — JWT 登录 + 访客模式 + 待审核队列（云端数据隔离）；`is_guest` 列自动迁移；移除旧 `verify_api_key` stub。
 See `CHANGELOG.md` for full history and diff from upstream fork.
 
 ---

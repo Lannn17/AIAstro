@@ -8,6 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.1] - 2026-03-24
+
+### Fixed
+- **AI 解读无响应** — 按钮 `onClick` 误将 DOM 事件对象当作星盘数据传入 API，导致请求携带垃圾数据静默失败；改为 `() => handleInterpretPlanets()` 并加入响应式错误提示
+- **启动阻塞** — 将 `create_tables()` 移至 `lifespan`，防止启动时静默挂起
+- **保存失败提示** — 前端现在展示后端返回的真实错误信息而非通用提示
+- **Turso ALTER TABLE 400** — 改用 `PRAGMA table_info` 检测列是否已存在，修复 Turso 上重复迁移报 400 的问题
+- **HuggingFace 兼容性** — 将 `python-jose` 替换为 `PyJWT`，修复云端 JWT 导入错误；Space metadata 补充 `app_port: 7860`
+
+---
+
 ## [0.6.0] - 2026-03-24
 
 ### Added
