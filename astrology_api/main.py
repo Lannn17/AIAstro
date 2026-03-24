@@ -4,13 +4,15 @@ Arquivo principal da aplicação AstroAPI.
 Este arquivo é o ponto de entrada para a aplicação FastAPI e configura
 os routers, middleware, e outras configurações globais.
 """
+from dotenv import load_dotenv
+load_dotenv()  # Must be first — app.db reads env vars at import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
 from app.api.natal_chart_router import router as natal_chart_router
 from app.api.transit_router import router as transit_router
@@ -24,8 +26,6 @@ from app.api.rectification_router import router as rectification_router
 from app.api.charts_router import router as charts_router
 from app.db import create_tables
 
-# Carregar variáveis de ambiente
-load_dotenv()
 create_tables()
 
 # Criar aplicação FastAPI
