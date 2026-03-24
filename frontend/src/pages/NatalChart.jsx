@@ -733,9 +733,14 @@ export default function NatalChart() {
                         </div>
                         {/* 分析理由（Markdown） */}
                         {t.reason && (
-                          <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '10px' }}
-                            className="rectify-reason">
-                            <ReactMarkdown>{t.reason}</ReactMarkdown>
+                          <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '10px', color: '#b0b0cc', fontSize: '0.88rem', lineHeight: 1.85 }}>
+                            <ReactMarkdown components={{
+                              p: ({children}) => <p style={{ margin: '0 0 0.5em', color: '#b0b0cc' }}>{children}</p>,
+                              strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
+                              em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
+                              ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
+                              li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#b0b0cc' }}>{children}</li>,
+                            }}>{t.reason}</ReactMarkdown>
                           </div>
                         )}
                       </div>
@@ -745,8 +750,14 @@ export default function NatalChart() {
                   {rectifyResult.overall && (
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
                       <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>综合推荐与验证建议</div>
-                      <div className="rectify-overall">
-                        <ReactMarkdown>{rectifyResult.overall}</ReactMarkdown>
+                      <div style={{ color: '#d0d0e8', fontSize: '0.9rem', lineHeight: 1.85 }}>
+                        <ReactMarkdown components={{
+                          p: ({children}) => <p style={{ margin: '0 0 0.6em', color: '#d0d0e8' }}>{children}</p>,
+                          strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
+                          em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
+                          ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
+                          li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#d0d0e8' }}>{children}</li>,
+                        }}>{rectifyResult.overall}</ReactMarkdown>
                       </div>
                     </div>
                   )}
@@ -877,8 +888,14 @@ export default function NatalChart() {
                       {confidenceResult.label} · {confidenceResult.score}分
                     </div>
                   </div>
-                  <div className="rectify-overall">
-                    <ReactMarkdown>{confidenceResult.analysis}</ReactMarkdown>
+                  <div style={{ color: '#d0d0e8', fontSize: '0.9rem', lineHeight: 1.85 }}>
+                    <ReactMarkdown components={{
+                      p: ({children}) => <p style={{ margin: '0 0 0.6em', color: '#d0d0e8' }}>{children}</p>,
+                      strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
+                      em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
+                      ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
+                      li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#d0d0e8' }}>{children}</li>,
+                    }}>{confidenceResult.analysis}</ReactMarkdown>
                   </div>
                 </div>
               )}

@@ -5,6 +5,8 @@ app/rag.py — RAG 核心模块
 """
 
 import os
+import re
+import json
 import numpy as np
 from google import genai
 from google.genai import types
@@ -27,6 +29,16 @@ GENERATE_MODEL  = "gemini-3.1-flash-lite-preview"
 COLLECTION_NAME = "astro_chunks"
 E5_MODEL        = "intfloat/multilingual-e5-small"
 E5_PREFIX       = "query: "
+
+
+def _parse_json(text: str) -> dict | list:
+    """Strip optional markdown code fences then parse JSON."""
+    text = text.strip()
+    # Remove ```json ... ``` or ``` ... ``` wrappers
+    text = re.sub(r'^```[a-z]*\s*', '', text)
+    text = re.sub(r'\s*```$', '', text.strip())
+    return json.loads(text.strip())
+
 
 # ── 懒加载（首次查询时初始化）────────────────────────────────────
 
@@ -723,7 +735,7 @@ JSON 格式返回：
         print(f"[RAG] analyze_active_transits_full finish_reason={finish}")
 
     try:
-        ai_result = json.loads(response.text)
+        ai_result = _parse_json(response.text)
     except Exception as e:
         print(f"[RAG] JSON parse error: {e}")
         ai_result = {"aspects": [], "overall": response.text}
@@ -873,7 +885,7 @@ def analyze_rectification(
 
     print(f"[rectify] raw response ({len(response.text)} chars): {response.text[:300]}")
     try:
-        parsed = json.loads(response.text)
+        parsed = _parse_json(response.text)
     except Exception as e:
         print(f"[rectify] JSON parse error: {e}")
         parsed = {"candidates": [], "overall": response.text}
@@ -931,7 +943,7 @@ def generate_asc_quiz(asc_signs: list[str]) -> list[dict]:
         ),
     )
     try:
-        data = json.loads(response.text)
+        data = _parse_json(response.text)
         return data.get("questions", [])
     except Exception:
         return []
@@ -1006,6 +1018,6 @@ def calc_confidence(
         ),
     )
     try:
-        return json.loads(response.text)
+        return _parse_json(response.text)
     except Exception:
         return {"score": 0, "label": "低", "analysis": response.text}
