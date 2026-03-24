@@ -39,11 +39,6 @@ async def get_optional_user(token: str = Depends(oauth2_scheme)) -> Optional[str
         return None
 
 
-# Backwards-compatible stub used by existing routers (no-op, returns None)
-async def verify_api_key():
-    return None
-
-
 async def require_auth(token: str = Depends(oauth2_scheme)) -> str:
     """Raises 401 if not authenticated. Use as a FastAPI dependency."""
     if not token:

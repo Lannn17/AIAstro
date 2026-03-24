@@ -3,7 +3,7 @@ Router para os endpoints de geração de gráficos SVG.
 
 Este módulo contém os endpoints relacionados à geração de gráficos astrológicos em formato SVG.
 """
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Response
 from kerykeion import AstrologicalSubject, KerykeionChartSVG
 from typing import Optional
 import os
@@ -15,13 +15,9 @@ from ..schemas.models import (
 )
 from ..core.calculations import create_astrological_subject
 from ..core.utils import svg_to_base64, validate_date, validate_timezone, validate_time
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["SVG Chart"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 @router.post("/svg_chart", response_class=Response)

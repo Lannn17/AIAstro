@@ -3,7 +3,7 @@ Router para os endpoints de mapa natal.
 
 Este módulo contém os endpoints relacionados ao cálculo de mapas natais.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Any, Dict, Optional
 from pydantic import BaseModel
 
@@ -15,13 +15,9 @@ from ..core.calculations import (
     get_aspects_data
 )
 from ..core.utils import validate_date, validate_timezone, validate_time
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["Natal Chart"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 @router.post("/natal_chart", response_model=NatalChartResponse)

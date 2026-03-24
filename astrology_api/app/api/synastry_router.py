@@ -3,7 +3,7 @@ Router para os endpoints de sinastria (comparação de mapas natais).
 
 Este módulo contém os endpoints relacionados ao cálculo de sinastria entre dois mapas natais.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional
 
 from ..schemas.models import SynastryRequest, SynastryResponse, HouseSystemType, LanguageType
@@ -14,13 +14,9 @@ from ..core.calculations import (
 )
 from ..core.utils import validate_date, validate_timezone, validate_time
 from ..interpretations.text_search import get_aspect_interpretation
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["Synastry"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 @router.post("/synastry", response_model=SynastryResponse)

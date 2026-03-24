@@ -3,7 +3,7 @@ Router para os endpoints de trânsitos.
 
 Este módulo contém os endpoints relacionados ao cálculo de trânsitos planetários.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Optional
 
 from ..schemas.models import (
@@ -18,13 +18,9 @@ from ..core.calculations import (
     get_aspects_between_subjects
 )
 from ..core.utils import validate_date, validate_timezone, validate_time
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["Transits"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 @router.post("/transit_chart", response_model=TransitResponse)

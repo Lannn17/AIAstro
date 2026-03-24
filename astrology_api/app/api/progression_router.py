@@ -3,7 +3,7 @@ Router para os endpoints de progressões astrológicas.
 
 Este módulo contém os endpoints relacionados ao cálculo de progressões secundárias.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional, Any
 
 from ..schemas.models import ProgressionRequest, ProgressionResponse
@@ -17,13 +17,9 @@ from ..core.calculations import (
 )
 from ..core.utils import validate_date, validate_timezone, validate_time
 from ..interpretations.text_search import get_planet_interpretation
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["Progressions"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 @router.post("/progressions", response_model=ProgressionResponse)

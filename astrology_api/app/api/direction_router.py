@@ -3,7 +3,7 @@ Router para os endpoints de direções astrológicas.
 
 Este módulo contém os endpoints relacionados ao cálculo de direções de arco solar e primárias.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
@@ -18,13 +18,9 @@ from ..core.calculations import (
 from ..core.utils import validate_date, validate_timezone, validate_time
 from ..interpretations.text_search import get_planet_interpretation
 from ..interpretations.translations import translate_sign, translate_aspect, translate_planet
-from ..security import verify_api_key
-
-# Criar o router
 router = APIRouter(
     prefix="/api",
     tags=["Directions"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 # Lista de signos em ordem
