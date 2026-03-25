@@ -350,6 +350,36 @@ def db_save_planet_cache(chart_id: int, chart_hash: str, analyses_json: str):
 
 # ── Query analytics ───────────────────────────────────────────────
 
+def db_get_analytics_summary() -> list[dict]:
+    """按 label 聚合：count、avg_score、cite_rate。"""
+    sql = """
+        SELECT
+            label,
+            COUNT(*)                     AS count,
+            ROUND(AVG(max_rag_score), 3) AS avg_score,
+            ROUND(AVG(any_cited), 3)     AS cite_rate
+        FROM query_analytics
+        GROUP BY label
+        ORDER BY count DESC
+    """
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql))
+    return _sqlite_fetchall(sql)
+
+
+def db_get_analytics_records(limit: int = 200) -> list[dict]:
+    """最近 N 条原始记录（不含原始 query 文本）。"""
+    sql = """
+        SELECT id, label, max_rag_score, any_cited, created_at
+        FROM query_analytics
+        ORDER BY created_at DESC
+        LIMIT ?
+    """
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql, [limit]))
+    return _sqlite_fetchall(sql, [limit])
+
+
 def db_log_query_analytics(query_hash: str, label: str,
                            max_rag_score: float, any_cited: bool):
     sql = """
