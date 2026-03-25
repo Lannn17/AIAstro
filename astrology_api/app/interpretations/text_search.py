@@ -1,5 +1,5 @@
 """
-Módulo para busca de texto e interpretações astrológicas.
+Text search and astrological interpretations module.
 """
 import os
 import re
@@ -11,31 +11,31 @@ from ..schemas.models import LanguageType
 
 from ..interpretations.translations import translate_astrological_text
 
-# Diretório onde os textos processados estão armazenados
+# Directory where processed texts are stored
 PROCESSED_TEXTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "processed_texts")
 
-# Cache para armazenar documentos já processados
+# Cache for already-processed documents
 DOCUMENT_CACHE = {}
 TF_IDF_INDEX = None
 DOCUMENT_PARAGRAPHS = {}
 
 def preprocess_text(text: str) -> List[str]:
     """
-    Pré-processa um texto, dividindo-o em tokens.
+    Pre-processes text by splitting it into tokens.
 
     Args:
-        text (str): Texto a ser pré-processado.
+        text (str): Text to pre-process.
 
     Returns:
-        List[str]: Lista de tokens.
+        List[str]: List of tokens.
     """
-    # Converter para minúsculas
+    # Convert to lowercase
     text = text.lower()
 
-    # Remover caracteres especiais e dividir em tokens
+    # Remove special characters and split into tokens
     tokens = re.findall(r'\b\w+\b', text)
 
-    # Remover stopwords simples (artigos, preposições, etc.)
+    # Remove simple stopwords (articles, prepositions, etc.)
     stopwords = {'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'e', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'por', 'para', 'com', 'que', 'se', 'the', 'and', 'of', 'to', 'in', 'is', 'for', 'with', 'by', 'on', 'at', 'from', 'an', 'this', 'that', 'these', 'those'}
     tokens = [token for token in tokens if token not in stopwords and len(token) > 1]
 
@@ -43,29 +43,29 @@ def preprocess_text(text: str) -> List[str]:
 
 def build_tf_idf_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[str]]]:
     """
-    Constrói um índice TF-IDF para os documentos processados.
+    Builds a TF-IDF index for processed documents.
 
     Returns:
         Tuple[Dict[str, Dict[str, float]], Dict[str, List[str]]]:
-            Índice TF-IDF e dicionário de parágrafos por documento.
+            TF-IDF index and paragraph dictionary per document.
     """
     global TF_IDF_INDEX, DOCUMENT_PARAGRAPHS
 
     if TF_IDF_INDEX is not None:
         return TF_IDF_INDEX, DOCUMENT_PARAGRAPHS
 
-    # Verificar se o diretório de textos processados existe
+    # Check if processed texts directory exists
     if not os.path.exists(PROCESSED_TEXTS_DIR):
         TF_IDF_INDEX = {}
         DOCUMENT_PARAGRAPHS = {}
         return TF_IDF_INDEX, DOCUMENT_PARAGRAPHS
 
-    # Índice invertido: termo -> documento -> frequência
+    # Inverted index: term -> document -> frequency
     index = {}
     document_terms = {}
     paragraphs_by_doc = {}
 
-    # Processar documentos
+    # Process documents
     doc_count = 0
     for filename in os.listdir(PROCESSED_TEXTS_DIR):
         if not filename.endswith(".txt"):
@@ -82,19 +82,19 @@ def build_tf_idf_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[st
                 paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
                 paragraphs_by_doc[doc_id] = paragraphs
 
-                # Processar cada parágrafo como um "subdocumento"
+                # Process each paragraph as a "sub-document"
                 for i, paragraph in enumerate(paragraphs):
                     sub_doc_id = f"{doc_id}:{i}"
                     DOCUMENT_CACHE[sub_doc_id] = paragraph
 
-                    # Pré-processar texto
+                    # Pre-process text
                     tokens = preprocess_text(paragraph)
 
-                    # Calcular frequência dos termos
+                    # Calculate term frequency
                     term_freq = Counter(tokens)
                     document_terms[sub_doc_id] = term_freq
 
-                    # Atualizar índice invertido
+                    # Update inverted index
                     for term, freq in term_freq.items():
                         if term not in index:
                             index[term] = {}
@@ -102,16 +102,16 @@ def build_tf_idf_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[st
 
                 doc_count += 1
         except Exception as e:
-            print(f"Erro ao processar arquivo {filename}: {str(e)}")
+            print(f"Error processing file {filename}: {str(e)}")
 
-    # Calcular IDF e TF-IDF
+    # Calculate IDF and TF-IDF
     tf_idf_index = {}
     for term, docs in index.items():
         # IDF = log(N / df)
         idf = math.log(doc_count / len(docs))
 
         for doc_id, freq in docs.items():
-            # Normalizar TF
+            # Normalize TF
             tf = freq / sum(document_terms[doc_id].values())
 
             # TF-IDF
@@ -129,29 +129,29 @@ def build_tf_idf_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[st
 
 def advanced_text_search(query: str, limit: int = 5, min_score: float = 0.1) -> List[Dict[str, Any]]:
     """
-    Realiza uma busca avançada de texto nos livros processados usando TF-IDF.
+    Performs advanced text search on processed books using TF-IDF.
 
     Args:
-        query (str): Consulta de busca.
-        limit (int, opcional): Número máximo de resultados. Padrão é 5.
-        min_score (float, opcional): Pontuação mínima para incluir um resultado. Padrão é 0.1.
+        query (str): Search query.
+        limit (int, optional): Maximum number of results. Defaults to 5.
+        min_score (float, optional): Minimum score to include a result. Defaults to 0.1.
 
     Returns:
-        List[Dict[str, Any]]: Lista de resultados da busca.
+        List[Dict[str, Any]]: List of search results.
     """
-    # Construir índice TF-IDF (ou recuperar do cache)
+    # Build TF-IDF index (or retrieve from cache)
     tf_idf_index, paragraphs_by_doc = build_tf_idf_index()
 
     if not tf_idf_index:
         return []
 
-    # Pré-processar a consulta
+    # Pre-process the query
     query_tokens = preprocess_text(query)
 
     if not query_tokens:
         return []
 
-    # Pontuar documentos
+    # Score documents
     scores = {}
     for doc_id, terms in tf_idf_index.items():
         score = 0
@@ -162,27 +162,27 @@ def advanced_text_search(query: str, limit: int = 5, min_score: float = 0.1) -> 
         if score > min_score:
             scores[doc_id] = score
 
-    # Ordenar por pontuação
+    # Sort by score
     sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-    # Preparar resultados
+    # Prepare results
     results = []
     for doc_id, score in sorted_docs[:limit]:
-        # Extrair informações do doc_id (formato: "filename:paragraph_index")
+        # Extract info from doc_id (format: "filename:paragraph_index")
         parts = doc_id.split(":")
         filename = parts[0]
         paragraph_index = int(parts[1])
 
-        # Recuperar parágrafo
+        # Retrieve paragraph
         paragraph = DOCUMENT_CACHE.get(doc_id, "")
 
-        # Destacar termos da consulta no parágrafo
+        # Highlight query terms in paragraph
         highlighted = paragraph
         for token in query_tokens:
             pattern = re.compile(r'\b' + re.escape(token) + r'\b', re.IGNORECASE)
             highlighted = pattern.sub(f"**{token.upper()}**", highlighted)
 
-        # Adicionar resultado
+        # Add result
         results.append({
             "source": filename,
             "score": score,
@@ -195,19 +195,19 @@ def advanced_text_search(query: str, limit: int = 5, min_score: float = 0.1) -> 
 
 def simple_text_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
-    Realiza uma busca simples de texto nos livros processados.
-    Mantida por compatibilidade, internamente usa advanced_text_search.
+    Performs a simple text search on processed books.
+    Kept for compatibility; internally uses advanced_text_search.
 
     Args:
-        query (str): Consulta de busca.
-        limit (int, opcional): Número máximo de resultados. Padrão é 5.
+        query (str): Search query.
+        limit (int, optional): Maximum number of results. Defaults to 5.
 
     Returns:
-        List[Dict[str, Any]]: Lista de resultados da busca.
+        List[Dict[str, Any]]: List of search results.
     """
     results = advanced_text_search(query, limit)
 
-    # Converter para o formato antigo
+    # Convert to legacy format
     simple_results = []
     for result in results:
         simple_results.append({
@@ -220,29 +220,29 @@ def simple_text_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 
 def get_planet_interpretation(planet_name: str, sign: str, house: int, language: LanguageType = "pt") -> Optional[str]:
     """
-    Busca a interpretação para um planeta em um signo e casa.
+    Looks up interpretation for a planet in a sign and house.
 
     Args:
-        planet_name (str): Nome do planeta
-        sign (str): Nome do signo
-        house (int): Número da casa
-        language (LanguageType): Idioma da interpretação. Defaults to "pt".
+        planet_name (str): Planet name
+        sign (str): Sign name
+        house (int): House number
+        language (LanguageType): Interpretation language. Defaults to "pt".
 
     Returns:
-        Optional[str]: Interpretação encontrada ou None se não houver
+        Optional[str]: Interpretation found, or None if not found
     """
-    # Formar a consulta
+    # Build query
     query = f"{planet_name} in {sign} in house {house}"
 
-    # Buscar documentos relevantes
+    # Search relevant documents
     results = advanced_text_search(query)
     if not results:
         return None
 
-    # Pegar o resultado mais relevante
+    # Get most relevant result
     best_match = results[0]
 
-    # Traduzir se necessário
+    # Translate if needed
     if language != "en":
         best_match = translate_astrological_text(best_match, language)
 
@@ -250,16 +250,16 @@ def get_planet_interpretation(planet_name: str, sign: str, house: int, language:
 
 def get_sign_interpretation(sign: str, language: str = "pt") -> Optional[Dict[str, Any]]:
     """
-    Busca interpretações para um signo específico.
+    Looks up interpretations for a specific sign.
 
     Args:
-        sign (str): Nome do signo.
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
+        sign (str): Sign name.
+        language (str, optional): Language for text output. Defaults to "pt".
 
     Returns:
-        Optional[Dict[str, Any]]: Interpretação encontrada ou None.
+        Optional[Dict[str, Any]]: Interpretation found, or None.
     """
-    # Construir a consulta
+    # Build query
     query = f"signo de {sign} características"
     if language != "pt":
         sign_en = {
@@ -270,7 +270,7 @@ def get_sign_interpretation(sign: str, language: str = "pt") -> Optional[Dict[st
 
         query = f"{sign_en} sign characteristics"
 
-    # Realizar a busca
+    # Search
     results = advanced_text_search(query, limit=1)
 
     if not results:
@@ -278,7 +278,7 @@ def get_sign_interpretation(sign: str, language: str = "pt") -> Optional[Dict[st
 
     result = results[0]
 
-    # Traduzir para o idioma solicitado, se necessário
+    # Translate to requested language if needed
     if language != "pt" and language != "en":
         result["paragraph"] = translate_astrological_text(result["paragraph"], "en", language)
 
@@ -290,21 +290,21 @@ def get_sign_interpretation(sign: str, language: str = "pt") -> Optional[Dict[st
 
 def get_house_interpretation(house: int, language: str = "pt") -> Optional[Dict[str, Any]]:
     """
-    Busca interpretações para uma casa específica.
+    Looks up interpretations for a specific house.
 
     Args:
-        house (int): Número da casa.
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
+        house (int): House number.
+        language (str, optional): Language for text output. Defaults to "pt".
 
     Returns:
-        Optional[Dict[str, Any]]: Interpretação encontrada ou None.
+        Optional[Dict[str, Any]]: Interpretation found, or None.
     """
-    # Construir a consulta
+    # Build query
     query = f"casa {house} astrologia"
     if language != "pt":
         query = f"house {house} astrology"
 
-    # Realizar a busca
+    # Search
     results = advanced_text_search(query, limit=1)
 
     if not results:
@@ -312,7 +312,7 @@ def get_house_interpretation(house: int, language: str = "pt") -> Optional[Dict[
 
     result = results[0]
 
-    # Traduzir para o idioma solicitado, se necessário
+    # Translate to requested language if needed
     if language != "pt" and language != "en":
         result["paragraph"] = translate_astrological_text(result["paragraph"], "en", language)
 
@@ -324,29 +324,29 @@ def get_house_interpretation(house: int, language: str = "pt") -> Optional[Dict[
 
 def get_aspect_interpretation(planet1: str, planet2: str, aspect: str, language: LanguageType = "pt") -> Optional[str]:
     """
-    Busca a interpretação para um aspecto entre dois planetas.
+    Looks up interpretation for an aspect between two planets.
 
     Args:
-        planet1 (str): Nome do primeiro planeta
-        planet2 (str): Nome do segundo planeta
-        aspect (str): Nome do aspecto
-        language (LanguageType): Idioma da interpretação. Defaults to "pt".
+        planet1 (str): First planet name
+        planet2 (str): Second planet name
+        aspect (str): Aspect name
+        language (LanguageType): Interpretation language. Defaults to "pt".
 
     Returns:
-        Optional[str]: Interpretação encontrada ou None se não houver
+        Optional[str]: Interpretation found, or None if not found
     """
-    # Formar a consulta
+    # Build query
     query = f"{planet1} {aspect} {planet2}"
 
-    # Buscar documentos relevantes
+    # Search relevant documents
     results = advanced_text_search(query)
     if not results:
         return None
 
-    # Pegar o resultado mais relevante
+    # Get most relevant result
     best_match = results[0]
 
-    # Traduzir se necessário
+    # Translate if needed
     if language != "en":
         best_match = translate_astrological_text(best_match, language)
 
@@ -354,21 +354,21 @@ def get_aspect_interpretation(planet1: str, planet2: str, aspect: str, language:
 
 def get_transit_interpretation(transit_planet: str, natal_planet: str, aspect: str, language: str = "pt") -> Optional[Dict[str, Any]]:
     """
-    Busca interpretações para um aspecto de trânsito.
+    Looks up interpretations for a transit aspect.
 
     Args:
-        transit_planet (str): Nome do planeta em trânsito.
-        natal_planet (str): Nome do planeta natal.
-        aspect (str): Nome do aspecto.
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
+        transit_planet (str): Transit planet name.
+        natal_planet (str): Natal planet name.
+        aspect (str): Aspect name.
+        language (str, optional): Language for text output. Defaults to "pt".
 
     Returns:
-        Optional[Dict[str, Any]]: Interpretação encontrada ou None.
+        Optional[Dict[str, Any]]: Interpretation found, or None.
     """
-    # Construir a consulta
+    # Build query
     query = f"trânsito {transit_planet} {aspect} {natal_planet}"
     if language != "pt":
-        # Traduzir para inglês
+        # Translate to English
         transit_planet_en = {
             "Sol": "Sun", "Lua": "Moon", "Mercúrio": "Mercury", "Vênus": "Venus",
             "Marte": "Mars", "Júpiter": "Jupiter", "Saturno": "Saturn",
@@ -390,7 +390,7 @@ def get_transit_interpretation(transit_planet: str, natal_planet: str, aspect: s
 
         query = f"transit {transit_planet_en} {aspect_en} {natal_planet_en}"
 
-    # Realizar a busca
+    # Search
     results = advanced_text_search(query, limit=1)
 
     if not results:
@@ -398,7 +398,7 @@ def get_transit_interpretation(transit_planet: str, natal_planet: str, aspect: s
 
     result = results[0]
 
-    # Traduzir para o idioma solicitado, se necessário
+    # Translate to requested language if needed
     if language != "pt" and language != "en":
         result["paragraph"] = translate_astrological_text(result["paragraph"], "en", language)
 
@@ -410,14 +410,14 @@ def get_transit_interpretation(transit_planet: str, natal_planet: str, aspect: s
 
 def get_natal_chart_interpretations(natal_data: Dict[str, Any], language: str = "pt") -> Dict[str, Any]:
     """
-    Obtém interpretações para um mapa natal completo.
+    Gets interpretations for a complete natal chart.
 
     Args:
-        natal_data (Dict[str, Any]): Dados do mapa natal.
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
+        natal_data (Dict[str, Any]): Natal chart data.
+        language (str, optional): Language for text output. Defaults to "pt".
 
     Returns:
-        Dict[str, Any]: Interpretações do mapa natal.
+        Dict[str, Any]: Natal chart interpretations.
     """
     interpretations = {
         "planets": {},
@@ -425,7 +425,7 @@ def get_natal_chart_interpretations(natal_data: Dict[str, Any], language: str = 
         "aspects": []
     }
 
-    # Interpretações dos planetas
+    # Planet interpretations
     for planet_key, planet_data in natal_data["planets"].items():
         planet_name = planet_data["name"]
         sign = planet_data["sign"]
@@ -435,7 +435,7 @@ def get_natal_chart_interpretations(natal_data: Dict[str, Any], language: str = 
         if interp:
             interpretations["planets"][planet_key] = interp
 
-    # Interpretações das casas
+    # House interpretations
     for house_key, house_data in natal_data["houses"].items():
         house_num = int(house_key)
 
@@ -443,7 +443,7 @@ def get_natal_chart_interpretations(natal_data: Dict[str, Any], language: str = 
         if interp:
             interpretations["houses"][house_key] = interp
 
-    # Interpretações dos aspectos
+    # Aspect interpretations
     for aspect_data in natal_data["aspects"]:
         p1_name = aspect_data["p1_name"]
         p2_name = aspect_data["p2_name"]

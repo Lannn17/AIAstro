@@ -1,5 +1,5 @@
 """
-Módulo de cálculos astrológicos para a aplicação AstroAPI.
+Astrological calculation module for the AstroAPI application.
 """
 from kerykeion import AstrologicalSubject
 from typing import Any, Dict, List, Optional, Tuple, Union, Literal, cast
@@ -34,7 +34,7 @@ HOUSE_NAME_TO_NUM = {
 }
 
 def get_kerykeion_house_system_code(house_system: HouseSystemType) -> str:
-    """Converte o nome do sistema de casas para o código usado pelo Kerykeion."""
+    """Converts the house system name to the code used by Kerykeion."""
     return HOUSE_SYSTEM_MAP.get(house_system, "P")
 
 def create_astrological_subject(
@@ -49,9 +49,9 @@ def create_astrological_subject(
     tz_str: str,
     house_system: HouseSystemType = "Placidus"
 ) -> AstrologicalSubject:
-    """Cria um objeto AstrologicalSubject do Kerykeion."""
+    """Creates a Kerykeion AstrologicalSubject object."""
     try:
-        # Garantir que house_system não é None
+        # Ensure house_system is not None
         house_system_code = HOUSE_SYSTEM_MAP.get(house_system or "Placidus", "P")
         
         subject = AstrologicalSubject(
@@ -72,23 +72,23 @@ def create_astrological_subject(
         return subject
         
     except Exception as e:
-        logger.error(f"Erro ao criar objeto AstrologicalSubject: {str(e)}")
-        raise ValueError(f"Erro ao criar objeto AstrologicalSubject: {str(e)}")
+        logger.error(f"Error creating AstrologicalSubject: {str(e)}")
+        raise ValueError(f"Error creating AstrologicalSubject: {str(e)}")
 
 def get_planet_data(subject: AstrologicalSubject, language: LanguageType = "pt") -> Dict[str, PlanetData]:
     """
-    Obtém dados dos planetas de um AstrologicalSubject.
-    
+    Gets planet data from an AstrologicalSubject.
+
     Args:
-        subject (AstrologicalSubject): Sujeito astrológico
-        language (LanguageType): Idioma para nomes traduzidos. Defaults to "pt".
-        
+        subject (AstrologicalSubject): Astrological subject
+        language (LanguageType): Language for translated names. Defaults to "pt".
+
     Returns:
-        Dict[str, PlanetData]: Dicionário com dados dos planetas
+        Dict[str, PlanetData]: Dictionary with planet data
     """
     planets_data = {}
-    
-    # Garantir que language não é None
+
+    # Ensure language is not None
     language = language or "pt"
     
     # 只保留平均节点/黑月，过滤掉真实（振荡）版本
@@ -124,18 +124,18 @@ def get_planet_data(subject: AstrologicalSubject, language: LanguageType = "pt")
 
 def get_houses_data(subject: AstrologicalSubject, language: LanguageType = "pt") -> Dict[str, HouseCuspData]:
     """
-    Obtém dados das casas de um AstrologicalSubject.
-    
+    Gets house data from an AstrologicalSubject.
+
     Args:
-        subject (AstrologicalSubject): Sujeito astrológico
-        language (LanguageType): Idioma para nomes traduzidos. Defaults to "pt".
-        
+        subject (AstrologicalSubject): Astrological subject
+        language (LanguageType): Language for translated names. Defaults to "pt".
+
     Returns:
-        Dict[str, HouseCuspData]: Dicionário com dados das casas
+        Dict[str, HouseCuspData]: Dictionary with house data
     """
     houses_data = {}
-    
-    # Garantir que language não é None
+
+    # Ensure language is not None
     language = language or "pt"
     
     for i, house_name in enumerate(subject.houses_names_list, start=1):
@@ -156,13 +156,13 @@ def get_houses_data(subject: AstrologicalSubject, language: LanguageType = "pt")
     return houses_data
 
 def calculate_aspect(point1_long: float, point2_long: float) -> Optional[Dict[str, Union[str, float]]]:
-    """Calcula o aspecto entre dois pontos baseado em suas longitudes."""
-    # Diferença entre as longitudes
+    """Calculates the aspect between two points based on their longitudes."""
+    # Difference between longitudes
     diff = abs(point1_long - point2_long)
     if diff > 180:
         diff = 360 - diff
         
-    # Definição dos aspectos e seus orbes
+    # Aspect definitions and their orbs
     aspects = {
         "Conjunction": {"angle": 0, "orb": 8},
         "Opposition": {"angle": 180, "orb": 8},
@@ -171,7 +171,7 @@ def calculate_aspect(point1_long: float, point2_long: float) -> Optional[Dict[st
         "Sextile": {"angle": 60, "orb": 4}
     }
     
-    # Verificar cada aspecto possível
+    # Check each possible aspect
     for aspect_name, aspect_data in aspects.items():
         orbit = abs(diff - aspect_data["angle"])
         if orbit <= aspect_data["orb"]:
@@ -185,18 +185,18 @@ def calculate_aspect(point1_long: float, point2_long: float) -> Optional[Dict[st
     return None
 
 def get_aspects_data(subject: AstrologicalSubject, language: LanguageType = "pt") -> List[AspectData]:
-    """Calcula os aspectos entre planetas em um mapa."""
+    """Calculates aspects between planets in a chart."""
     result = []
     processed = set()
-    
+
     try:
-        # Lista de planetas principais para aspectos
+        # Main planet list for aspects
         planet_attrs = [
             'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn',
             'uranus', 'neptune', 'pluto'
         ]
         
-        # Calcular aspectos entre todos os pares de planetas
+        # Calculate aspects between all planet pairs
         for i, p1_attr in enumerate(planet_attrs):
             if not hasattr(subject, p1_attr):
                 continue
@@ -213,25 +213,25 @@ def get_aspects_data(subject: AstrologicalSubject, language: LanguageType = "pt"
                 if not planet2 or not hasattr(planet2, 'longitude'):
                     continue
                     
-                # Calcular o aspecto
+                # Calculate the aspect
                 aspect_info = calculate_aspect(planet1.longitude, planet2.longitude)
                 if not aspect_info:
                     continue
                 
-                # Criar chave única para o aspecto
+                # Create unique key for the aspect
                 aspect_key = tuple(sorted([p1_attr, p2_attr]))
                 if aspect_key in processed:
                     continue
                 
                 processed.add(aspect_key)
                 
-                # Determinar se o aspecto está se aplicando
+                # Determine whether the aspect is applying
                 applying = False
                 if hasattr(planet1, 'motion') and hasattr(planet2, 'motion'):
                     if hasattr(planet1.motion, 'speed') and hasattr(planet2.motion, 'speed'):
                         applying = planet1.motion.speed > planet2.motion.speed
                 
-                # Criar o objeto AspectData
+                # Create the AspectData object
                 aspect_data = AspectData(
                     p1_name=translate_planet(planet1.name, language),
                     p1_name_original=planet1.name,
@@ -250,7 +250,7 @@ def get_aspects_data(subject: AstrologicalSubject, language: LanguageType = "pt"
                 result.append(aspect_data)
                 
     except Exception as e:
-        logger.error(f"Erro ao calcular aspectos: {str(e)}")
+        logger.error(f"Error calculating aspects: {str(e)}")
         
     return result
 
@@ -259,15 +259,15 @@ def get_aspects_between_charts(
     subject2: AstrologicalSubject,
     language: LanguageType = "pt"
 ) -> List[AspectData]:
-    """Calcula aspectos entre dois mapas astrológicos."""
+    """Calculates aspects between two astrological charts."""
     result = []
-    
+
     try:
-        # Usar o método de aspectos entre mapas se disponível
+        # Use chart aspects method if available
         if hasattr(subject1, 'get_aspects_between'):
             aspects = subject1.get_aspects_between(subject2)
         else:
-            # Implementação alternativa se o método não existir
+            # Fallback implementation if the method does not exist
             aspects = calculate_aspects_between(subject1, subject2)
             
         for aspect in aspects:
@@ -290,21 +290,21 @@ def get_aspects_between_charts(
                 orbit=float(aspect.orbit) if hasattr(aspect, 'orbit') else 0.0,
                 aspect_degrees=float(aspect.aspect_degrees) if hasattr(aspect, 'aspect_degrees') else 0.0,
                 diff=float(aspect.diff) if hasattr(aspect, 'diff') else 0.0,
-                applying=False  # Implementar lógica de applying/separating se necessário
+                applying=False  # TODO: implement applying/separating logic
             )
             
             result.append(aspect_data)
             
     except Exception as e:
-        logger.error(f"Erro ao calcular aspectos entre mapas: {str(e)}")
+        logger.error(f"Error calculating aspects between charts: {str(e)}")
         
     return result
 
 def calculate_aspects_between(subject1: AstrologicalSubject, subject2: AstrologicalSubject) -> List[Any]:
-    """Implementação alternativa para cálculo de aspectos entre mapas."""
+    """Fallback implementation for calculating aspects between charts."""
     result = []
-    
-    # Definir aspectos principais e seus orbes
+
+    # Define main aspects and their orbs
     aspects = {
         "Conjunction": {"angle": 0, "orb": 8},
         "Opposition": {"angle": 180, "orb": 8},
@@ -316,29 +316,29 @@ def calculate_aspects_between(subject1: AstrologicalSubject, subject2: Astrologi
     try:
         planet_attrs = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter',
                         'saturn', 'uranus', 'neptune', 'pluto']
-        # Iterar sobre os planetas do primeiro mapa
+        # Iterate over planets of the first chart
         for p1_attr in planet_attrs:
             p1 = getattr(subject1, p1_attr, None)
             if not p1:
                 continue
 
-            # Iterar sobre os planetas do segundo mapa
+            # Iterate over planets of the second chart
             for p2_attr in planet_attrs:
                 p2 = getattr(subject2, p2_attr, None)
                 if not p2:
                     continue
                     
-                # Calcular a diferença de longitude
+                # Calculate longitude difference
                 diff = abs(p1.abs_pos - p2.abs_pos)
                 if diff > 180:
                     diff = 360 - diff
                     
-                # Verificar aspectos
+                # Check aspects
                 for aspect_name, aspect_data in aspects.items():
                     orbit = abs(diff - aspect_data["angle"])
-                    
+
                     if orbit <= aspect_data["orb"]:
-                        # Criar um objeto de aspecto simples
+                        # Create a simple aspect object
                         aspect = type("Aspect", (), {
                             "p1": p1,
                             "p2": p2,
@@ -351,7 +351,7 @@ def calculate_aspects_between(subject1: AstrologicalSubject, subject2: Astrologi
                         result.append(aspect)
                         
     except Exception as e:
-        logger.error(f"Erro ao calcular aspectos manualmente: {str(e)}")
+        logger.error(f"Error calculating aspects manually: {str(e)}")
         
     return result
 
@@ -365,17 +365,17 @@ def get_aspects_between_subjects(
     language: str = "pt"
 ) -> List[AspectData]:
     """
-    Extrai os dados dos aspectos entre dois objetos AstrologicalSubject.
-    
+    Extracts aspect data between two AstrologicalSubject objects.
+
     Args:
-        subject1 (AstrologicalSubject): Primeiro objeto AstrologicalSubject (geralmente o mapa natal).
-        subject2 (AstrologicalSubject): Segundo objeto AstrologicalSubject (geralmente o mapa de trânsito).
-        subject1_owner (str, opcional): Identificador do proprietário do primeiro objeto. Padrão é "natal".
-        subject2_owner (str, opcional): Identificador do proprietário do segundo objeto. Padrão é "transit".
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
-        
+        subject1 (AstrologicalSubject): First AstrologicalSubject (usually the natal chart).
+        subject2 (AstrologicalSubject): Second AstrologicalSubject (usually the transit chart).
+        subject1_owner (str, optional): Owner identifier for the first subject. Defaults to "natal".
+        subject2_owner (str, optional): Owner identifier for the second subject. Defaults to "transit".
+        language (str, optional): Language for text output. Defaults to "pt".
+
     Returns:
-        List[AspectData]: Lista com os dados dos aspectos entre os dois objetos.
+        List[AspectData]: List of aspect data between the two subjects.
     """
     result = []
     planet_attrs = [
@@ -510,20 +510,20 @@ def get_synastry_aspects_data(subject1: AstrologicalSubject, subject2: Astrologi
 
 def get_progressed_chart(natal_subject: AstrologicalSubject, prog_year: int, prog_month: int, prog_day: int) -> AstrologicalSubject:
     """
-    Calcula o mapa progressado secundário para uma data específica.
-    A progressão secundária segue o princípio de "um dia = um ano".
-    
+    Calculates the secondary progressed chart for a specific date.
+    Secondary progression follows the "one day = one year" principle.
+
     Args:
-        natal_subject (AstrologicalSubject): Objeto AstrologicalSubject do mapa natal.
-        prog_year (int): Ano para o qual calcular a progressão.
-        prog_month (int): Mês para o qual calcular a progressão.
-        prog_day (int): Dia para o qual calcular a progressão.
-        
+        natal_subject (AstrologicalSubject): Natal chart AstrologicalSubject.
+        prog_year (int): Year for which to calculate the progression.
+        prog_month (int): Month for which to calculate the progression.
+        prog_day (int): Day for which to calculate the progression.
+
     Returns:
-        AstrologicalSubject: Objeto AstrologicalSubject do mapa progressado.
+        AstrologicalSubject: Progressed chart AstrologicalSubject.
     """
-    # Calcular a diferença em anos entre a data natal e a data de progressão
-    # Data natal
+    # Calculate the year difference between natal date and progression date
+    # Natal date
     natal_date = datetime(
         natal_subject.year, 
         natal_subject.month, 
@@ -532,16 +532,16 @@ def get_progressed_chart(natal_subject: AstrologicalSubject, prog_year: int, pro
         natal_subject.minute
     )
     
-    # Data para a qual queremos a progressão
+    # Target progression date
     prog_date = datetime(prog_year, prog_month, prog_day)
-    
-    # Calcular a diferença em dias (1 dia = 1 ano na progressão secundária)
+
+    # Calculate day difference (1 day = 1 year in secondary progression)
     days_diff = (prog_date.year - natal_date.year) + (prog_date.month - natal_date.month) / 12 + (prog_date.day - natal_date.day) / 365.25
-    
-    # Calcular a data progressada
+
+    # Calculate the progressed date
     progressed_date = natal_date + timedelta(days=days_diff)
-    
-    # Criar um novo objeto AstrologicalSubject com a data progressada
+
+    # Create a new AstrologicalSubject with the progressed date
     progressed_subject = AstrologicalSubject(
         name=f"{natal_subject.name}_Progressed",
         year=progressed_date.year,
@@ -568,49 +568,49 @@ def get_return_chart(
     location_tz_str: Optional[str] = None
 ) -> AstrologicalSubject:
     """
-    Calcula um mapa de retorno solar ou lunar.
-    
+    Calculates a solar or lunar return chart.
+
     Args:
-        natal_subject (AstrologicalSubject): Objeto AstrologicalSubject do mapa natal.
-        return_year (int): Ano para o qual calcular o retorno.
-        return_month (Optional[int]): Mês para o qual calcular o retorno (apenas para retorno lunar).
-        return_type (str): Tipo de retorno, "solar" ou "lunar".
-        location_longitude (Optional[float]): Longitude do local do retorno.
-        location_latitude (Optional[float]): Latitude do local do retorno.
-        location_tz_str (Optional[str]): Fuso horário do local do retorno.
-        
+        natal_subject (AstrologicalSubject): Natal chart AstrologicalSubject.
+        return_year (int): Year for which to calculate the return.
+        return_month (Optional[int]): Month for which to calculate the return (lunar return only).
+        return_type (str): Return type, "solar" or "lunar".
+        location_longitude (Optional[float]): Longitude of the return location.
+        location_latitude (Optional[float]): Latitude of the return location.
+        location_tz_str (Optional[str]): Timezone of the return location.
+
     Returns:
-        AstrologicalSubject: Objeto AstrologicalSubject do mapa de retorno.
+        AstrologicalSubject: Return chart AstrologicalSubject.
     """
-    # Definir a localização para o retorno
+    # Set the location for the return
     location_lng = location_longitude if location_longitude is not None else natal_subject.lng
     location_lat = location_latitude if location_latitude is not None else natal_subject.lat
     location_tz = location_tz_str if location_tz_str is not None else natal_subject.tz_str
     
     if return_type == "solar":
-        # Para retorno solar, precisamos encontrar o momento exato em que o Sol retorna
-        # à mesma posição zodiacal do mapa natal
-        
-        # Obter a posição do Sol no mapa natal
+        # For solar return, find the exact moment the Sun returns
+        # to the same zodiacal position as in the natal chart
+
+        # Get natal Sun position
         natal_sun_position = natal_subject.sun.abs_pos
-        
-        # Criar uma data aproximada para o retorno solar (próximo ao aniversário)
+
+        # Create an approximate date for the solar return (near birthday)
         natal_month = natal_subject.month
         natal_day = natal_subject.day
-        
-        # Data inicial para a busca
+
+        # Start date for the search
         start_date = datetime(return_year, natal_month, natal_day)
-        
-        # Ajustar para 5 dias antes do aniversário
+
+        # Adjust to 5 days before birthday
         start_date = start_date - timedelta(days=5)
-        
-        # Criar um mapa para esta data inicial
+
+        # Create a chart for this initial date
         temp_subject = AstrologicalSubject(
             name=f"{natal_subject.name}_SolarReturn",
             year=start_date.year,
             month=start_date.month,
             day=start_date.day,
-            hour=12,  # Meio-dia como hora inicial
+            hour=12,  # Noon as initial hour
             minute=0,
             city="",
             lng=location_lng,
@@ -618,15 +618,15 @@ def get_return_chart(
             tz_str=location_tz
         )
         
-        # Buscar iterativamente a data do retorno solar
-        for i in range(12):  # Verificar até 12 dias a partir da data inicial
+        # Iteratively search for the solar return date
+        for i in range(12):  # Check up to 12 days from the initial date
             temp_date = start_date + timedelta(days=i)
             temp_subject = AstrologicalSubject(
                 name=f"{natal_subject.name}_SolarReturn",
                 year=temp_date.year,
                 month=temp_date.month,
                 day=temp_date.day,
-                hour=12,  # Meio-dia como hora inicial
+                hour=12,  # Noon as initial hour
                 minute=0,
                 city="",
                 lng=location_lng,
@@ -634,15 +634,14 @@ def get_return_chart(
                 tz_str=location_tz
             )
             
-            # Verificar a posição do Sol
+            # Check Sun position
             current_sun_position = temp_subject.sun.abs_pos
-            
-            # Se a posição atual é maior que a natal, significa que o retorno ocorreu
-            # entre este dia e o anterior
+
+            # If current position is past natal, the return occurred between this day and the previous
             if current_sun_position > natal_sun_position and i > 0:
                 break
-        
-        # Refinar a hora exata do retorno
+
+        # Refine to the exact hour of return
         for hour in range(24):
             temp_subject = AstrologicalSubject(
                 name=f"{natal_subject.name}_SolarReturn",
@@ -659,9 +658,9 @@ def get_return_chart(
             
             current_sun_position = temp_subject.sun.abs_pos
             
-            # Se a posição atual é maior ou igual à natal, encontramos a hora aproximada
+            # If close enough to natal position, refine to exact minute
             if abs(current_sun_position - natal_sun_position) < 1.0:
-                # Refinar os minutos
+                # Refine to exact minute
                 for minute in range(0, 60, 5):
                     temp_subject = AstrologicalSubject(
                         name=f"{natal_subject.name}_SolarReturn",
@@ -678,32 +677,32 @@ def get_return_chart(
                     
                     current_sun_position = temp_subject.sun.abs_pos
                     
-                    # Verificar se encontramos a posição exata
+                    # Check if we found the exact position
                     if abs(current_sun_position - natal_sun_position) < 0.1:
                         return temp_subject
-                
-                # Se não encontrou a posição exata, retorna a mais próxima
+
+                # Return closest match if exact position not found
                 return temp_subject
-        
-        # Se não encontrou nas horas, retorna o mapa do meio-dia
+
+        # Return noon chart if no exact hour found
         return temp_subject
-    
+
     elif return_type == "lunar":
-        # Para retorno lunar, precisamos encontrar o momento exato em que a Lua retorna
-        # à mesma posição zodiacal do mapa natal
-        
-        # Obter a posição da Lua no mapa natal
+        # For lunar return, find the exact moment the Moon returns
+        # to the same zodiacal position as in the natal chart
+
+        # Get natal Moon position
         natal_moon_position = natal_subject.moon.abs_pos
-        
-        # Se o mês não foi especificado, usar o mês atual
+
+        # If month not specified, use current month
         if return_month is None:
             return_month = datetime.now().month
-        
-        # Data inicial para a busca (primeiro dia do mês)
+
+        # Start date for search (first day of the month)
         start_date = datetime(return_year, return_month, 1)
-        
-        # Calcular cada dia do mês até encontrar o retorno lunar
-        for day in range(1, 29):  # A Lua completa um ciclo em aproximadamente 27.3 dias
+
+        # Check each day of the month for the lunar return
+        for day in range(1, 29):  # Moon completes a cycle in approximately 27.3 days
             temp_date = start_date + timedelta(days=day)
             
             temp_subject = AstrologicalSubject(
@@ -711,7 +710,7 @@ def get_return_chart(
                 year=temp_date.year,
                 month=temp_date.month,
                 day=temp_date.day,
-                hour=12,  # Meio-dia como hora inicial
+                hour=12,  # Noon as initial hour
                 minute=0,
                 city="",
                 lng=location_lng,
@@ -719,12 +718,12 @@ def get_return_chart(
                 tz_str=location_tz
             )
             
-            # Verificar a posição da Lua
+            # Check Moon position
             current_moon_position = temp_subject.moon.abs_pos
-            
-            # Se a posição atual está próxima da natal, refinar a hora
+
+            # If close to natal position, refine to exact hour
             if abs(current_moon_position - natal_moon_position) < 15:
-                # Refinar a hora exata do retorno
+                # Refine to exact hour
                 for hour in range(24):
                     temp_subject = AstrologicalSubject(
                         name=f"{natal_subject.name}_LunarReturn",
@@ -741,9 +740,9 @@ def get_return_chart(
                     
                     current_moon_position = temp_subject.moon.abs_pos
                     
-                    # Se a posição atual está mais próxima da natal, refinar os minutos
+                    # If close enough, refine to exact minute
                     if abs(current_moon_position - natal_moon_position) < 5:
-                        # Refinar os minutos
+                        # Refine to exact minute
                         for minute in range(0, 60, 5):
                             temp_subject = AstrologicalSubject(
                                 name=f"{natal_subject.name}_LunarReturn",
@@ -760,17 +759,17 @@ def get_return_chart(
                             
                             current_moon_position = temp_subject.moon.abs_pos
                             
-                            # Verificar se encontramos a posição exata
+                            # Check if we found the exact position
                             if abs(current_moon_position - natal_moon_position) < 0.5:
                                 return temp_subject
-                        
-                        # Se não encontrou a posição exata, retorna a mais próxima
+
+                        # Return closest match if exact position not found
                         return temp_subject
-                
-                # Se não encontrou nas horas, retorna o mapa do meio-dia
+
+                # Return noon chart if no exact hour found
                 return temp_subject
-        
-        # Se não encontrou o retorno lunar no mês especificado, usar o primeiro dia do mês
+
+        # If lunar return not found in specified month, use first day of month
         return AstrologicalSubject(
             name=f"{natal_subject.name}_LunarReturn",
             year=return_year,
@@ -785,7 +784,7 @@ def get_return_chart(
         )
     
     else:
-        raise ValueError(f"Tipo de retorno não suportado: {return_type}")
+        raise ValueError(f"Unsupported return type: {return_type}")
 
 def get_return_chart_cached(
     natal_subject: AstrologicalSubject, 
@@ -797,21 +796,21 @@ def get_return_chart_cached(
     location_tz_str: Optional[str] = None
 ) -> AstrologicalSubject:
     """
-    Calcula um mapa de retorno solar ou lunar com cache.
-    
+    Calculates a solar or lunar return chart with caching.
+
     Args:
-        natal_subject (AstrologicalSubject): Objeto AstrologicalSubject do mapa natal.
-        return_year (int): Ano para o qual calcular o retorno.
-        return_month (Optional[int]): Mês para o qual calcular o retorno (apenas para retorno lunar).
-        return_type (str): Tipo de retorno, "solar" ou "lunar".
-        location_longitude (Optional[float]): Longitude do local do retorno.
-        location_latitude (Optional[float]): Latitude do local do retorno.
-        location_tz_str (Optional[str]): Fuso horário do local do retorno.
-        
+        natal_subject (AstrologicalSubject): Natal chart AstrologicalSubject.
+        return_year (int): Year for which to calculate the return.
+        return_month (Optional[int]): Month for which to calculate the return (lunar return only).
+        return_type (str): Return type, "solar" or "lunar".
+        location_longitude (Optional[float]): Longitude of the return location.
+        location_latitude (Optional[float]): Latitude of the return location.
+        location_tz_str (Optional[str]): Timezone of the return location.
+
     Returns:
-        AstrologicalSubject: Objeto AstrologicalSubject do mapa de retorno.
+        AstrologicalSubject: Return chart AstrologicalSubject.
     """
-    # Gerar a chave de cache
+    # Generate cache key
     cache_key = get_cache_key(
         f"{return_type}_return",
         natal_name=natal_subject.name,
@@ -827,12 +826,12 @@ def get_return_chart_cached(
         location_tz_str=location_tz_str or natal_subject.tz_str
     )
     
-    # Verificar se existe no cache
+    # Check if cached
     cached_subject = get_from_cache(cache_key)
     if cached_subject is not None:
         return cached_subject
-    
-    # Se não estiver no cache, calcular
+
+    # Not cached — calculate
     subject = get_return_chart(
         natal_subject=natal_subject,
         return_year=return_year,
@@ -843,9 +842,9 @@ def get_return_chart_cached(
         location_tz_str=location_tz_str
     )
     
-    # Salvar no cache
+    # Save to cache
     save_to_cache(cache_key, subject)
-    
+
     return subject
 
 def get_progressed_chart_cached(
@@ -855,18 +854,18 @@ def get_progressed_chart_cached(
     prog_day: int
 ) -> AstrologicalSubject:
     """
-    Calcula o mapa progressado secundário com cache.
-    
+    Calculates the secondary progressed chart with caching.
+
     Args:
-        natal_subject (AstrologicalSubject): Objeto AstrologicalSubject do mapa natal.
-        prog_year (int): Ano para o qual calcular a progressão.
-        prog_month (int): Mês para o qual calcular a progressão.
-        prog_day (int): Dia para o qual calcular a progressão.
-        
+        natal_subject (AstrologicalSubject): Natal chart AstrologicalSubject.
+        prog_year (int): Year for which to calculate the progression.
+        prog_month (int): Month for which to calculate the progression.
+        prog_day (int): Day for which to calculate the progression.
+
     Returns:
-        AstrologicalSubject: Objeto AstrologicalSubject do mapa progressado.
+        AstrologicalSubject: Progressed chart AstrologicalSubject.
     """
-    # Gerar a chave de cache
+    # Generate cache key
     cache_key = get_cache_key(
         "progressed_chart",
         natal_name=natal_subject.name,
@@ -880,12 +879,12 @@ def get_progressed_chart_cached(
         prog_day=prog_day
     )
     
-    # Verificar se existe no cache
+    # Check if cached
     cached_subject = get_from_cache(cache_key)
     if cached_subject is not None:
         return cached_subject
-    
-    # Se não estiver no cache, calcular
+
+    # Not cached — calculate
     subject = get_progressed_chart(
         natal_subject=natal_subject,
         prog_year=prog_year,
@@ -893,9 +892,9 @@ def get_progressed_chart_cached(
         prog_day=prog_day
     )
     
-    # Salvar no cache
+    # Save to cache
     save_to_cache(cache_key, subject)
-    
+
     return subject
 
 def calculate_solar_arc_directions(
@@ -903,16 +902,16 @@ def calculate_solar_arc_directions(
     direction_date: datetime
 ) -> Tuple[float, Dict[str, float]]:
     """
-    Calcula as direções de arco solar.
-    
+    Calculates solar arc directions.
+
     Args:
-        natal_subject (AstrologicalSubject): Objeto AstrologicalSubject do mapa natal.
-        direction_date (datetime): Data para a qual calcular as direções.
-        
+        natal_subject (AstrologicalSubject): Natal chart AstrologicalSubject.
+        direction_date (datetime): Date for which to calculate the directions.
+
     Returns:
-        Tuple[float, Dict[str, float]]: Valor do arco em graus e posições dos planetas direcionados.
+        Tuple[float, Dict[str, float]]: Arc value in degrees and directed planet positions.
     """
-    # Data natal
+    # Natal date
     natal_date = datetime(
         natal_subject.year, 
         natal_subject.month, 
@@ -921,22 +920,22 @@ def calculate_solar_arc_directions(
         natal_subject.minute
     )
     
-    # Calcular a diferença em anos decimais
+    # Calculate difference in decimal years
     years_diff = (direction_date.year - natal_date.year) + \
                  (direction_date.month - natal_date.month) / 12 + \
                  (direction_date.day - natal_date.day) / 365.25
     
-    # Calcular o arco solar (aproximadamente 1 grau por ano)
+    # Calculate solar arc (approximately 1 degree per year)
     solar_arc = years_diff
-    
-    # Obter as posições dos planetas natais (lowercase keys)
+
+    # Get natal planet positions (lowercase keys)
     natal_positions = {}
     for planet_name in natal_subject.planets_names_list:
         attr = planet_name.lower()
         if hasattr(natal_subject, attr):
             natal_positions[attr] = getattr(natal_subject, attr).abs_pos
-    
-    # Calcular as posições direcionadas (adicionar o arco solar)
+
+    # Calculate directed positions (add solar arc)
     directed_positions = {}
     for planet_key, position in natal_positions.items():
         directed_positions[planet_key] = (position + solar_arc) % 360

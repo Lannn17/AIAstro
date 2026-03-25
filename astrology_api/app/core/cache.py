@@ -1,8 +1,8 @@
 """
-Módulo para cache de cálculos astrológicos.
+Cache module for astrological calculations.
 
-Este módulo implementa um sistema de cache para cálculos astrológicos frequentes,
-reduzindo o tempo de resposta para requisições repetidas.
+Implements a cache system for frequent astrological calculations,
+reducing response time for repeated requests.
 """
 from typing import Dict, Any, Optional, Tuple
 import time
@@ -11,114 +11,114 @@ import os
 import hashlib
 import json
 
-# Diretório para armazenar o cache
+# Directory to store cache files
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "cache")
 
-# Verificar se o diretório de cache existe, caso contrário, criá-lo
+# Create cache directory if it doesn't exist
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
-# Cache em memória para acesso rápido
+# In-memory cache for fast access
 MEMORY_CACHE = {}
 
-# Tempo de expiração do cache em segundos (24 horas)
+# Cache expiration time in seconds (24 hours)
 CACHE_EXPIRATION = 24 * 60 * 60
 
 def get_cache_key(prefix: str, **kwargs) -> str:
     """
-    Gera uma chave de cache baseada nos parâmetros.
-    
+    Generates a cache key based on the given parameters.
+
     Args:
-        prefix (str): Prefixo para a chave (ex: 'natal', 'transit').
-        **kwargs: Parâmetros para gerar a chave.
-        
+        prefix (str): Key prefix (e.g. 'natal', 'transit').
+        **kwargs: Parameters used to generate the key.
+
     Returns:
-        str: Chave de cache.
+        str: Cache key.
     """
-    # Criar uma string representando os parâmetros
+    # Build a string representing the parameters
     param_str = json.dumps(kwargs, sort_keys=True)
-    
-    # Gerar um hash SHA-256 da string
+
+    # Generate a SHA-256 hash of the string
     hash_obj = hashlib.sha256(param_str.encode())
     hash_str = hash_obj.hexdigest()
-    
-    # Retornar a chave no formato prefix_hash
+
+    # Return key in format prefix_hash
     return f"{prefix}_{hash_str}"
 
 def get_from_cache(key: str) -> Optional[Any]:
     """
-    Recupera um valor do cache.
-    
+    Retrieves a value from the cache.
+
     Args:
-        key (str): Chave do cache.
-        
+        key (str): Cache key.
+
     Returns:
-        Optional[Any]: Valor do cache ou None se não encontrado ou expirado.
+        Optional[Any]: Cached value or None if not found or expired.
     """
-    # Verificar primeiro no cache em memória
+    # Check in-memory cache first
     if key in MEMORY_CACHE:
         timestamp, value = MEMORY_CACHE[key]
-        
-        # Verificar se o cache expirou
+
+        # Check if cache has expired
         if time.time() - timestamp < CACHE_EXPIRATION:
             return value
         else:
-            # Remover do cache em memória se expirou
+            # Remove from memory cache if expired
             del MEMORY_CACHE[key]
-    
-    # Verificar no cache em disco
+
+    # Check disk cache
     cache_file = os.path.join(CACHE_DIR, f"{key}.pickle")
     if os.path.exists(cache_file):
-        # Verificar a data de modificação do arquivo
+        # Check file modification time
         mod_time = os.path.getmtime(cache_file)
-        
-        # Verificar se o cache expirou
+
+        # Check if cache has expired
         if time.time() - mod_time < CACHE_EXPIRATION:
             try:
                 with open(cache_file, 'rb') as f:
                     value = pickle.load(f)
-                
-                # Atualizar o cache em memória
+
+                # Update in-memory cache
                 MEMORY_CACHE[key] = (time.time(), value)
-                
+
                 return value
             except:
-                # Em caso de erro ao carregar o cache, remover o arquivo
+                # Remove file if loading fails
                 os.remove(cache_file)
         else:
-            # Remover o arquivo se expirou
+            # Remove file if expired
             os.remove(cache_file)
-    
+
     return None
 
 def save_to_cache(key: str, value: Any) -> None:
     """
-    Salva um valor no cache.
-    
+    Saves a value to the cache.
+
     Args:
-        key (str): Chave do cache.
-        value (Any): Valor a ser armazenado.
+        key (str): Cache key.
+        value (Any): Value to store.
     """
-    # Salvar no cache em memória
+    # Save to in-memory cache
     MEMORY_CACHE[key] = (time.time(), value)
-    
-    # Salvar no cache em disco
+
+    # Save to disk cache
     cache_file = os.path.join(CACHE_DIR, f"{key}.pickle")
     try:
         with open(cache_file, 'wb') as f:
             pickle.dump(value, f)
     except:
-        # Em caso de erro ao salvar, apenas ignorar
+        # Silently ignore save errors
         pass
 
 def clear_cache() -> None:
     """
-    Limpa todo o cache.
+    Clears all cache entries.
     """
-    # Limpar cache em memória
+    # Clear in-memory cache
     MEMORY_CACHE.clear()
-    
-    # Limpar cache em disco
+
+    # Clear disk cache
     for filename in os.listdir(CACHE_DIR):
         file_path = os.path.join(CACHE_DIR, filename)
         try:
@@ -129,20 +129,20 @@ def clear_cache() -> None:
 
 def clear_expired_cache() -> None:
     """
-    Limpa apenas o cache expirado.
+    Clears only expired cache entries.
     """
     current_time = time.time()
-    
-    # Limpar cache em memória
+
+    # Clear expired in-memory cache entries
     keys_to_remove = []
     for key, (timestamp, _) in MEMORY_CACHE.items():
         if current_time - timestamp >= CACHE_EXPIRATION:
             keys_to_remove.append(key)
-    
+
     for key in keys_to_remove:
         del MEMORY_CACHE[key]
-    
-    # Limpar cache em disco
+
+    # Clear expired disk cache files
     for filename in os.listdir(CACHE_DIR):
         file_path = os.path.join(CACHE_DIR, filename)
         try:

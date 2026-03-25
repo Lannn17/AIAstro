@@ -1,7 +1,7 @@
 """
-Router para os endpoints de sinastria (comparação de mapas natais).
+Router for synastry (natal chart comparison) endpoints.
 
-Este módulo contém os endpoints relacionados ao cálculo de sinastria entre dois mapas natais.
+This module contains endpoints for calculating synastry between two natal charts.
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional
@@ -22,46 +22,46 @@ router = APIRouter(
 @router.post("/synastry", response_model=SynastryResponse)
 async def calculate_synastry(request: SynastryRequest):
     """
-    Calcula a sinastria (comparação) entre dois mapas natais.
-    
+    Calculates synastry (comparison) between two natal charts.
+
     Args:
-        request (SynastryRequest): Dados para o cálculo da sinastria.
-        
+        request (SynastryRequest): Data for the synastry calculation.
+
     Returns:
-        SynastryResponse: Dados da sinastria calculada.
-        
+        SynastryResponse: Calculated synastry data.
+
     Raises:
-        HTTPException: Se ocorrer um erro durante o cálculo.
+        HTTPException: If an error occurs during calculation.
     """
     try:
-        # Validar os dados de entrada do primeiro mapa
+        # Validate first chart input data
         chart1 = request.chart1
         if not validate_date(chart1.year, chart1.month, chart1.day):
-            raise HTTPException(status_code=400, detail="Data do primeiro mapa inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid date for first chart")
+
         if not validate_time(chart1.hour, chart1.minute):
-            raise HTTPException(status_code=400, detail="Hora do primeiro mapa inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid time for first chart")
+
         if not validate_timezone(chart1.tz_str):
-            raise HTTPException(status_code=400, detail="Fuso horário do primeiro mapa inválido")
-        
-        # Validar os dados de entrada do segundo mapa
+            raise HTTPException(status_code=400, detail="Invalid timezone for first chart")
+
+        # Validate second chart input data
         chart2 = request.chart2
         if not validate_date(chart2.year, chart2.month, chart2.day):
-            raise HTTPException(status_code=400, detail="Data do segundo mapa inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid date for second chart")
+
         if not validate_time(chart2.hour, chart2.minute):
-            raise HTTPException(status_code=400, detail="Hora do segundo mapa inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid time for second chart")
+
         if not validate_timezone(chart2.tz_str):
-            raise HTTPException(status_code=400, detail="Fuso horário do segundo mapa inválido")
-        
-        # Usar valores padrão se não fornecidos
+            raise HTTPException(status_code=400, detail="Invalid timezone for second chart")
+
+        # Use defaults if not provided
         house_system1: HouseSystemType = chart1.house_system or "Placidus"
         house_system2: HouseSystemType = chart2.house_system or "Placidus"
         language: LanguageType = request.language or "pt"
-        
-        # Criar os objetos AstrologicalSubject
+
+        # Create AstrologicalSubject objects
         subject1 = create_astrological_subject(
             name=chart1.name if chart1.name else "Chart1",
             year=chart1.year,
@@ -74,7 +74,7 @@ async def calculate_synastry(request: SynastryRequest):
             tz_str=chart1.tz_str,
             house_system=house_system1
         )
-        
+
         subject2 = create_astrological_subject(
             name=chart2.name if chart2.name else "Chart2",
             year=chart2.year,
@@ -87,26 +87,26 @@ async def calculate_synastry(request: SynastryRequest):
             tz_str=chart2.tz_str,
             house_system=house_system2
         )
-        
-        # Obter os dados dos planetas para ambos os mapas
+
+        # Get planet data for both charts
         planets1 = get_planet_data(subject1, language)
         planets2 = get_planet_data(subject2, language)
-        
-        # Obter os aspectos entre os planetas dos dois mapas
+
+        # Get aspects between the two charts
         aspects = get_synastry_aspects_data(subject1, subject2, language)
-        
-        # Obter interpretações dos aspectos, se solicitado
+
+        # Get aspect interpretations if requested
         interpretations = None
         if request.include_interpretations:
             interpretations = {
                 "aspects": []
             }
-            
+
             for aspect in aspects:
                 p1_name = aspect.p1_name
                 p2_name = aspect.p2_name
                 aspect_name = aspect.aspect
-                
+
                 interp = get_aspect_interpretation(p1_name, p2_name, aspect_name, request.language)
                 if interp:
                     interpretations["aspects"].append({
@@ -115,8 +115,7 @@ async def calculate_synastry(request: SynastryRequest):
                         "aspect": aspect_name,
                         "interpretation": interp
                     })
-        
-        # Criar a resposta
+
         response = SynastryResponse(
             input_data=request,
             chart1_planets=planets1,
@@ -126,15 +125,12 @@ async def calculate_synastry(request: SynastryRequest):
             chart2_house_system=chart2.house_system,
             interpretations=interpretations
         )
-        
+
         return response
-        
+
     except Exception as e:
-        # Logar o erro
-        print(f"Erro ao calcular sinastria: {str(e)}")
-        
-        # Retornar erro ao cliente
+        print(f"Error calculating synastry: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao calcular sinastria: {str(e)}"
+            detail=f"Error calculating synastry: {str(e)}"
         )

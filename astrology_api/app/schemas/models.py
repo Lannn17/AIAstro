@@ -1,30 +1,30 @@
 """
-Modelos Pydantic para a aplicação AstroAPI.
+Pydantic models for the AstroAPI application.
 
-Este arquivo contém os modelos Pydantic que definem a estrutura
-de requisições e respostas da API.
+This file contains the Pydantic models that define the structure
+of API requests and responses.
 """
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Literal
 
-# Definição de tipos literais para sistemas de casas
+# Literal types for house systems
 HouseSystemType = Literal[
-    "Placidus", "Koch", "Porphyrius", "Regiomontanus", "Campanus", 
-    "Equal", "Whole Sign", "Alcabitus", "Morinus", "Horizontal", 
+    "Placidus", "Koch", "Porphyrius", "Regiomontanus", "Campanus",
+    "Equal", "Whole Sign", "Alcabitus", "Morinus", "Horizontal",
     "Topocentric", "Vehlow"
 ]
 
-# Definição de tipos literais para idiomas suportados
+# Literal types for supported languages
 LanguageType = Literal["pt", "en", "es", "zh", "ja"]
 
-# Mapeamento de nomes amigáveis para os códigos do Kerykeion
+# Friendly name to Kerykeion code mapping
 HOUSE_SYSTEM_MAP = {
     "Placidus": "P",
     "Koch": "K",
     "Porphyrius": "O",
     "Regiomontanus": "R",
     "Campanus": "C",
-    "Equal": "A",  # ou "E"
+    "Equal": "A",  # or "E"
     "Whole Sign": "W",
     "Alcabitus": "B",
     "Morinus": "M",
@@ -33,268 +33,268 @@ HOUSE_SYSTEM_MAP = {
     "Vehlow": "V"
 }
 
-# Classes para requisições
+# Request models
 
 class NatalChartRequest(BaseModel):
     """
-    Modelo para requisição de mapa natal.
+    Request model for natal chart calculation.
     """
-    name: Optional[str] = Field(None, description="Nome da pessoa ou evento")
-    year: int = Field(..., description="Ano de nascimento")
-    month: int = Field(..., ge=1, le=12, description="Mês de nascimento (1-12)")
-    day: int = Field(..., ge=1, le=31, description="Dia de nascimento (1-31)")
-    hour: int = Field(..., ge=0, le=23, description="Hora de nascimento (0-23)")
-    minute: int = Field(..., ge=0, le=59, description="Minuto de nascimento (0-59)")
-    latitude: float = Field(..., ge=-90, le=90, description="Latitude do local de nascimento")
-    longitude: float = Field(..., ge=-180, le=180, description="Longitude do local de nascimento")
-    tz_str: str = Field(..., description="String de fuso horário (ex: 'America/Sao_Paulo')")
-    house_system: Optional[HouseSystemType] = Field("Placidus", description="Sistema de casas a ser utilizado")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    name: Optional[str] = Field(None, description="Name of the person or event")
+    year: int = Field(..., description="Birth year")
+    month: int = Field(..., ge=1, le=12, description="Birth month (1-12)")
+    day: int = Field(..., ge=1, le=31, description="Birth day (1-31)")
+    hour: int = Field(..., ge=0, le=23, description="Birth hour (0-23)")
+    minute: int = Field(..., ge=0, le=59, description="Birth minute (0-59)")
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude of birth location")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude of birth location")
+    tz_str: str = Field(..., description="Timezone string (e.g. 'America/Sao_Paulo')")
+    house_system: Optional[HouseSystemType] = Field("Placidus", description="House system to use")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class TransitRequest(BaseModel):
     """
-    Modelo para requisição de trânsitos.
+    Request model for transit calculation.
     """
-    year: int = Field(..., description="Ano do trânsito")
-    month: int = Field(..., ge=1, le=12, description="Mês do trânsito (1-12)")
-    day: int = Field(..., ge=1, le=31, description="Dia do trânsito (1-31)")
-    hour: int = Field(..., ge=0, le=23, description="Hora do trânsito (0-23)")
-    minute: int = Field(..., ge=0, le=59, description="Minuto do trânsito (0-59)")
-    latitude: float = Field(..., ge=-90, le=90, description="Latitude do local do trânsito")
-    longitude: float = Field(..., ge=-180, le=180, description="Longitude do local do trânsito")
-    tz_str: str = Field(..., description="String de fuso horário (ex: 'America/Sao_Paulo')")
-    house_system: Optional[HouseSystemType] = Field("Placidus", description="Sistema de casas a ser utilizado")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    year: int = Field(..., description="Transit year")
+    month: int = Field(..., ge=1, le=12, description="Transit month (1-12)")
+    day: int = Field(..., ge=1, le=31, description="Transit day (1-31)")
+    hour: int = Field(..., ge=0, le=23, description="Transit hour (0-23)")
+    minute: int = Field(..., ge=0, le=59, description="Transit minute (0-59)")
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude of transit location")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude of transit location")
+    tz_str: str = Field(..., description="Timezone string (e.g. 'America/Sao_Paulo')")
+    house_system: Optional[HouseSystemType] = Field("Placidus", description="House system to use")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class TransitsToNatalRequest(BaseModel):
     """
-    Modelo para requisição de trânsitos sobre mapa natal.
+    Request model for transits to natal chart.
     """
-    natal: NatalChartRequest = Field(..., description="Dados do mapa natal")
-    transit: TransitRequest = Field(..., description="Dados do trânsito")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    natal: NatalChartRequest = Field(..., description="Natal chart data")
+    transit: TransitRequest = Field(..., description="Transit data")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class SVGChartRequest(BaseModel):
     """
-    Modelo para requisição de gráfico SVG.
+    Request model for SVG chart generation.
     """
-    natal_chart: NatalChartRequest = Field(..., description="Dados do mapa natal")
-    transit_chart: Optional[TransitRequest] = Field(None, description="Dados do trânsito (opcional)")
+    natal_chart: NatalChartRequest = Field(..., description="Natal chart data")
+    transit_chart: Optional[TransitRequest] = Field(None, description="Transit data (optional)")
     chart_type: Literal["natal", "transit", "combined"] = Field(
-        "natal", 
-        description="Tipo de gráfico: 'natal' para apenas mapa natal, 'transit' para apenas trânsitos, 'combined' para mapa natal com trânsitos"
+        "natal",
+        description="Chart type: 'natal' for natal only, 'transit' for transit only, 'combined' for natal with transits"
     )
     show_aspects: bool = Field(
         True,
-        description="Se deve mostrar linhas de aspectos no gráfico"
+        description="Whether to show aspect lines on the chart"
     )
     language: LanguageType = Field(
         "pt",
-        description="Idioma para os textos no gráfico"
+        description="Language for text on the chart"
     )
     theme: Literal["light", "dark"] = Field(
         "light",
-        description="Tema de cores para o gráfico"
+        description="Color theme for the chart"
     )
 
-# Classes para componentes de resposta
+# Response component models
 
 class PlanetData(BaseModel):
     """
-    Modelo para dados de um planeta.
+    Model for planet data.
     """
-    name: str = Field(..., description="Nome do planeta")
-    name_original: Optional[str] = Field(None, description="Nome original do planeta em inglês")
-    longitude: float = Field(..., description="Longitude eclíptica do planeta")
-    latitude: Optional[float] = Field(0.0, description="Latitude eclíptica do planeta")
-    sign: str = Field(..., description="Signo zodiacal do planeta")
-    sign_original: Optional[str] = Field(None, description="Nome original do signo em inglês")
-    sign_num: int = Field(..., description="Número do signo (1-12)")
-    house: int = Field(..., description="Casa astrológica do planeta (1-12)")
-    retrograde: bool = Field(..., description="Se o planeta está retrógrado")
-    speed: Optional[float] = Field(0.0, description="Velocidade do planeta")
+    name: str = Field(..., description="Planet name")
+    name_original: Optional[str] = Field(None, description="Original planet name in English")
+    longitude: float = Field(..., description="Ecliptic longitude of the planet")
+    latitude: Optional[float] = Field(0.0, description="Ecliptic latitude of the planet")
+    sign: str = Field(..., description="Zodiac sign of the planet")
+    sign_original: Optional[str] = Field(None, description="Original sign name in English")
+    sign_num: int = Field(..., description="Sign number (1-12)")
+    house: int = Field(..., description="Astrological house of the planet (1-12)")
+    retrograde: bool = Field(..., description="Whether the planet is retrograde")
+    speed: Optional[float] = Field(0.0, description="Planet speed")
 
 class HouseCuspData(BaseModel):
     """
-    Modelo para dados de uma cúspide de casa.
+    Model for house cusp data.
     """
-    number: int = Field(..., description="Número da casa (1-12)")
-    sign: str = Field(..., description="Signo zodiacal da cúspide")
-    sign_original: Optional[str] = Field(None, description="Nome original do signo em inglês")
-    sign_num: int = Field(..., description="Número do signo (1-12)")
-    longitude: float = Field(..., description="Longitude eclíptica da cúspide")
+    number: int = Field(..., description="House number (1-12)")
+    sign: str = Field(..., description="Zodiac sign of the cusp")
+    sign_original: Optional[str] = Field(None, description="Original sign name in English")
+    sign_num: int = Field(..., description="Sign number (1-12)")
+    longitude: float = Field(..., description="Ecliptic longitude of the cusp")
 
 class AspectData(BaseModel):
     """
-    Modelo para dados de um aspecto.
+    Model for aspect data.
     """
-    p1_name: str = Field(..., description="Nome do primeiro planeta/ponto")
-    p1_name_original: Optional[str] = Field(None, description="Nome original do primeiro planeta/ponto em inglês")
-    p1_owner: str = Field(..., description="Proprietário do primeiro planeta/ponto (natal/trânsito)")
-    p2_name: str = Field(..., description="Nome do segundo planeta/ponto")
-    p2_name_original: Optional[str] = Field(None, description="Nome original do segundo planeta/ponto em inglês")
-    p2_owner: str = Field(..., description="Proprietário do segundo planeta/ponto (natal/trânsito)")
-    aspect: str = Field(..., description="Nome do aspecto")
-    aspect_original: Optional[str] = Field(None, description="Nome original do aspecto em inglês")
-    orbit: float = Field(..., description="Orbe do aspecto")
-    aspect_degrees: float = Field(..., description="Graus do aspecto")
-    diff: float = Field(..., description="Diferença em graus")
-    applying: bool = Field(..., description="Se o aspecto está se aplicando (true) ou separando (false)")
+    p1_name: str = Field(..., description="Name of the first planet/point")
+    p1_name_original: Optional[str] = Field(None, description="Original name of the first planet/point in English")
+    p1_owner: str = Field(..., description="Owner of the first planet/point (natal/transit)")
+    p2_name: str = Field(..., description="Name of the second planet/point")
+    p2_name_original: Optional[str] = Field(None, description="Original name of the second planet/point in English")
+    p2_owner: str = Field(..., description="Owner of the second planet/point (natal/transit)")
+    aspect: str = Field(..., description="Aspect name")
+    aspect_original: Optional[str] = Field(None, description="Original aspect name in English")
+    orbit: float = Field(..., description="Aspect orb")
+    aspect_degrees: float = Field(..., description="Aspect degrees")
+    diff: float = Field(..., description="Degree difference")
+    applying: bool = Field(..., description="Whether the aspect is applying (true) or separating (false)")
     direction: Optional[str] = Field(None, description="p1_to_p2 or p2_to_p1")
     double_whammy: bool = Field(False, description="True if reciprocal aspect exists")
 
-# Classes para respostas
+# Response models
 
 class NatalChartResponse(BaseModel):
     """
-    Modelo para resposta de mapa natal.
+    Response model for natal chart.
     """
-    input_data: NatalChartRequest = Field(..., description="Dados de entrada da requisição")
-    planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas")
-    houses: Dict[str, HouseCuspData] = Field(..., description="Dados das casas")
-    ascendant: HouseCuspData = Field(..., description="Dados do Ascendente")
-    midheaven: HouseCuspData = Field(..., description="Dados do Meio-do-Céu")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas")
-    house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: NatalChartRequest = Field(..., description="Request input data")
+    planets: Dict[str, PlanetData] = Field(..., description="Planet data")
+    houses: Dict[str, HouseCuspData] = Field(..., description="House data")
+    ascendant: HouseCuspData = Field(..., description="Ascendant data")
+    midheaven: HouseCuspData = Field(..., description="Midheaven data")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between planets")
+    house_system: HouseSystemType = Field(..., description="House system used")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class TransitResponse(BaseModel):
     """
-    Modelo para resposta de trânsitos.
+    Response model for transits.
     """
-    input_data: TransitRequest = Field(..., description="Dados de entrada da requisição")
-    planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas em trânsito")
-    house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: TransitRequest = Field(..., description="Request input data")
+    planets: Dict[str, PlanetData] = Field(..., description="Transit planet data")
+    house_system: HouseSystemType = Field(..., description="House system used")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class TransitsToNatalResponse(BaseModel):
     """
-    Modelo para resposta de trânsitos sobre mapa natal.
+    Response model for transits to natal chart.
     """
-    input_data: TransitsToNatalRequest = Field(..., description="Dados de entrada da requisição")
-    natal_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas natais")
-    transit_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas em trânsito")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas em trânsito e natais")
-    natal_house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado para o mapa natal")
-    transit_house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado para os trânsitos")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: TransitsToNatalRequest = Field(..., description="Request input data")
+    natal_planets: Dict[str, PlanetData] = Field(..., description="Natal planet data")
+    transit_planets: Dict[str, PlanetData] = Field(..., description="Transit planet data")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between transit and natal planets")
+    natal_house_system: HouseSystemType = Field(..., description="House system used for the natal chart")
+    transit_house_system: HouseSystemType = Field(..., description="House system used for transits")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class SVGChartResponse(BaseModel):
     """
-    Modelo para resposta de gráfico SVG.
+    Response model for SVG chart.
     """
-    svg_image: str = Field(..., description="Conteúdo SVG do gráfico")
+    svg_image: str = Field(..., description="SVG content of the chart")
 
 class SVGChartBase64Response(BaseModel):
     """
-    Modelo para resposta de gráfico SVG em Base64.
+    Response model for Base64-encoded SVG chart.
     """
-    svg_base64: str = Field(..., description="Conteúdo SVG do gráfico em Base64")
-    data_uri: str = Field(..., description="URI de dados do SVG em Base64")
+    svg_base64: str = Field(..., description="Base64-encoded SVG content")
+    data_uri: str = Field(..., description="Base64 SVG data URI")
 
 class InterpretationResponse(BaseModel):
     """
-    Modelo para resposta de interpretações.
+    Response model for interpretations.
     """
-    interpretations: Dict[str, Any] = Field(..., description="Interpretações textuais")
+    interpretations: Dict[str, Any] = Field(..., description="Textual interpretations")
 
 class SynastryRequest(BaseModel):
     """
-    Modelo para requisição de sinastria (comparação de mapas natais).
+    Request model for synastry (natal chart comparison).
     """
-    chart1: NatalChartRequest = Field(..., description="Dados do primeiro mapa natal")
-    chart2: NatalChartRequest = Field(..., description="Dados do segundo mapa natal")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    chart1: NatalChartRequest = Field(..., description="First natal chart data")
+    chart2: NatalChartRequest = Field(..., description="Second natal chart data")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class SynastryResponse(BaseModel):
     """
-    Modelo para resposta de sinastria.
+    Response model for synastry.
     """
-    input_data: SynastryRequest = Field(..., description="Dados de entrada da requisição")
-    chart1_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas do primeiro mapa")
-    chart2_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas do segundo mapa")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas dos dois mapas")
-    chart1_house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado para o primeiro mapa")
-    chart2_house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado para o segundo mapa")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: SynastryRequest = Field(..., description="Request input data")
+    chart1_planets: Dict[str, PlanetData] = Field(..., description="Planet data from the first chart")
+    chart2_planets: Dict[str, PlanetData] = Field(..., description="Planet data from the second chart")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between planets of both charts")
+    chart1_house_system: HouseSystemType = Field(..., description="House system used for the first chart")
+    chart2_house_system: HouseSystemType = Field(..., description="House system used for the second chart")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class ProgressionDateRequest(BaseModel):
     """
-    Modelo para dados de data de progressão.
+    Model for progression date data.
     """
-    year: int = Field(..., description="Ano da progressão")
-    month: int = Field(..., ge=1, le=12, description="Mês da progressão (1-12)")
-    day: int = Field(..., ge=1, le=31, description="Dia da progressão (1-31)")
+    year: int = Field(..., description="Progression year")
+    month: int = Field(..., ge=1, le=12, description="Progression month (1-12)")
+    day: int = Field(..., ge=1, le=31, description="Progression day (1-31)")
 
 class ProgressionRequest(BaseModel):
     """
-    Modelo para requisição de progressões secundárias.
+    Request model for secondary progressions.
     """
-    natal_chart: NatalChartRequest = Field(..., description="Dados do mapa natal")
-    progression_date: ProgressionDateRequest = Field(..., description="Data para a progressão")
-    include_natal_comparison: bool = Field(True, description="Se deve incluir comparação com mapa natal")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    natal_chart: NatalChartRequest = Field(..., description="Natal chart data")
+    progression_date: ProgressionDateRequest = Field(..., description="Date for the progression")
+    include_natal_comparison: bool = Field(True, description="Whether to include comparison with natal chart")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class ProgressionResponse(BaseModel):
     """
-    Modelo para resposta de progressões secundárias.
+    Response model for secondary progressions.
     """
-    input_data: ProgressionRequest = Field(..., description="Dados de entrada da requisição")
-    progressed_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas progressados")
-    natal_houses: Dict[str, HouseCuspData] = Field(..., description="Dados das casas natais")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas progressados e natais")
-    house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: ProgressionRequest = Field(..., description="Request input data")
+    progressed_planets: Dict[str, PlanetData] = Field(..., description="Progressed planet data")
+    natal_houses: Dict[str, HouseCuspData] = Field(..., description="Natal house data")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between progressed and natal planets")
+    house_system: HouseSystemType = Field(..., description="House system used")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class ReturnRequest(BaseModel):
     """
-    Modelo para requisição de retornos solares ou lunares.
+    Request model for solar or lunar returns.
     """
-    natal_chart: NatalChartRequest = Field(..., description="Dados do mapa natal")
-    return_year: int = Field(..., description="Ano para o retorno")
-    return_month: Optional[int] = Field(None, ge=1, le=12, description="Mês para o retorno (usado apenas para retorno lunar)")
-    location_longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude do local do retorno (se diferente do local de nascimento)")
-    location_latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude do local do retorno (se diferente do local de nascimento)")
-    location_tz_str: Optional[str] = Field(None, description="String de fuso horário para o local do retorno (se diferente do local de nascimento)")
-    include_natal_comparison: bool = Field(True, description="Se deve incluir comparação com mapa natal")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    natal_chart: NatalChartRequest = Field(..., description="Natal chart data")
+    return_year: int = Field(..., description="Year for the return")
+    return_month: Optional[int] = Field(None, ge=1, le=12, description="Month for the return (used only for lunar return)")
+    location_longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude of return location (if different from birth location)")
+    location_latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude of return location (if different from birth location)")
+    location_tz_str: Optional[str] = Field(None, description="Timezone string for the return location (if different from birth location)")
+    include_natal_comparison: bool = Field(True, description="Whether to include comparison with natal chart")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class ReturnResponse(BaseModel):
     """
-    Modelo para resposta de retornos solares ou lunares.
+    Response model for solar or lunar returns.
     """
-    input_data: ReturnRequest = Field(..., description="Dados de entrada da requisição")
-    return_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas do retorno")
-    return_houses: Dict[str, HouseCuspData] = Field(..., description="Dados das casas do retorno")
-    return_date: str = Field(..., description="Data e hora exata do retorno")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas do retorno e natais")
-    house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: ReturnRequest = Field(..., description="Request input data")
+    return_planets: Dict[str, PlanetData] = Field(..., description="Return chart planet data")
+    return_houses: Dict[str, HouseCuspData] = Field(..., description="Return chart house data")
+    return_date: str = Field(..., description="Exact date and time of the return")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between return and natal planets")
+    house_system: HouseSystemType = Field(..., description="House system used")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")
 
 class DirectionRequest(BaseModel):
     """
-    Modelo para requisição de direções solares.
+    Request model for solar arc directions.
     """
-    natal_chart: NatalChartRequest = Field(..., description="Dados do mapa natal")
-    direction_date: ProgressionDateRequest = Field(..., description="Data para a direção")
-    direction_type: Literal["solar_arc", "primary"] = Field("solar_arc", description="Tipo de direção")
-    include_natal_comparison: bool = Field(True, description="Se deve incluir comparação com mapa natal")
-    language: Optional[LanguageType] = Field("pt", description="Idioma para textos na resposta")
-    include_interpretations: bool = Field(False, description="Se deve incluir interpretações textuais na resposta")
+    natal_chart: NatalChartRequest = Field(..., description="Natal chart data")
+    direction_date: ProgressionDateRequest = Field(..., description="Date for the direction")
+    direction_type: Literal["solar_arc", "primary"] = Field("solar_arc", description="Direction type")
+    include_natal_comparison: bool = Field(True, description="Whether to include comparison with natal chart")
+    language: Optional[LanguageType] = Field("pt", description="Language for text in the response")
+    include_interpretations: bool = Field(False, description="Whether to include textual interpretations in the response")
 
 class DirectionResponse(BaseModel):
     """
-    Modelo para resposta de direções solares.
+    Response model for solar arc directions.
     """
-    input_data: DirectionRequest = Field(..., description="Dados de entrada da requisição")
-    directed_planets: Dict[str, PlanetData] = Field(..., description="Dados dos planetas direcionados")
-    natal_houses: Dict[str, HouseCuspData] = Field(..., description="Dados das casas natais")
-    direction_value: float = Field(..., description="Valor da direção em graus")
-    aspects: List[AspectData] = Field(default_factory=list, description="Aspectos entre planetas direcionados e natais")
-    house_system: HouseSystemType = Field(..., description="Sistema de casas utilizado")
-    interpretations: Optional[Dict[str, Any]] = Field(None, description="Interpretações textuais (opcional)")
+    input_data: DirectionRequest = Field(..., description="Request input data")
+    directed_planets: Dict[str, PlanetData] = Field(..., description="Directed planet data")
+    natal_houses: Dict[str, HouseCuspData] = Field(..., description="Natal house data")
+    direction_value: float = Field(..., description="Direction value in degrees")
+    aspects: List[AspectData] = Field(default_factory=list, description="Aspects between directed and natal planets")
+    house_system: HouseSystemType = Field(..., description="House system used")
+    interpretations: Optional[Dict[str, Any]] = Field(None, description="Textual interpretations (optional)")

@@ -1,7 +1,7 @@
 """
-Router para os endpoints de direções astrológicas.
+Router for astrological direction endpoints.
 
-Este módulo contém os endpoints relacionados ao cálculo de direções de arco solar e primárias.
+This module contains endpoints for calculating solar arc and primary directions.
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional, Any, Tuple
@@ -23,86 +23,86 @@ router = APIRouter(
     tags=["Directions"],
 )
 
-# Lista de signos em ordem
+# Zodiac signs in order
 ZODIAC_SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
 ]
 
 def get_sign_name(sign_num: int) -> str:
-    """Retorna o nome do signo baseado no número (1-12)"""
+    """Returns the sign name based on its number (1-12)."""
     if 1 <= sign_num <= 12:
         return ZODIAC_SIGNS[sign_num - 1]
     return "Unknown"
 
 def calculate_house_position(longitude: float, house_cusps: List[float]) -> int:
     """
-    Calcula a casa astrológica para uma dada longitude.
-    
+    Calculates the astrological house for a given longitude.
+
     Args:
-        longitude (float): Longitude eclíptica
-        house_cusps (List[float]): Lista de cúspides das casas
-        
+        longitude (float): Ecliptic longitude
+        house_cusps (List[float]): List of house cusps
+
     Returns:
-        int: Número da casa (1-12)
+        int: House number (1-12)
     """
-    # Normalizar longitude para 0-360
+    # Normalize longitude to 0-360
     while longitude < 0:
         longitude += 360
     while longitude >= 360:
         longitude -= 360
-    
-    # Verificar cada casa
+
+    # Check each house
     for i in range(1, 13):
         cusp_start = house_cusps[i-1]
         cusp_end = house_cusps[i % 12]
-        
-        # Lidar com casas que cruzam 0°
+
+        # Handle houses that cross 0°
         if cusp_end < cusp_start:
             if longitude >= cusp_start or longitude < cusp_end:
                 return i
         else:
             if cusp_start <= longitude < cusp_end:
                 return i
-    
-    return 1  # Default para a primeira casa se algo der errado
+
+    return 1  # Default to first house if something goes wrong
 
 @router.post("/solar-arc", response_model=DirectionResponse)
 async def calculate_solar_arc(request: DirectionRequest):
     """
-    Calcula as direções de arco solar para um mapa natal.
-    
+    Calculates solar arc directions for a natal chart.
+
     Args:
-        request (DirectionRequest): Dados para o cálculo das direções.
-        
+        request (DirectionRequest): Data for the direction calculation.
+
     Returns:
-        DirectionResponse: Dados das direções calculadas.
-        
+        DirectionResponse: Calculated direction data.
+
     Raises:
-        HTTPException: Se ocorrer um erro durante o cálculo.
+        HTTPException: If an error occurs during calculation.
     """
     try:
-        # Validar os dados de entrada do mapa natal
+        # Validate natal chart input data
         natal = request.natal_chart
         if not validate_date(natal.year, natal.month, natal.day):
-            raise HTTPException(status_code=400, detail="Data natal inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid natal date")
+
         if not validate_time(natal.hour, natal.minute):
-            raise HTTPException(status_code=400, detail="Hora natal inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid natal time")
+
         if not validate_timezone(natal.tz_str):
-            raise HTTPException(status_code=400, detail="Fuso horário natal inválido")
-        
-        # Validar os dados da data de direção
+            raise HTTPException(status_code=400, detail="Invalid natal timezone")
+
+        # Validate direction date
         direction_date = request.direction_date
         if not validate_date(direction_date.year, direction_date.month, direction_date.day):
-            raise HTTPException(status_code=400, detail="Data de direção inválida")
-            
-        # Usar valores padrão para house_system e language se não fornecidos
+            raise HTTPException(status_code=400, detail="Invalid direction date")
+
+        # Use defaults for house_system and language if not provided
         house_system: HouseSystemType = natal.house_system or "Placidus"
         language: LanguageType = request.language or "pt"
-        
-        # Criar o objeto AstrologicalSubject para o mapa natal
+
+        # Create AstrologicalSubject for the natal chart
         natal_subject = create_astrological_subject(
             name=natal.name if natal.name else "NatalChart",
             year=natal.year,
@@ -115,56 +115,56 @@ async def calculate_solar_arc(request: DirectionRequest):
             tz_str=natal.tz_str,
             house_system=house_system
         )
-        
-        # Calcular as direções de arco solar
+
+        # Calculate solar arc directions
         direction_date_obj = datetime(
             direction_date.year,
             direction_date.month,
             direction_date.day
         )
-        
+
         solar_arc, directed_positions = calculate_solar_arc_directions(natal_subject, direction_date_obj)
-        
-        # Obter dados das casas natais
+
+        # Get natal house data
         houses = get_houses_data(natal_subject, language)
-        
-        # Criar um mapa com as posições direcionadas
+
+        # Build directed planet positions
         directed_planets = {}
-        
+
         for planet_name, planet_data in get_planet_data(natal_subject, language).items():
-            # Copiar os dados do planeta natal
+            # Copy natal planet data
             directed_planet = planet_data.model_copy()
-            
-            # Atualizar a longitude com a posição direcionada
+
+            # Update longitude with directed position
             if planet_name in directed_positions:
                 longitude = directed_positions[planet_name]
                 directed_planet.longitude = longitude
-                
-                # Calcular o novo signo
+
+                # Calculate new sign
                 sign_num = int(longitude / 30) + 1
                 sign = get_sign_name(sign_num)
                 directed_planet.sign = translate_sign(sign, language)
                 directed_planet.sign_original = sign
                 directed_planet.sign_num = sign_num
-                
-                # Atualizar a casa
+
+                # Update house
                 house_cusps = [float(h.longitude) for h in houses.values()]
                 directed_planet.house = calculate_house_position(longitude, house_cusps)
-            
+
             directed_planets[planet_name] = directed_planet
-        
-        # Calcular aspectos entre planetas direcionados e natais
+
+        # Calculate aspects between directed and natal planets
         natal_planets = get_planet_data(natal_subject, language)
         all_aspects = []
-        
+
         for d_planet, d_data in directed_planets.items():
             for n_planet, n_data in natal_planets.items():
-                # Calcular aspecto (simplificado)
+                # Calculate aspect
                 diff = abs(d_data.longitude - n_data.longitude) % 360
-                for aspect_angle, aspect_name in [(0, "Conjunction"), (60, "Sextile"), 
+                for aspect_angle, aspect_name in [(0, "Conjunction"), (60, "Sextile"),
                                               (90, "Square"), (120, "Trine"), (180, "Opposition")]:
                     orbit = abs(diff - aspect_angle)
-                    if orbit <= 8:  # Orbe de 8 graus
+                    if orbit <= 8:  # 8-degree orb
                         all_aspects.append(AspectData(
                             p1_name=translate_planet(d_planet, language),
                             p1_name_original=d_planet,
@@ -179,28 +179,26 @@ async def calculate_solar_arc(request: DirectionRequest):
                             diff=round(diff, 4),
                             applying=False
                         ))
-        
-        # Gerar interpretações se solicitado
+
+        # Generate interpretations if requested
         interpretations = None
         if request.include_interpretations:
             interpretations = {
                 "planets": {},
                 "aspects": []
             }
-            
-            # Interpretações dos planetas
+
+            # Planet interpretations
             for planet_name, planet_data in directed_planets.items():
-                # Usar a função get_planet_interpretation com valores não-nulos
                 interp = get_planet_interpretation(planet_name, planet_data.sign, planet_data.house, language)
                 if interp:
                     interpretations["planets"][planet_name] = interp
-            
-            # Interpretações dos aspectos
+
+            # Aspect interpretations
             for aspect in all_aspects:
                 p1_name = aspect["p1_name_original"]
                 p2_name = aspect["p2_name_original"]
                 aspect_name = aspect["aspect_original"]
-                # Usar a função get_aspect_interpretation com valores não-nulos
                 interp = get_planet_interpretation(f"{p1_name} {aspect_name} {p2_name}", "", 0, language)
                 if interp:
                     interpretations["aspects"].append({
@@ -209,8 +207,8 @@ async def calculate_solar_arc(request: DirectionRequest):
                         "aspect": aspect_name,
                         "text": interp
                     })
-        
-        # Construir resposta
+
+        # Build response
         return DirectionResponse(
             input_data=request,
             directed_planets=directed_planets,
@@ -220,6 +218,6 @@ async def calculate_solar_arc(request: DirectionRequest):
             house_system=house_system,
             interpretations=interpretations
         )
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

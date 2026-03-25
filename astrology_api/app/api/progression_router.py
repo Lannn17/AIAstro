@@ -1,7 +1,7 @@
 """
-Router para os endpoints de progressões astrológicas.
+Router for astrological progression endpoints.
 
-Este módulo contém os endpoints relacionados ao cálculo de progressões secundárias.
+This module contains endpoints for calculating secondary progressions.
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional, Any
@@ -25,35 +25,35 @@ router = APIRouter(
 @router.post("/progressions", response_model=ProgressionResponse)
 async def calculate_progressions(request: ProgressionRequest):
     """
-    Calcula as progressões secundárias para um mapa natal.
-    
+    Calculates secondary progressions for a natal chart.
+
     Args:
-        request (ProgressionRequest): Dados para o cálculo das progressões.
-        
+        request (ProgressionRequest): Data for the progression calculation.
+
     Returns:
-        ProgressionResponse: Dados das progressões calculadas.
-        
+        ProgressionResponse: Calculated progression data.
+
     Raises:
-        HTTPException: Se ocorrer um erro durante o cálculo.
+        HTTPException: If an error occurs during calculation.
     """
     try:
-        # Validar os dados de entrada do mapa natal
+        # Validate natal chart input data
         natal = request.natal_chart
         if not validate_date(natal.year, natal.month, natal.day):
-            raise HTTPException(status_code=400, detail="Data natal inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid natal date")
+
         if not validate_time(natal.hour, natal.minute):
-            raise HTTPException(status_code=400, detail="Hora natal inválida")
-        
+            raise HTTPException(status_code=400, detail="Invalid natal time")
+
         if not validate_timezone(natal.tz_str):
-            raise HTTPException(status_code=400, detail="Fuso horário natal inválido")
-        
-        # Validar os dados da data de progressão
+            raise HTTPException(status_code=400, detail="Invalid natal timezone")
+
+        # Validate progression date
         prog_date = request.progression_date
         if not validate_date(prog_date.year, prog_date.month, prog_date.day):
-            raise HTTPException(status_code=400, detail="Data de progressão inválida")
-        
-        # Criar o objeto AstrologicalSubject para o mapa natal
+            raise HTTPException(status_code=400, detail="Invalid progression date")
+
+        # Create AstrologicalSubject for the natal chart
         natal_subject = create_astrological_subject(
             name=natal.name if natal.name else "NatalChart",
             year=natal.year,
@@ -66,29 +66,26 @@ async def calculate_progressions(request: ProgressionRequest):
             tz_str=natal.tz_str,
             house_system=natal.house_system
         )
-        
-        # Calcular as progressões
+
+        # Calculate progressions
         progressed_subject = get_progressed_chart(
-            natal_subject, 
-            prog_date.year, 
-            prog_date.month, 
+            natal_subject,
+            prog_date.year,
+            prog_date.month,
             prog_date.day
         )
-        
-        # Obter os dados dos planetas progressados
+
+        # Get progressed planet data
         progressed_planets = get_planet_data(progressed_subject, request.language)
-        
-        # Obter os dados das casas (usando o mapa natal como referência)
+
+        # Get house data (using natal chart as reference)
         houses = get_houses_data(natal_subject, request.language)
-        
-        # Obter os aspectos entre planetas natais e progressados
+
+        # Get aspects between natal and progressed planets
         aspects = []
         if request.include_natal_comparison:
-            # Obter os dados dos planetas natais
             natal_planets = get_planet_data(natal_subject, request.language)
-            
-            # Calcular aspectos entre planetas natais e progressados
-            # (Esta função precisa ser implementada no módulo calculations.py)
+
             aspects = get_aspects_between_subjects(
                 progressed_subject,
                 natal_subject,
@@ -96,31 +93,31 @@ async def calculate_progressions(request: ProgressionRequest):
                 subject2_owner="natal",
                 language=request.language
             )
-        
-        # Obter interpretações, se solicitado
+
+        # Get interpretations if requested
         interpretations = None
         if request.include_interpretations:
             interpretations = {
                 "planets": {},
                 "aspects": []
             }
-            
-            # Interpretações dos planetas progressados
+
+            # Progressed planet interpretations
             for planet_key, planet_data in progressed_planets.items():
                 planet_name = planet_data.name
                 sign = planet_data.sign
                 house = planet_data.house
-                
+
                 interp = get_planet_interpretation(planet_name, sign, house, request.language)
                 if interp:
                     interpretations["planets"][planet_key] = interp
-            
-            # Interpretações dos aspectos
+
+            # Aspect interpretations
             for aspect in aspects:
                 p1_name = aspect.p1_name
                 p2_name = aspect.p2_name
                 aspect_name = aspect.aspect
-                
+
                 interp = get_planet_interpretation(f"{p1_name} {aspect_name} {p2_name}", "", 0, request.language)
                 if interp:
                     interpretations["aspects"].append({
@@ -129,8 +126,7 @@ async def calculate_progressions(request: ProgressionRequest):
                         "aspect": aspect_name,
                         "interpretation": interp
                     })
-        
-        # Criar a resposta
+
         response = ProgressionResponse(
             input_data=request,
             progressed_planets=progressed_planets,
@@ -139,15 +135,12 @@ async def calculate_progressions(request: ProgressionRequest):
             house_system=natal.house_system,
             interpretations=interpretations
         )
-        
+
         return response
-        
+
     except Exception as e:
-        # Logar o erro
-        print(f"Erro ao calcular progressões: {str(e)}")
-        
-        # Retornar erro ao cliente
+        print(f"Error calculating progressions: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao calcular progressões: {str(e)}"
+            detail=f"Error calculating progressions: {str(e)}"
         )
