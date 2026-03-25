@@ -84,6 +84,7 @@ function UserBadge() {
 }
 
 function AppInner() {
+  const { sessionKey } = useAuth()
   return (
     <BrowserRouter>
       <LoginModal />
@@ -124,7 +125,7 @@ function AppInner() {
         </header>
 
         {/* Page content */}
-        <main className="app-main">
+        <main key={sessionKey} className="app-main">
           <Routes>
             <Route path="/"              element={<NatalChart />} />
             <Route path="/transits"      element={<Transits />} />

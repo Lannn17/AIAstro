@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [sessionKey, setSessionKey] = useState(0)
 
   useEffect(() => {
     if (!token && !isGuest) {
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
     setToken(access_token)
     setIsGuest(false)
     setShowLoginModal(false)
+    setSessionKey(k => k + 1)
   }
 
   function continueAsGuest() {
@@ -39,6 +41,7 @@ export function AuthProvider({ children }) {
     setIsGuest(true)
     setToken(null)
     setShowLoginModal(false)
+    setSessionKey(k => k + 1)
   }
 
   function logout() {
@@ -47,6 +50,7 @@ export function AuthProvider({ children }) {
     setToken(null)
     setIsGuest(false)
     setShowLoginModal(true)
+    setSessionKey(k => k + 1)
   }
 
   function authHeaders() {
@@ -65,6 +69,7 @@ export function AuthProvider({ children }) {
       authHeaders,
       showLoginModal,
       setShowLoginModal,
+      sessionKey,
     }}>
       {children}
     </AuthContext.Provider>
