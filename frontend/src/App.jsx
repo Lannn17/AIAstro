@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { useEffect } from 'react'
 import './index.css'
 import NatalChart from './pages/NatalChart'
 import Transits from './pages/Transits'
@@ -7,7 +8,7 @@ import Progressions from './pages/Progressions'
 import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { ChartSessionProvider } from './contexts/ChartSessionContext'
+import { ChartSessionProvider, useChartSession } from './contexts/ChartSessionContext'
 import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 
@@ -87,6 +88,12 @@ function UserBadge() {
 
 function AppInner() {
   const { sessionKey } = useAuth()
+  const { clearSessionCharts } = useChartSession()
+
+  useEffect(() => {
+    clearSessionCharts()
+  }, [sessionKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <BrowserRouter>
       <LoginModal />
