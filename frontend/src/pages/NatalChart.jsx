@@ -280,7 +280,10 @@ export default function NatalChart() {
     setChatSummary('')
     try {
       const res = await fetch(`${API_BASE}/api/charts/${summary.id}`, { headers: authHeaders() })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status}: ${errText}`)
+      }
       const chart = await res.json()
       setLastFormData({
         name: chart.name || '',
@@ -303,8 +306,8 @@ export default function NatalChart() {
         fetchPlanetCache(chart.chart_data, summary.id)
       }
       if (chart.svg_data) setSvgContent(chart.svg_data)
-    } catch {
-      setError('加载失败')
+    } catch (e) {
+      setError(`加载失败: ${e.message}`)
       setSavedId(null)
     }
   }
