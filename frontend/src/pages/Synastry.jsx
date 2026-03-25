@@ -184,7 +184,7 @@ function ChartInputCol({ label, col, setCol, isAuthenticated, authHeaders, sessi
 
   const chartList = isAuthenticated ? savedCharts : sessionCharts
 
-  function handleSelectChange(e) {
+  async function handleSelectChange(e) {
     const id = e.target.value
     if (!id) {
       setCol(prev => ({ ...prev, selectedId: null, formData: EMPTY_FORM }))
@@ -192,22 +192,25 @@ function ChartInputCol({ label, col, setCol, isAuthenticated, authHeaders, sessi
     }
     let fd = { ...EMPTY_FORM }
     if (isAuthenticated) {
-      const chart = savedCharts.find(c => String(c.id) === id)
-      if (chart) {
-        fd = {
-          name: chart.name || '',
-          year: chart.birth_year || '',
-          month: chart.birth_month || '',
-          day: chart.birth_day || '',
-          hour: chart.birth_hour !== undefined ? chart.birth_hour : '',
-          minute: chart.birth_minute !== undefined ? chart.birth_minute : '',
-          latitude: chart.latitude || '',
-          longitude: chart.longitude || '',
-          tz_str: chart.tz_str || 'Asia/Shanghai',
-          house_system: chart.house_system || 'Placidus',
-          locationName: chart.location_name || '',
+      try {
+        const res = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
+        if (res.ok) {
+          const chart = await res.json()
+          fd = {
+            name: chart.name || '',
+            year: chart.birth_year || '',
+            month: chart.birth_month || '',
+            day: chart.birth_day || '',
+            hour: chart.birth_hour !== undefined ? chart.birth_hour : '',
+            minute: chart.birth_minute !== undefined ? chart.birth_minute : '',
+            latitude: chart.latitude || '',
+            longitude: chart.longitude || '',
+            tz_str: chart.tz_str || 'Asia/Shanghai',
+            house_system: chart.house_system || 'Placidus',
+            locationName: chart.location_name || '',
+          }
         }
-      }
+      } catch { /* keep EMPTY_FORM */ }
     } else {
       const chart = sessionCharts.find(c => String(c.id) === id)
       if (chart && chart.formData) {
