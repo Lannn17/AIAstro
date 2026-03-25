@@ -31,7 +31,10 @@ from app.db import create_tables
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_tables()
+    try:
+        create_tables()
+    except Exception as e:
+        print(f"[WARN] create_tables() failed (DB may be unavailable): {e}")
     yield
 
 
