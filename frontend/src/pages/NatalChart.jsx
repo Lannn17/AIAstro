@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 export default function NatalChart() {
-  const { isGuest, isAuthenticated, authHeaders } = useAuth()
+  const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -69,15 +69,25 @@ export default function NatalChart() {
   async function fetchSavedCharts() {
     try {
       const res = await fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
-      if (res.ok) setSavedCharts(await res.json())
-    } catch { /* keep empty list */ }
+      if (res.ok) {
+        setSavedCharts(await res.json())
+      } else if (res.status === 401) {
+        logout()
+      } else {
+        const errText = await res.text().catch(() => '')
+        setError(`加载星盘列表失败 (${res.status})${errText ? ': ' + errText : ''}`)
+      }
+    } catch (e) {
+      setError(`无法连接服务器: ${e.message}`)
+    }
   }
 
   async function fetchPendingCharts() {
     try {
       const res = await fetch(`${API_BASE}/api/charts/pending`, { headers: authHeaders() })
       if (res.ok) setPendingCharts(await res.json())
-    } catch { /* keep empty list */ }
+      // 401 handled by fetchSavedCharts; other errors silently ignored for pending list
+    } catch { /* ignore */ }
   }
 
   async function handleApprove(id, e) {
