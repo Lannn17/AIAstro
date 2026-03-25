@@ -31,6 +31,36 @@ E5_MODEL        = "intfloat/multilingual-e5-small"
 E5_PREFIX       = "query: "
 _index_source   = "qdrant"
 
+_QUERY_LABELS = (
+    "planet_sign",   # 行星在某星座的解读
+    "planet_house",  # 行星在某宫位的解读
+    "aspect",        # 相位解读
+    "life_area",     # 感情/事业/财运/健康等生活领域
+    "psychological", # 性格/心理/行为模式
+    "prediction",    # 运势预测/时机判断
+    "other",         # 兜底
+)
+
+
+def classify_query(query: str) -> str:
+    """用 Gemini 将占星问题分类为 7 个预定义标签之一。失败时返回 'other'。"""
+    labels_str = " | ".join(_QUERY_LABELS)
+    prompt = (
+        f"占星问题：{query}\n\n"
+        f"从以下标签中选一个最合适的，只输出标签本身，不要其他文字：\n{labels_str}"
+    )
+    try:
+        resp = client.models.generate_content(
+            model=GENERATE_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.0),
+        )
+        label = resp.text.strip().lower().rstrip(".，。")
+        return label if label in _QUERY_LABELS else "other"
+    except Exception as e:
+        print(f"[Analytics] classify_query failed: {e}", flush=True)
+        return "other"
+
 
 def _parse_json(text: str) -> dict | list:
     """Strip optional markdown code fences then parse JSON."""
