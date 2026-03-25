@@ -135,7 +135,7 @@ export default function NatalChart() {
 
   // Restore guest session chart when returning to this tab
   useEffect(() => {
-    if (result === null && sessionChart) {
+    if (isGuest && result === null && sessionChart) {
       setResult(sessionChart.chartData)
       setSvgContent(sessionChart.svgData || null)
       setLastFormData(sessionChart.formData)
