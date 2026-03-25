@@ -29,6 +29,7 @@ GENERATE_MODEL  = "gemini-3.1-flash-lite-preview"
 COLLECTION_NAME = "astro_chunks"
 E5_MODEL        = "intfloat/multilingual-e5-small"
 E5_PREFIX       = "query: "
+_index_source   = "qdrant"
 
 
 def _parse_json(text: str) -> dict | list:
