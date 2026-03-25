@@ -525,9 +525,16 @@ export default function NatalChart() {
   async function handleRectify() {
     if (!lastFormData) return
     const events = rectifyEvents
-      .filter(e => e.year && e.month && e.day)
-      .map(e => ({ year: Number(e.year), month: Number(e.month), day: Number(e.day), event_type: e.event_type, weight: Number(e.weight), is_turning_point: e.is_turning_point || false }))
-    if (events.length === 0) { setRectifyError('请至少填写一个完整事件'); return }
+      .filter(e => e.year)
+      .map(e => ({
+        year: Number(e.year),
+        month: e.month ? Number(e.month) : null,
+        day: (e.month && e.day) ? Number(e.day) : null,
+        event_type: e.event_type,
+        weight: Number(e.weight),
+        is_turning_point: e.is_turning_point || false,
+      }))
+    if (events.length === 0) { setRectifyError('请至少填写一个事件（年份必填）'); return }
     setRectifyLoading(true)
     setRectifyError(null)
     setRectifyResult(null)
@@ -1236,7 +1243,9 @@ export default function NatalChart() {
                       const typeLabel = domain.types.find(t => t.value === ev.event_type)?.label || ev.event_type
                       return (
                         <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', padding: '6px 10px', background: '#1a1a30', borderRadius: '6px' }}>
-                          <span style={{ color: '#9a8acc', fontSize: '0.8rem', flex: 1 }}>{ev.year}/{String(ev.month).padStart(2,'0')}/{String(ev.day).padStart(2,'0')} · {typeLabel}</span>
+                          <span style={{ color: '#9a8acc', fontSize: '0.8rem', flex: 1 }}>
+                            {ev.year}{ev.month ? `/${String(ev.month).padStart(2,'0')}${ev.day ? `/${String(ev.day).padStart(2,'0')}` : ''}` : ' (仅年份)'} · {typeLabel}
+                          </span>
                           <button onClick={() => removeEvent(gi)} style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.8rem', padding: '0 2px' }}
                             onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
                             onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✕</button>
@@ -1246,16 +1255,18 @@ export default function NatalChart() {
                     {/* 填写表单 */}
                     {currentDomainEvent ? (
                       <div style={{ marginTop: '8px' }}>
-                        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                          <input type="number" placeholder="年" value={currentDomainEvent.year}
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          <input type="number" placeholder="年 *" value={currentDomainEvent.year}
                             onChange={e => setCurrentDomainEvent(p => ({ ...p, year: e.target.value }))}
                             style={{ ...inputSm, width: '62px' }} />
                           <input type="number" placeholder="月" min="1" max="12" value={currentDomainEvent.month}
-                            onChange={e => setCurrentDomainEvent(p => ({ ...p, month: e.target.value }))}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, month: e.target.value, day: '' }))}
                             style={{ ...inputSm, width: '46px' }} />
-                          <input type="number" placeholder="日" min="1" max="31" value={currentDomainEvent.day}
-                            onChange={e => setCurrentDomainEvent(p => ({ ...p, day: e.target.value }))}
-                            style={{ ...inputSm, width: '46px' }} />
+                          {currentDomainEvent.month && (
+                            <input type="number" placeholder="日" min="1" max="31" value={currentDomainEvent.day}
+                              onChange={e => setCurrentDomainEvent(p => ({ ...p, day: e.target.value }))}
+                              style={{ ...inputSm, width: '46px' }} />
+                          )}
                           <select value={currentDomainEvent.event_type}
                             onChange={e => setCurrentDomainEvent(p => ({ ...p, event_type: e.target.value }))}
                             style={{ ...inputSm, flex: 1, minWidth: '120px' }}>
@@ -1269,10 +1280,15 @@ export default function NatalChart() {
                             <option value={3}>非常重要</option>
                           </select>
                         </div>
+                        {currentDomainEvent.year && !currentDomainEvent.month && (
+                          <div style={{ color: '#7a6a3a', fontSize: '0.72rem', marginBottom: '6px' }}>
+                            仅填年份时权重降至 40%，填月份可提升至 70%
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
                             onClick={() => {
-                              if (!currentDomainEvent.year || !currentDomainEvent.month || !currentDomainEvent.day) return
+                              if (!currentDomainEvent.year) return
                               setRectifyEvents(prev => [...prev, { ...currentDomainEvent }])
                               setCurrentDomainEvent(null)
                             }}

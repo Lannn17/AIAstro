@@ -166,6 +166,37 @@ EVENT_HOUSE_MAP: dict[str, list[tuple[str, float]]] = {
 }
 
 
+# 精度权重：日期越模糊权重越低
+_PRECISION_WEIGHT = {"day": 1.0, "month": 0.7, "year": 0.4}
+
+
+def _expand_events(events: list[dict]) -> list[dict]:
+    """将模糊日期事件展开为具体采样点，同时折算权重。
+
+    - precision="day" (month+day 均有)：保持原权重，直接使用
+    - precision="month" (month 有但 day 为 None)：取当月15日，权重×0.7
+    - precision="year" (month 为 None)：均匀采样1/4/7/10月15日，权重×0.4/4
+    """
+    expanded = []
+    for ev in events:
+        month = ev.get('month')
+        day = ev.get('day')
+        if month is None:
+            precision_mult = _PRECISION_WEIGHT["year"]
+            samples = [(ev['year'], m, 15) for m in [1, 4, 7, 10]]
+        elif day is None:
+            precision_mult = _PRECISION_WEIGHT["month"]
+            samples = [(ev['year'], month, 15)]
+        else:
+            precision_mult = _PRECISION_WEIGHT["day"]
+            samples = [(ev['year'], month, day)]
+
+        per_weight = ev.get('weight', 1.0) * precision_mult / len(samples)
+        for y, m, d in samples:
+            expanded.append({**ev, 'year': y, 'month': m, 'day': d, 'weight': per_weight})
+    return expanded
+
+
 # ── 评分函数 ──────────────────────────────────────────────────────
 
 def _score_transits(natal: AstrologicalSubject,
@@ -363,7 +394,7 @@ def _score_candidate(h: int, m: int,
     birth_date = date(birth_year, birth_month, birth_day)
     total = 0.0
 
-    for ev in events:
+    for ev in _expand_events(events):
         ev_date = date(ev['year'], ev['month'], ev['day'])
         ev_type = ev.get('event_type', 'other')
         ew = ev.get('weight', 1.0) * EVENT_TYPE_WEIGHT.get(ev_type, 1.0)

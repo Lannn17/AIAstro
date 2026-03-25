@@ -66,8 +66,8 @@ THEME_QUIZ = [
 
 class EventInput(BaseModel):
     year: int
-    month: int
-    day: int
+    month: Optional[int] = None   # 可选；为 None 时按年份均匀采样（权重×0.4）
+    day: Optional[int] = None     # 可选；为 None 时取月中第15日（权重×0.7）
     event_type: str  # marriage/divorce/career_up/career_down/bereavement/illness/relocation/accident/other
     weight: float = 1.0  # 1=一般, 2=重要, 3=非常重要
     is_turning_point: bool = False  # 用户标记为人生转折点 → 评分权重 ×2
