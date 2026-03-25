@@ -175,9 +175,12 @@ export default function Transits() {
                   {sessionChart.formData?.name || '当前星盘'}（未保存）
                 </option>
               )}
-              {savedCharts.map(c => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
+              {savedCharts.map(c => {
+                const label = c.label && !c.label.includes('undefined')
+                  ? c.label
+                  : `${c.name || '星盘'} · ${c.birth_year}/${c.birth_month}/${c.birth_day}`
+                return <option key={c.id} value={c.id}>{label}</option>
+              })}
             </select>
             {savedCharts.length === 0 && !sessionChart && (
               <p style={{ color: '#555577', fontSize: '0.78rem', marginTop: '6px' }}>
