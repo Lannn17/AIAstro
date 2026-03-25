@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **RAG 质量分析后台** — `query_analytics` 表收集每条对话的 query_hash、自动分类标签（7类）、max_rag_score、any_cited；异步写入不阻塞响应
+- **Admin 页面** — 隐藏路由 `/admin`，展示 RAG 聚合统计表 + 明细记录，支持一键生成 Gemini 中文分析报告
+- **跨 Tab 星盘共享** — `ChartSessionContext` 在内存中保存当前计算结果，访客切换到行运 Tab 可选"当前星盘（未保存）"
+
+### Fixed
+- **占星对话 500** — `_index_source` 变量未定义导致 NameError；`_clean_source_name` 修复 camelCase 书名拆分，引用检测现在能正确匹配英文书名
+- **访客切换 Tab 后数据丢失** — 返回星盘页时从 `sessionChart` context 恢复 result + SVG
+- **访客转登录后界面未清空** — 恢复逻辑加 `isGuest` 守卫，登录后不再复填访客数据
+- **行运下拉框显示 undefined 日期** — 早期保存记录 label 字段含 undefined 时，改从 birth_year/month/day 字段重建
+- **HF 直接 URL 访问 404** — 移除 `app.mount()` 与 catch-all 路由的冲突，统一用单个 catch-all 处理静态文件与 SPA 路由
+
+---
+
 ## [0.6.1] - 2026-03-24
 
 ### Fixed
