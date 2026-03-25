@@ -36,3 +36,11 @@ COPY --from=frontend-builder /app/frontend/dist ./dist
 
 EXPOSE 7860
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+
+
+COPY --from=frontend-builder /app/frontend/dist ./dist
+
+# 加这行debug
+RUN ls -la /app/dist/ && cat /app/dist/index.html | head -5
+
+EXPOSE 7860
