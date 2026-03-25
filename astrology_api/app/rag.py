@@ -446,15 +446,18 @@ def _clean_source_name(raw: str) -> str:
 def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
     """
     检测 AI 回答中是否引用了各 chunk 的来源书名。
-    用书名中长度>2的词做子串匹配，属启发式检测，非精确。
+    策略1：书名中长度>2的英文词子串匹配。
+    策略2：检测"参考{i}"模式（模型用参考编号引用的情况）。
     """
     answer_lower = answer.lower()
     result = []
-    for c in chunks:
+    for i, c in enumerate(chunks, 1):
         name = _clean_source_name(c["source"])
         words = [w for w in name.replace("·", " ").split() if len(w) > 2]
-        cited = any(w.lower() in answer_lower for w in words)
-        print(f"[Citation] {name!r} words={words} cited={cited}", flush=True)
+        cited_by_name = any(w.lower() in answer_lower for w in words)
+        cited_by_ref = f"参考{i}" in answer or f"参考 {i}" in answer
+        cited = cited_by_name or cited_by_ref
+        print(f"[Citation] {name!r} by_name={cited_by_name} by_ref={cited_by_ref}", flush=True)
         result.append({
             "source": c["source"],
             "score":  round(c["score"], 3),
