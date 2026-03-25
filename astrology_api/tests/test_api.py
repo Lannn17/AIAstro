@@ -152,13 +152,12 @@ def test_svg_chart_base64():
 def test_synastry():
     """Testa o endpoint de sinastria."""
     response = client.post(
-        "/api/v1/synastry",
+        "/api/synastry",
         json={
             "chart1": EINSTEIN_DATA,
             "chart2": TRANSIT_DATA,
             "include_interpretations": False
-        },
-        headers={"X-API-KEY": os.getenv("API_KEY_ASTROLOGIA", "dev_key")}
+        }
     )
     
     assert response.status_code == 200
@@ -171,10 +170,11 @@ def test_synastry():
     # Verificar se há aspectos entre os planetas dos dois mapas
     assert len(data["aspects"]) > 0
     
-    # Verificar se os proprietários estão corretos
+    # Verificar se os proprietários estão corretos (bidirectional aspects)
     for aspect in data["aspects"]:
-        assert aspect["p1_owner"] == "chart1"
-        assert aspect["p2_owner"] == "chart2"
+        assert aspect["p1_owner"] in {"chart1", "chart2"}
+        assert aspect["p2_owner"] in {"chart1", "chart2"}
+        assert aspect["p1_owner"] != aspect["p2_owner"]
 
 # Testes para o endpoint de progressões
 def test_progressions():
