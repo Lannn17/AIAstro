@@ -142,6 +142,8 @@ class AspectData(BaseModel):
     aspect_degrees: float = Field(..., description="Graus do aspecto")
     diff: float = Field(..., description="Diferença em graus")
     applying: bool = Field(..., description="Se o aspecto está se aplicando (true) ou separando (false)")
+    direction: Optional[str] = Field(None, description="p1_to_p2 or p2_to_p1")
+    double_whammy: bool = Field(False, description="True if reciprocal aspect exists")
 
 # Classes para respostas
 

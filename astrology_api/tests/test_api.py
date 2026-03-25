@@ -315,3 +315,49 @@ def test_interpret_text():
         assert "source" in data[0]
         assert "matched_terms" in data[0]
         assert "paragraphs" in data[0]
+
+MARIE_CURIE_DATA = {
+    "name": "Marie Curie",
+    "year": 1867, "month": 11, "day": 7,
+    "hour": 12, "minute": 0,
+    "longitude": 21.01, "latitude": 52.23,
+    "tz_str": "Europe/Warsaw",
+    "house_system": "Placidus",
+    "language": "zh",
+}
+
+def test_synastry_returns_aspects():
+    payload = {
+        "chart1": EINSTEIN_DATA,
+        "chart2": MARIE_CURIE_DATA,
+        "language": "zh",
+        "include_interpretations": False,
+    }
+    res = client.post("/api/synastry", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "aspects" in data
+    assert len(data["aspects"]) > 0
+
+def test_synastry_aspects_have_direction():
+    payload = {
+        "chart1": EINSTEIN_DATA,
+        "chart2": MARIE_CURIE_DATA,
+        "language": "zh",
+        "include_interpretations": False,
+    }
+    res = client.post("/api/synastry", json=payload)
+    data = res.json()
+    directions = {a["direction"] for a in data["aspects"] if a.get("direction")}
+    assert directions
+
+def test_synastry_aspects_sorted_by_orbit():
+    payload = {
+        "chart1": EINSTEIN_DATA,
+        "chart2": MARIE_CURIE_DATA,
+        "language": "zh",
+        "include_interpretations": False,
+    }
+    res = client.post("/api/synastry", json=payload)
+    orbits = [a["orbit"] for a in res.json()["aspects"]]
+    assert orbits == sorted(orbits)

@@ -418,73 +418,93 @@ def get_aspects_between_subjects(
 
     return result
 
-def get_synastry_aspects_data(subject1: AstrologicalSubject, subject2: AstrologicalSubject, language: str = "pt") -> List[AspectData]:
+def get_synastry_aspects_data(subject1: AstrologicalSubject, subject2: AstrologicalSubject, language: str = "zh") -> List[AspectData]:
     """
-    Calcula os aspectos entre os planetas de dois mapas natais (sinastria).
-    
-    Args:
-        subject1 (AstrologicalSubject): Primeiro objeto AstrologicalSubject.
-        subject2 (AstrologicalSubject): Segundo objeto AstrologicalSubject.
-        language (str, opcional): Idioma para os textos. Padrão é "pt".
-        
-    Returns:
-        List[AspectData]: Lista de aspectos entre os planetas dos dois mapas.
+    计算两张本命盘之间的跨盘相位。
+    包含：行星×行星、行星×对方ASC/MC。
+    每条相位带方向性（p1_to_p2 / p2_to_p1）和 double whammy 标记。
     """
-    aspects = []
-    
-    # Dicionário para mapear nomes de planetas em inglês para os do Kerykeion
-    planet_to_kerykeion = {
-        "Sun": "sun", "Moon": "moon", "Mercury": "mercury", "Venus": "venus",
-        "Mars": "mars", "Jupiter": "jupiter", "Saturn": "saturn",
-        "Uranus": "uranus", "Neptune": "neptune", "Pluto": "pluto",
-        "Mean_Node": "mean_node", "True_Node": "true_node", "Chiron": "chiron"
-    }
-    
     planet_attrs = [
         'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn',
         'uranus', 'neptune', 'pluto', 'mean_node', 'chiron'
     ]
-    aspect_configs = {
-        "Conjunction": 0, "Opposition": 180, "Trine": 120, "Square": 90, "Sextile": 60
+    # ASC/MC 作为接受点（不作为主动点）
+    sensitive_points = {
+        'first_house': 'Ascendant',
+        'tenth_house': 'Midheaven',
     }
+    aspect_configs = {"Conjunction": 0, "Opposition": 180, "Trine": 120, "Square": 90, "Sextile": 60}
     orbs = {"Conjunction": 8, "Opposition": 8, "Trine": 6, "Square": 6, "Sextile": 4}
 
-    for p1_attr in planet_attrs:
-        if not hasattr(subject1, p1_attr):
-            continue
-        p1 = getattr(subject1, p1_attr)
-        if p1 is None:
-            continue
-
-        for p2_attr in planet_attrs:
-            if not hasattr(subject2, p2_attr):
+    def _calc_aspects(attribs_a, subject_a, attribs_b, subject_b, direction: str) -> list:
+        results = []
+        for p1_attr in attribs_a:
+            p1 = getattr(subject_a, p1_attr, None)
+            if p1 is None:
                 continue
-            p2 = getattr(subject2, p2_attr)
-            if p2 is None:
-                continue
+            for p2_attr in attribs_b:
+                p2 = getattr(subject_b, p2_attr, None)
+                if p2 is None:
+                    continue
+                diff = abs(p1.abs_pos - p2.abs_pos)
+                if diff > 180:
+                    diff = 360 - diff
+                for asp_name, asp_angle in aspect_configs.items():
+                    orb = abs(diff - asp_angle)
+                    if orb <= orbs[asp_name]:
+                        results.append({
+                            "p1_attr": p1_attr,
+                            "p1_pos": p1.abs_pos,
+                            "p2_attr": p2_attr,
+                            "p2_pos": p2.abs_pos,
+                            "aspect": asp_name,
+                            "orbit": round(orb, 4),
+                            "direction": direction,
+                        })
+                        break
+        return results
 
-            diff = abs(p1.abs_pos - p2.abs_pos)
-            if diff > 180:
-                diff = 360 - diff
+    # 行星 × 行星（双向）
+    raw_p1p2 = _calc_aspects(planet_attrs, subject1, planet_attrs, subject2, "p1_to_p2")
+    raw_p2p1 = _calc_aspects(planet_attrs, subject2, planet_attrs, subject1, "p2_to_p1")
 
-            for aspect_name, aspect_degree in aspect_configs.items():
-                orbit = abs(diff - aspect_degree)
-                if orbit <= orbs[aspect_name]:
-                    aspects.append(AspectData(
-                        p1_name=translate_planet(p1.name, language),
-                        p1_name_original=p1.name,
-                        p1_owner="chart1",
-                        p2_name=translate_planet(p2.name, language),
-                        p2_name_original=p2.name,
-                        p2_owner="chart2",
-                        aspect=translate_aspect(aspect_name, language),
-                        aspect_original=aspect_name,
-                        orbit=orbit,
-                        aspect_degrees=float(aspect_degree),
-                        diff=diff,
-                        applying=False
-                    ))
+    # 行星 × 对方 ASC/MC
+    sp_attrs = list(sensitive_points.keys())
+    raw_p1sp2 = _calc_aspects(planet_attrs, subject1, sp_attrs, subject2, "p1_to_p2")
+    raw_p2sp1 = _calc_aspects(planet_attrs, subject2, sp_attrs, subject1, "p2_to_p1")
 
+    all_raw = raw_p1p2 + raw_p2p1 + raw_p1sp2 + raw_p2sp1
+
+    # Double whammy：同一对行星在双向均有同类相位
+    seen_pairs: dict = {}
+    for r in all_raw:
+        key = (frozenset([r["p1_attr"], r["p2_attr"]]), r["aspect"])
+        seen_pairs[key] = seen_pairs.get(key, "") + r["direction"] + ","
+    dw_keys = {k for k, v in seen_pairs.items() if "p1_to_p2" in v and "p2_to_p1" in v}
+
+    aspects = []
+    for r in all_raw:
+        key = (frozenset([r["p1_attr"], r["p2_attr"]]), r["aspect"])
+        p1_display = sensitive_points.get(r["p1_attr"], r["p1_attr"].replace("_", " ").title())
+        p2_display = sensitive_points.get(r["p2_attr"], r["p2_attr"].replace("_", " ").title())
+        p1_owner = "chart1" if r["direction"] == "p1_to_p2" else "chart2"
+        p2_owner = "chart2" if r["direction"] == "p1_to_p2" else "chart1"
+        asp_angle = aspect_configs[r["aspect"]]
+        aspects.append(AspectData(
+            p1_name=p1_display,
+            p2_name=p2_display,
+            p1_owner=p1_owner,
+            p2_owner=p2_owner,
+            aspect=r["aspect"],
+            aspect_degrees=float(asp_angle),
+            orbit=r["orbit"],
+            diff=round(abs(r["p1_pos"] - r["p2_pos"]), 4),
+            applying=False,
+            direction=r["direction"],
+            double_whammy=(key in dw_keys),
+        ))
+
+    aspects.sort(key=lambda a: a.orbit)
     return aspects
 
 def get_progressed_chart(natal_subject: AstrologicalSubject, prog_year: int, prog_month: int, prog_day: int) -> AstrologicalSubject:
