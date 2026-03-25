@@ -449,6 +449,7 @@ def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
         name = _clean_source_name(c["source"])
         words = [w for w in name.replace("·", " ").split() if len(w) > 2]
         cited = any(w.lower() in answer_lower for w in words)
+        print(f"[CitationDebug] raw={c['source']!r} → name={name!r} words={words} cited={cited}", flush=True)
         result.append({
             "source": c["source"],
             "score":  round(c["score"], 3),
