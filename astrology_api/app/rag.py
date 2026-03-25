@@ -1067,6 +1067,122 @@ def calc_confidence(
 
 _SKIP_PLANETS = {'true_node', 'true_lilith', 'true_south_node'}
 
+_SIGN_ELEMENT = {
+    'Aries': '火', 'Leo': '火', 'Sagittarius': '火',
+    'Taurus': '土', 'Virgo': '土', 'Capricorn': '土',
+    'Gemini': '风', 'Libra': '风', 'Aquarius': '风',
+    'Cancer': '水', 'Scorpio': '水', 'Pisces': '水',
+}
+_SIGN_MODE = {
+    'Aries': '本始', 'Cancer': '本始', 'Libra': '本始', 'Capricorn': '本始',
+    'Taurus': '固定', 'Leo': '固定', 'Scorpio': '固定', 'Aquarius': '固定',
+    'Gemini': '变动', 'Virgo': '变动', 'Sagittarius': '变动', 'Pisces': '变动',
+}
+_CORE_PLANETS = {'sun', 'moon', 'mercury', 'venus', 'mars',
+                 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'}
+
+
+def _compute_chart_facts(natal_chart: dict) -> list[str]:
+    """从星盘数据中用规则提取确定性事实标签，供 AI prompt 使用。"""
+    planets = natal_chart.get('planets', {})
+    aspects = natal_chart.get('aspects', [])
+
+    sign_count: dict[str, int] = {}
+    house_count: dict[int, int] = {}
+    elem_count = {'火': 0, '土': 0, '风': 0, '水': 0}
+    mode_count = {'本始': 0, '固定': 0, '变动': 0}
+    retro_names = []
+
+    for key, p in planets.items():
+        sign = p.get('sign_original') or p.get('sign', '')
+        house = p.get('house') or 0
+        name = p.get('name_original') or p.get('name', key)
+        if key in _CORE_PLANETS:
+            sign_count[sign] = sign_count.get(sign, 0) + 1
+            if house:
+                house_count[house] = house_count.get(house, 0) + 1
+            if sign in _SIGN_ELEMENT:
+                elem_count[_SIGN_ELEMENT[sign]] += 1
+            if sign in _SIGN_MODE:
+                mode_count[_SIGN_MODE[sign]] += 1
+        if p.get('retrograde') and key in _CORE_PLANETS:
+            retro_names.append(name)
+
+    facts = []
+
+    # 星座群星
+    for s, c in sign_count.items():
+        if c >= 3:
+            facts.append(f"群星{s}座（{c}颗核心行星）")
+
+    # 宫位强势
+    for h, c in house_count.items():
+        if c >= 3:
+            facts.append(f"第{h}宫强势（{c}颗核心行星）")
+
+    # 元素主导
+    dom_elem = max(elem_count, key=elem_count.get)
+    if elem_count[dom_elem] >= 4:
+        facts.append(f"多{dom_elem}象行星（{elem_count[dom_elem]}颗）")
+
+    # 模式主导
+    dom_mode = max(mode_count, key=mode_count.get)
+    if mode_count[dom_mode] >= 4:
+        facts.append(f"多{dom_mode}星（{mode_count[dom_mode]}颗）")
+
+    # 逆行
+    if retro_names:
+        facts.append(f"逆行行星：{'、'.join(retro_names)}")
+
+    # 相位格局检测
+    trine_pairs: set[tuple] = set()
+    opp_pairs: list[tuple] = []
+    sq_map: dict[str, set] = {}  # planet → set of planets it squares
+
+    for a in aspects:
+        asp = (a.get('aspect_original') or a.get('aspect', '')).lower()
+        orb = a.get('orbit', 99)
+        p1, p2 = a.get('p1_name', ''), a.get('p2_name', '')
+        if not p1 or not p2:
+            continue
+        if 'trine' in asp and orb < 8:
+            trine_pairs.add((p1, p2))
+            trine_pairs.add((p2, p1))
+        if 'opposition' in asp and orb < 8:
+            opp_pairs.append((p1, p2))
+        if 'square' in asp and orb < 8:
+            sq_map.setdefault(p1, set()).add(p2)
+            sq_map.setdefault(p2, set()).add(p1)
+
+    # 大三角：三颗行星互相形成三分相
+    tp_list = list({p for pair in trine_pairs for p in pair})
+    gt_found = False
+    for i in range(len(tp_list)):
+        for j in range(i + 1, len(tp_list)):
+            for k in range(j + 1, len(tp_list)):
+                a, b, c = tp_list[i], tp_list[j], tp_list[k]
+                if (a, b) in trine_pairs and (a, c) in trine_pairs and (b, c) in trine_pairs:
+                    facts.append(f"大三角格局（{a}·{b}·{c}）")
+                    gt_found = True
+                    break
+            if gt_found:
+                break
+        if gt_found:
+            break
+
+    # T三角：一对对冲 + 一颗行星分别四分两端
+    for (a, b) in opp_pairs:
+        sq_a = sq_map.get(a, set())
+        sq_b = sq_map.get(b, set())
+        apex_set = sq_a & sq_b
+        if apex_set:
+            apex = next(iter(apex_set))
+            facts.append(f"T三角格局（顶点：{apex}，对冲：{a}·{b}）")
+            break
+
+    return facts
+
+
 def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     """
     为本命盘每颗行星生成简洁解读（单次 Gemini 调用，返回全部结果）。
@@ -1125,6 +1241,12 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             aspect_lines.append(f"{p1} {asp} {p2}（容许度{round(orbit,1)}°）")
     aspect_summary = '\n'.join(aspect_lines) if aspect_lines else '（无数据）'
 
+    # 规则提取确定性事实
+    chart_facts = _compute_chart_facts(natal_chart)
+    facts_section = ''
+    if chart_facts:
+        facts_section = '\n\n【规则检测到的确定性事实（必须体现在 tags 中）】\n' + '\n'.join(f'- {f}' for f in chart_facts)
+
     # 尝试从 Qdrant 检索相关片段作为参考
     try:
         chunks = retrieve(f"行星星座宫位解读 {asc_sign}上升", k=3)
@@ -1146,7 +1268,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 {house_summary}
 
 主要相位：
-{aspect_summary}
+{aspect_summary}{facts_section}
 
 分析要求——每颗行星必须同时结合以下维度：
 1. 【星座特质】该行星在此星座的表达方式与能量底色
@@ -1158,7 +1280,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
 
 综合概述（overall）为结构化对象，包含以下字段：
-- tags: 字符串数组，标注本命盘的突出特征，如「群星天蝎座」「第10宫强势」「多火象行星」「大三角格局」「命主星逆行」等，3-6 个标签
+- tags: 字符串数组，**必须优先使用上方【确定性事实】中列出的标签**，再补充 AI 判断的其他特征（如「命主星逆行」「日月形成对冲」等），共 3-6 个
 - summary: 主要人生命题、核心潜力与成长方向，100-150 字
 - career: 学业与事业领域分析，列出支持该结论的具体行星/宫位依据，80-100 字
 - love: 恋爱与家庭领域分析，附占星依据，80-100 字
@@ -1176,7 +1298,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
         config=types.GenerateContentConfig(
             system_instruction=_SYSTEM_PROMPT_UNIFIED,
             response_mime_type="application/json",
-            temperature=0.6,
+            temperature=0.3,
         ),
     )
     try:
