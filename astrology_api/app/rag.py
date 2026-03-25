@@ -1184,3 +1184,82 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     except Exception as e:
         print(f"[planets] JSON parse error: {e}")
         return {}
+
+
+# ── 合盘解读 ───────────────────────────────────────────────────────
+
+def analyze_synastry(
+    chart1_summary: dict,
+    chart2_summary: dict,
+    aspects: list[dict],
+) -> dict:
+    """
+    合盘 RAG 解读：检索占星书籍相关段落 + Gemini 生成关系分析。
+    返回 {answer, sources, index_used}
+    """
+    _load()
+
+    # 取最紧密的 Top5 相位构造检索 query
+    tight = sorted(aspects, key=lambda a: a.get("orbit", 99))[:5]
+    desc_parts = []
+    for a in tight:
+        desc_parts.append(f"synastry {a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}")
+    query = ", ".join(desc_parts) if desc_parts else "synastry compatibility aspects"
+
+    chunks = retrieve(query, k=5)
+
+    name1 = chart1_summary.get("name", "甲")
+    name2 = chart2_summary.get("name", "乙")
+
+    # 相位列表文字
+    aspect_lines = []
+    for a in aspects[:20]:  # 最多展示20条避免 prompt 过长
+        dw = " ★" if a.get("double_whammy") else ""
+        direction = "→" if a.get("direction") == "p1_to_p2" else "←"
+        aspect_lines.append(
+            f"  {name1} {direction} {name2}  {a.get('p1_name','')} "
+            f"{a.get('aspect','')} {a.get('p2_name','')}  容许度{a.get('orbit',0):.1f}°{dw}"
+        )
+
+    rag_section = ""
+    if chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(chunks, 1)
+        ]
+        rag_section = (
+            "\n\n---\n以下是检索到的占星书籍参考片段，若与合盘主题相关可引用（注明书名），不相关可忽略：\n\n"
+            + "\n\n".join(parts)
+        )
+
+    prompt = f"""合盘分析：{name1} × {name2}
+
+【跨盘相位】（按容许度排序，★ 表示双向命中 double whammy）
+{chr(10).join(aspect_lines) or '（无相位数据）'}
+
+---
+请根据以上合盘相位，从以下四个维度给出综合分析：
+1. 情感连结（最强的正面相位体现了怎样的情感共鸣？）
+2. 沟通方式（双方沟通和理解的特点，水星/第三宫相关相位）
+3. 摩擦点（刑/对分 + 土星/火星接触带来的挑战）
+4. 整体兼容度（综合评估这段关系的基调与潜力）{rag_section}"""
+
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            temperature=0.5,
+        ),
+    )
+
+    finish = response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN"
+    if finish != "STOP":
+        print(f"[RAG] analyze_synastry finish_reason={finish}")
+
+    sources = _detect_citations(response.text, chunks) if chunks else []
+    return {
+        "answer": response.text,
+        "sources": sources,
+        "index_used": _index_source,
+    }

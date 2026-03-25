@@ -194,3 +194,32 @@ async def summarize_chat(body: SummarizeRequest):
         return {"summary": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Summarize error: {e}")
+
+
+class SynastryInterpretRequest(BaseModel):
+    chart1_summary: Dict[str, Any]   # {name, ...} 用于 prompt 中称呼
+    chart2_summary: Dict[str, Any]
+    aspects: List[Dict[str, Any]]    # 来自 /api/synastry 返回的 aspects 列表
+
+
+@router.post("/interpret/synastry")
+async def interpret_synastry(body: SynastryInterpretRequest):
+    """合盘 RAG 解读：Qdrant 检索 + Gemini 生成关系分析，写入 query_analytics。"""
+    try:
+        from ..rag import analyze_synastry
+        result = analyze_synastry(
+            chart1_summary=body.chart1_summary,
+            chart2_summary=body.chart2_summary,
+            aspects=body.aspects,
+        )
+        # 异步写入 analytics（不阻塞响应），复用已有的 _log_chat_analytics
+        query = " ".join(
+            f"{a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}"
+            for a in body.aspects[:5]
+        )
+        asyncio.create_task(_log_chat_analytics(query, result))
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Synastry interpretation error: {e}")
