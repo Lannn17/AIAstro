@@ -49,6 +49,12 @@
 ### 部署
 - ✅ HuggingFace Spaces 云部署（`lannn17-astro.hf.space`）
 - ✅ 每次代码改动立即 commit + 推两端（origin + hf）
+- ✅ SPA 直接 URL 访问修复（catch-all 路由，支持 /admin 等路径直接打开）
+
+### Bug 修复（本次 debug 轮）
+- ✅ 访客切换 Tab 后返回星盘页结果保留（sessionChart 恢复）
+- ✅ 访客转登录后界面正确清空（isGuest 守卫）
+- ✅ 行运下拉框早期记录显示 undefined 日期（label fallback）
 
 ---
 
@@ -74,9 +80,9 @@ _以下为潜在方向，尚未确认优先级：_
 
 ---
 
-## 已知问题 / 技术债
+## 已知问题 / 待优化
 
-_目前无已知未修复 bug。_
+- 🔧 修改综合星盘分析的标签生成逻辑
 
 ---
 
