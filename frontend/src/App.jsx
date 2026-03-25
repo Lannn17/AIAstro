@@ -7,6 +7,7 @@ import Progressions from './pages/Progressions'
 import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 
 const NAV_ITEMS = [
@@ -133,6 +134,7 @@ function AppInner() {
             <Route path="/progressions"  element={<Progressions />} />
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
+            <Route path="/admin"         element={<Analytics />} />
           </Routes>
         </main>
 
