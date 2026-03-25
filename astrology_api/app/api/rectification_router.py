@@ -85,6 +85,7 @@ class RectifyRequest(BaseModel):
     approx_minute: Optional[int] = None
     time_range_hours: Optional[float] = None
     natal_chart_data: Dict[str, Any] = {}
+    version: str = "v1.0"
 
 
 @router.post("/rectify")
@@ -94,9 +95,12 @@ async def rectify(body: RectifyRequest):
     返回 Top3 候选时间（含上升星座）及 AI 解读文本。
     """
     try:
-        from ..core.rectification import rectify_birth_time
+        from ..core.rectification import (
+            rectify_birth_time, STRATEGY_DESCRIPTIONS, SCORING_STRATEGIES, DEFAULT_VERSION,
+        )
         from ..rag import analyze_rectification
 
+        version = body.version if body.version in SCORING_STRATEGIES else DEFAULT_VERSION
         events = [e.model_dump() for e in body.events]
 
         top3 = rectify_birth_time(
@@ -110,6 +114,7 @@ async def rectify(body: RectifyRequest):
             approx_hour=body.approx_hour,
             approx_minute=body.approx_minute,
             time_range_hours=body.time_range_hours,
+            version=version,
         )
 
         ai = analyze_rectification(
@@ -124,12 +129,36 @@ async def rectify(body: RectifyRequest):
             if 0 <= idx < len(top3):
                 top3[idx]["reason"] = item.get("reason", "")
 
-        return {"top3": top3, "overall": ai.get("overall", "")}
+        return {
+            "top3": top3,
+            "overall": ai.get("overall", ""),
+            "version": version,
+            "version_description": STRATEGY_DESCRIPTIONS.get(version, ""),
+        }
 
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Rectification error: {e}")
+
+
+# ── 可用版本列表 ─────────────────────────────────────────────────
+
+@router.get("/rectify/versions")
+async def list_versions():
+    """返回所有可用的推盘评分策略版本及说明"""
+    from ..core.rectification import SCORING_STRATEGIES, STRATEGY_DESCRIPTIONS, DEFAULT_VERSION
+    return {
+        "default": DEFAULT_VERSION,
+        "versions": [
+            {
+                "version": v,
+                "description": STRATEGY_DESCRIPTIONS.get(v, ""),
+                "dimensions": strat,
+            }
+            for v, strat in SCORING_STRATEGIES.items()
+        ],
+    }
 
 
 # ── 上升星座性格问卷 ──────────────────────────────────────────────
