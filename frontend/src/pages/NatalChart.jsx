@@ -1012,16 +1012,52 @@ export default function NatalChart() {
                     <input type="number" placeholder="日" min="1" max="31" value={ev.day} onChange={e => updateEvent(i, 'day', e.target.value)}
                       style={{ ...inputSm, width: '46px' }} />
                     <select value={ev.event_type} onChange={e => updateEvent(i, 'event_type', e.target.value)}
-                      style={{ ...inputSm, flex: 1, minWidth: '100px' }}>
-                      <option value="marriage">结婚</option>
-                      <option value="divorce">离婚</option>
-                      <option value="career_up">升职/突破</option>
-                      <option value="career_down">失业/受挫</option>
-                      <option value="bereavement">亲人离世</option>
-                      <option value="illness">重大疾病</option>
-                      <option value="relocation">搬迁</option>
-                      <option value="accident">意外事故</option>
-                      <option value="other">其他</option>
+                      style={{ ...inputSm, flex: 1, minWidth: '120px' }}>
+                      <optgroup label="感情">
+                        <option value="marriage">结婚</option>
+                        <option value="divorce">离婚</option>
+                        <option value="new_relationship">确立恋情</option>
+                        <option value="breakup">分手/分居</option>
+                      </optgroup>
+                      <optgroup label="事业">
+                        <option value="career_up">晋升/加薪</option>
+                        <option value="career_down">降职/失业</option>
+                        <option value="career_change">职业转型</option>
+                        <option value="business_start">创业/开业</option>
+                        <option value="business_end">关闭生意</option>
+                        <option value="retirement">退休</option>
+                      </optgroup>
+                      <optgroup label="家庭">
+                        <option value="childbirth">子女出生/收养</option>
+                        <option value="bereavement_parent">父母去世</option>
+                        <option value="bereavement_spouse">配偶去世</option>
+                        <option value="bereavement_child">子女去世</option>
+                        <option value="bereavement_other">其他亲友去世</option>
+                      </optgroup>
+                      <optgroup label="健康">
+                        <option value="serious_illness">重病确诊</option>
+                        <option value="accident">意外事故</option>
+                        <option value="surgery">重大手术</option>
+                      </optgroup>
+                      <optgroup label="居住/迁移">
+                        <option value="relocation_domestic">国内搬迁</option>
+                        <option value="relocation_international">跨国移居</option>
+                      </optgroup>
+                      <optgroup label="财务">
+                        <option value="financial_gain">重大收益</option>
+                        <option value="financial_loss">重大损失</option>
+                        <option value="inheritance">继承遗产</option>
+                        <option value="bankruptcy">破产</option>
+                      </optgroup>
+                      <optgroup label="教育/法律">
+                        <option value="graduation">毕业/重要学历</option>
+                        <option value="legal_win">胜诉</option>
+                        <option value="legal_loss">败诉/法律纠纷</option>
+                      </optgroup>
+                      <optgroup label="其他">
+                        <option value="spiritual_awakening">精神觉醒</option>
+                        <option value="other">其他</option>
+                      </optgroup>
                     </select>
                     <select value={ev.weight} onChange={e => updateEvent(i, 'weight', e.target.value)}
                       style={{ ...inputSm, width: '78px' }}>

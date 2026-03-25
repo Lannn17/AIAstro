@@ -8,6 +8,7 @@ Phase2: 对Top候选 ±20分钟细扫，每4分钟一个 → 全量评分（加�
 版本策略：
   v1.0 — 基础版：行运 + 太阳弧 + 二次推运
   v1.1 — 加入初级推运（Primary Directions，pyswisseph 精确实现）
+  v1.2 — 用完整12宫事件映射替代旧 ASC/MC 行运评分
 """
 from datetime import date, datetime, timedelta
 import pytz
@@ -32,11 +33,19 @@ SCORING_STRATEGIES: dict[str, dict] = {
         "progressions":       True,
         "primary_directions": True,
     },
+    "v1.2": {
+        "transits":           False,   # 由 cusp_hits 替代（不再只看 ASC/MC）
+        "solar_arc":          True,
+        "progressions":       True,
+        "primary_directions": True,
+        "cusp_hits":          True,    # 新增：完整12宫事件映射
+    },
 }
 
 STRATEGY_DESCRIPTIONS: dict[str, str] = {
     "v1.0": "行运相位 + 太阳弧方向 + 二次推运",
     "v1.1": "v1.0 基础上加入初级推运（Primary Directions，Naibod 率，pyswisseph 精确计算）",
+    "v1.2": "v1.1 基础上用完整12宫事件映射替代旧 ASC/MC 行运评分（婚姻→第7宫，丧亲→第4/8宫等）",
 }
 
 DEFAULT_VERSION = "v1.0"
@@ -50,15 +59,94 @@ ACTIVE_POINTS = [
 
 # 事件类型权重倍率
 EVENT_TYPE_WEIGHT = {
-    'marriage':    1.5,
-    'divorce':     1.2,
-    'career_up':   1.3,
-    'career_down': 1.2,
-    'bereavement': 1.0,
-    'illness':     1.0,
-    'relocation':  0.8,
-    'accident':    1.1,
-    'other':       1.0,
+    # 感情
+    'marriage':                1.8,
+    'divorce':                 1.5,
+    'new_relationship':        1.2,
+    'breakup':                 1.2,
+    # 事业
+    'career_up':               1.5,
+    'career_down':             1.3,
+    'career_change':           1.3,
+    'business_start':          1.5,
+    'business_end':            1.3,
+    'retirement':              1.5,
+    # 家庭
+    'childbirth':              1.8,
+    'bereavement_parent':      1.8,
+    'bereavement_spouse':      2.0,
+    'bereavement_child':       2.0,
+    'bereavement_other':       1.3,
+    # 健康
+    'serious_illness':         1.5,
+    'accident':                1.5,
+    'surgery':                 1.3,
+    # 居住/迁移
+    'relocation_domestic':     0.8,
+    'relocation_international': 1.2,
+    # 财务
+    'financial_gain':          1.3,
+    'financial_loss':          1.3,
+    'inheritance':             1.5,
+    'bankruptcy':              1.5,
+    # 教育/法律
+    'graduation':              1.0,
+    'legal_win':               1.2,
+    'legal_loss':              1.2,
+    # 精神
+    'spiritual_awakening':     1.2,
+    # 其他
+    'other':                   1.0,
+    # 向后兼容（旧 event_type 名）
+    'bereavement':             1.5,
+    'illness':                 1.3,
+    'relocation':              0.9,
+}
+
+# 事件类型 → 相关宫头（Kerykeion 属性名，权重倍率）
+# 权重倍率：该宫头对此类事件的占星敏感度
+EVENT_HOUSE_MAP: dict[str, list[tuple[str, float]]] = {
+    # 感情
+    'marriage':                [('seventh_house', 2.5), ('fifth_house', 1.5), ('first_house', 1.0)],
+    'divorce':                 [('seventh_house', 2.5), ('eighth_house', 1.8), ('first_house', 1.2)],
+    'new_relationship':        [('seventh_house', 2.0), ('fifth_house', 1.8), ('first_house', 1.0)],
+    'breakup':                 [('seventh_house', 2.0), ('eighth_house', 1.5), ('twelfth_house', 1.2)],
+    # 事业
+    'career_up':               [('tenth_house', 2.5), ('first_house', 1.5), ('second_house', 1.2)],
+    'career_down':             [('tenth_house', 2.5), ('sixth_house', 1.5), ('twelfth_house', 1.2)],
+    'career_change':           [('tenth_house', 2.0), ('first_house', 1.8), ('ninth_house', 1.2)],
+    'business_start':          [('tenth_house', 2.0), ('first_house', 1.8), ('second_house', 1.5)],
+    'business_end':            [('tenth_house', 2.0), ('eighth_house', 1.5), ('twelfth_house', 1.5)],
+    'retirement':              [('tenth_house', 2.5), ('fourth_house', 1.8), ('twelfth_house', 1.2)],
+    # 家庭
+    'childbirth':              [('fifth_house', 2.5), ('fourth_house', 1.8), ('first_house', 1.2)],
+    'bereavement_parent':      [('fourth_house', 2.5), ('tenth_house', 2.0), ('eighth_house', 1.5)],
+    'bereavement_spouse':      [('seventh_house', 2.0), ('eighth_house', 2.5), ('fourth_house', 1.2)],
+    'bereavement_child':       [('fifth_house', 2.5), ('eighth_house', 2.0), ('fourth_house', 1.2)],
+    'bereavement_other':       [('eighth_house', 2.0), ('fourth_house', 1.5), ('twelfth_house', 1.2)],
+    # 健康
+    'serious_illness':         [('sixth_house', 2.5), ('first_house', 2.0), ('twelfth_house', 1.5)],
+    'accident':                [('first_house', 2.5), ('eighth_house', 2.0), ('sixth_house', 1.5)],
+    'surgery':                 [('eighth_house', 2.0), ('sixth_house', 2.0), ('first_house', 1.8)],
+    # 居住/迁移
+    'relocation_domestic':     [('fourth_house', 2.5), ('third_house', 1.8)],
+    'relocation_international':[('ninth_house', 2.5), ('fourth_house', 2.0), ('third_house', 1.2)],
+    # 财务
+    'financial_gain':          [('second_house', 2.5), ('eighth_house', 1.8), ('tenth_house', 1.5)],
+    'financial_loss':          [('second_house', 2.5), ('eighth_house', 2.0), ('twelfth_house', 1.5)],
+    'inheritance':             [('eighth_house', 2.5), ('second_house', 2.0), ('fourth_house', 1.5)],
+    'bankruptcy':              [('second_house', 2.5), ('eighth_house', 2.0), ('twelfth_house', 1.8)],
+    # 教育/法律
+    'graduation':              [('ninth_house', 2.5), ('third_house', 1.5), ('tenth_house', 1.2)],
+    'legal_win':               [('ninth_house', 2.0), ('seventh_house', 1.8), ('tenth_house', 1.5)],
+    'legal_loss':              [('ninth_house', 1.8), ('seventh_house', 1.8), ('twelfth_house', 2.0)],
+    # 精神/其他
+    'spiritual_awakening':     [('twelfth_house', 2.5), ('ninth_house', 2.0), ('eighth_house', 1.5)],
+    'other':                   [('first_house', 1.0), ('tenth_house', 1.0)],
+    # 向后兼容
+    'bereavement':             [('eighth_house', 2.0), ('fourth_house', 1.8), ('twelfth_house', 1.2)],
+    'illness':                 [('sixth_house', 2.5), ('first_house', 2.0), ('twelfth_house', 1.5)],
+    'relocation':              [('fourth_house', 2.5), ('third_house', 1.8)],
 }
 
 
@@ -200,6 +288,43 @@ def _score_primary_directions(natal: AstrologicalSubject,
 
 # ── 综合打分 ──────────────────────────────────────────────────────
 
+def _score_cusp_hits(natal: AstrologicalSubject,
+                     event_subj: AstrologicalSubject,
+                     event_type: str,
+                     event_weight: float,
+                     orb: float = 3.0) -> float:
+    """
+    完整12宫宫头命中打分（v1.2 新增）。
+    按事件类型从 EVENT_HOUSE_MAP 取相关宫头，计算行运行星与这些宫头的相位得分。
+    替代 v1.0/v1.1 中只检查 ASC/MC 的 _score_transits。
+    """
+    relevant_cusps = EVENT_HOUSE_MAP.get(event_type, EVENT_HOUSE_MAP['other'])
+    planet_attrs = ['sun', 'moon', 'mercury', 'venus', 'mars',
+                    'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']
+    aspects = {0: 3.0, 180: 2.0, 120: 2.0, 90: 1.5, 60: 1.0}
+
+    score = 0.0
+    for cusp_attr, cusp_mult in relevant_cusps:
+        cusp_obj = getattr(natal, cusp_attr, None)
+        if cusp_obj is None:
+            continue
+        cusp_pos = cusp_obj.abs_pos
+
+        for p_attr in planet_attrs:
+            tr_p = getattr(event_subj, p_attr, None)
+            if tr_p is None:
+                continue
+            diff = abs(tr_p.abs_pos - cusp_pos)
+            if diff > 180:
+                diff = 360 - diff
+            for asp_angle, asp_weight in aspects.items():
+                orbit = abs(diff - asp_angle)
+                if orbit <= orb:
+                    score += (orb - orbit) * asp_weight * cusp_mult * event_weight
+                    break   # 只取最近相位
+    return score
+
+
 def _score_candidate(h: int, m: int,
                      birth_year: int, birth_month: int, birth_day: int,
                      lat: float, lng: float, tz_str: str,
@@ -224,16 +349,21 @@ def _score_candidate(h: int, m: int,
 
     for ev in events:
         ev_date = date(ev['year'], ev['month'], ev['day'])
-        ew = ev.get('weight', 1.0) * EVENT_TYPE_WEIGHT.get(ev.get('event_type', 'other'), 1.0)
+        ev_type = ev.get('event_type', 'other')
+        ew = ev.get('weight', 1.0) * EVENT_TYPE_WEIGHT.get(ev_type, 1.0)
 
         # 快速维度（Phase1 + Phase2）
-        if strategy.get('transits'):
+        needs_ev_subj = strategy.get('transits') or strategy.get('cusp_hits')
+        if needs_ev_subj:
             try:
                 ev_subj = AstrologicalSubject(
                     'ev', ev_date.year, ev_date.month, ev_date.day,
                     12, 0, lng=lng, lat=lat, tz_str=tz_str,
                 )
-                total += _score_transits(natal, ev_subj, ew)
+                if strategy.get('transits'):
+                    total += _score_transits(natal, ev_subj, ew)
+                if strategy.get('cusp_hits'):
+                    total += _score_cusp_hits(natal, ev_subj, ev_type, ew)
             except Exception:
                 pass
 
