@@ -378,6 +378,8 @@ export default function NatalChart() {
 
   async function handleLoad(summary) {
     setSavedId(summary.id)
+    setEditingChartId(null)
+    setChartFormInitialData(null)
     setError(null)
     setMessages([])
     setChatSummary('')
@@ -625,8 +627,10 @@ export default function NatalChart() {
     e.stopPropagation()
     if (!window.confirm('确认删除该星盘？此操作无法撤销。')) return
     await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
-    if (savedId === id) {
+    if (savedId === id || editingChartId === id) {
       setSavedId(null)
+      setEditingChartId(null)
+      setChartFormInitialData(null)
       setResult(null)
       setSvgContent(null)
       setLastFormData(null)
@@ -867,7 +871,7 @@ export default function NatalChart() {
             </div>
           )}
 
-          {result && !savedId && !loading && svgContent && !isGuest && (
+          {result && (!savedId || editingChartId) && !loading && svgContent && !isGuest && (
             editingChartId ? (
               <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button

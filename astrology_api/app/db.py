@@ -262,6 +262,32 @@ def db_get_chart(chart_id: int) -> dict | None:
     return _sqlite_fetchone(sql, [chart_id])
 
 
+def db_update_chart(chart_id: int, data: dict) -> dict:
+    sql = """
+        UPDATE saved_charts SET
+            label=?, name=?, birth_year=?, birth_month=?, birth_day=?,
+            birth_hour=?, birth_minute=?, location_name=?, latitude=?,
+            longitude=?, tz_str=?, house_system=?, language=?,
+            chart_data=?, svg_data=?
+        WHERE id=?
+    """
+    params = [
+        data["label"], data.get("name"),
+        data["birth_year"], data["birth_month"], data["birth_day"],
+        data["birth_hour"], data["birth_minute"],
+        data.get("location_name"),
+        data["latitude"], data["longitude"],
+        data["tz_str"], data["house_system"], data["language"],
+        data.get("chart_data"), data.get("svg_data"),
+        chart_id,
+    ]
+    if USE_TURSO:
+        _turso_exec(sql, params)
+    else:
+        _sqlite_write(sql, params)
+    return db_get_chart(chart_id)
+
+
 def db_delete_chart(chart_id: int):
     sql = "DELETE FROM saved_charts WHERE id = ?"
     if USE_TURSO:

@@ -80,8 +80,20 @@ const labelStyle = {
   marginBottom: '4px',
 }
 
-export default function ChartForm({ onSubmit, loading }) {
-  const [form, setForm] = useState({
+export default function ChartForm({ onSubmit, loading, initialData }) {
+  const [form, setForm] = useState(() => initialData ? {
+    name: initialData.name || '',
+    year: String(initialData.year ?? ''),
+    month: String(initialData.month ?? ''),
+    day: String(initialData.day ?? ''),
+    hour: String(initialData.hour ?? ''),
+    minute: String(initialData.minute ?? ''),
+    latitude: String(initialData.latitude ?? ''),
+    longitude: String(initialData.longitude ?? ''),
+    tz_str: initialData.tz_str || 'Asia/Shanghai',
+    house_system: initialData.house_system || 'Placidus',
+    language: initialData.language || 'zh',
+  } : {
     name: '',
     year: '',
     month: '',
@@ -94,7 +106,7 @@ export default function ChartForm({ onSubmit, loading }) {
     house_system: 'Placidus',
     language: 'zh',
   })
-  const [locationQuery, setLocationQuery] = useState('')
+  const [locationQuery, setLocationQuery] = useState(initialData?.locationName || '')
   const [suggestions, setSuggestions] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchFailed, setSearchFailed] = useState(false)
