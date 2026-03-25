@@ -76,7 +76,10 @@ async def interpret_chat(body: ChatRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat error: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[CHAT ERROR]\n{tb}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Chat error: {type(e).__name__}: {e}")
 
 
 class TransitInterpretRequest(BaseModel):
