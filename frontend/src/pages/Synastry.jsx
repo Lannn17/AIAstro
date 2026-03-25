@@ -358,6 +358,7 @@ export default function Synastry() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chart1: makeChart(col1), chart2: makeChart(col2), language: 'zh' }),
       })
+      if (!syRes.ok) throw new Error(await syRes.text())
       const syData = await syRes.json()
       setResult(syData)
 
@@ -383,6 +384,7 @@ export default function Synastry() {
   async function handleInterpret() {
     setInterpLoading(true)
     try {
+      if (!result?.aspects) return
       const res = await fetch(`${API_BASE}/api/interpret/synastry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,6 +394,7 @@ export default function Synastry() {
           aspects: result.aspects,
         }),
       })
+      if (!res.ok) throw new Error(await res.text())
       setInterpretation(await res.json())
     } catch (e) {
       console.error(e)
