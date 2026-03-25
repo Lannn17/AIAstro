@@ -57,7 +57,7 @@ function todayStr() {
 
 export default function Transits() {
   const { isAuthenticated, authHeaders } = useAuth()
-  const { sessionChart } = useChartSession()
+  const { sessionCharts } = useChartSession()
 
   const [savedCharts, setSavedCharts]     = useState([])
   const [selectedId, setSelectedId]       = useState('')
@@ -81,20 +81,26 @@ export default function Transits() {
     setResult(null)
     setError(null)
     if (!id) { setSelectedChart(null); return }
-    if (id === '__session__') {
-      if (!sessionChart) { setSelectedChart(null); return }
-      const f = sessionChart.formData
+
+    // 会话盘：value 格式为 "session:<id>"
+    if (id.startsWith('session:')) {
+      const sessionId = id.slice('session:'.length)
+      const sc = sessionCharts.find(c => String(c.id) === sessionId)
+      if (!sc) { setSelectedChart(null); return }
+      const f = sc.formData
       setSelectedChart({
         birth_year: f.year, birth_month: f.month, birth_day: f.day,
         birth_hour: f.hour, birth_minute: f.minute,
         latitude: f.latitude, longitude: f.longitude,
         tz_str: f.tz_str, house_system: f.house_system,
         language: f.language,
-        chart_data: sessionChart.chartData,
-        location_name: sessionChart.locationName,
+        chart_data: sc.chartData,
+        location_name: sc.locationName,
       })
       return
     }
+
+    // DB 星盘
     try {
       const headers = authHeaders()
       const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers })
@@ -125,7 +131,7 @@ export default function Transits() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chart_id:         selectedId === '__session__' ? 0 : Number(selectedId),
+          chart_id:         selectedId?.startsWith('session:') ? 0 : Number(selectedId),
           natal_info:       natalInfo,
           natal_chart_data: natalChartData,
           query_date:       queryDate,
@@ -170,11 +176,11 @@ export default function Transits() {
               style={{ ...inputStyle, marginBottom: '4px' }}
             >
               <option value="">-- 请选择 --</option>
-              {sessionChart && (
-                <option value="__session__">
-                  {sessionChart.formData?.name || '当前星盘'}（未保存）
+              {sessionCharts.map(c => (
+                <option key={c.id} value={`session:${c.id}`}>
+                  {c.name || c.formData?.name || '当前星盘'}（未保存）
                 </option>
-              )}
+              ))}
               {savedCharts.map(c => {
                 const label = c.label && !c.label.includes('undefined')
                   ? c.label
@@ -182,7 +188,7 @@ export default function Transits() {
                 return <option key={c.id} value={c.id}>{label}</option>
               })}
             </select>
-            {savedCharts.length === 0 && !sessionChart && (
+            {savedCharts.length === 0 && sessionCharts.length === 0 && (
               <p style={{ color: '#555577', fontSize: '0.78rem', marginTop: '6px' }}>
                 请先在「星盘」页面计算本命盘
               </p>
