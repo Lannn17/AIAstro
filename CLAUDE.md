@@ -8,6 +8,7 @@ This file provides guidance to Claude Code when working with this repository.
 ## Hard rules / 硬性规则
 
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
+- **每次代码改动后立即 `git commit`，但不自动 push。** 只有当用户明确说"push"/"部署"/"推一下"时，才同时执行 `git push origin main`（GitHub）和 `git push hf main`（HuggingFace）。
 
 ---
 
