@@ -293,7 +293,7 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
         </div>
 
         {/* House system + Language row */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
               <label style={{ ...labelStyle, marginBottom: 0 }}>宫位系统</label>

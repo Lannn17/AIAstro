@@ -90,11 +90,11 @@ export default function PlanetTable({ planets, language = 'zh', analyses = {} })
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid #2a2a5a', color: '#8888aa' }}>
-              <th className="text-left px-4 py-2">{L.planet}</th>
-              <th className="text-left px-4 py-2">{L.sign}</th>
-              <th className="text-left px-4 py-2">{L.degree}</th>
-              <th className="text-left px-4 py-2">{L.house}</th>
-              <th className="text-left px-4 py-2">{L.retro}</th>
+              <th className="text-left px-2 py-1.5 sm:px-4 sm:py-2">{L.planet}</th>
+              <th className="text-left px-2 py-1.5 sm:px-4 sm:py-2">{L.sign}</th>
+              <th className="text-left px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell">{L.degree}</th>
+              <th className="text-left px-2 py-1.5 sm:px-4 sm:py-2">{L.house}</th>
+              <th className="text-left px-2 py-1.5 sm:px-4 sm:py-2">{L.retro}</th>
             </tr>
           </thead>
           <tbody>
@@ -108,33 +108,35 @@ export default function PlanetTable({ planets, language = 'zh', analyses = {} })
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1a1a35'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    <td className="px-4 py-2 font-medium">
-                      <span className="mr-2 text-base" style={{ color: '#c9a84c' }}>
+                    <td className="px-2 py-1.5 sm:px-4 sm:py-2 font-medium">
+                      <span className="mr-1 sm:mr-2 text-base" style={{ color: '#c9a84c' }}>
                         {PLANET_SYMBOLS[key] || '·'}
                       </span>
-                      {PLANET_NAMES[language]?.[planet.name_original || planet.name] || planet.name}
+                      <span className="text-xs sm:text-sm">
+                        {PLANET_NAMES[language]?.[planet.name_original || planet.name] || planet.name}
+                      </span>
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm">
                       {(() => {
                         const signEn = planet.sign_original || planet.sign
                         const signDisplay = SIGN_NAMES[language]?.[signEn] || planet.sign
                         return <>
-                          <span className="mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
+                          <span className="mr-0.5 sm:mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
                           {signDisplay}
                         </>
                       })()}
                     </td>
-                    <td className="px-4 py-2" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
+                    <td className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
                       {formatDegree(planet.longitude)}
                     </td>
-                    <td className="px-4 py-2">
-                      <span className="px-2 py-0.5 rounded text-xs"
+                    <td className="px-2 py-1.5 sm:px-4 sm:py-2">
+                      <span className="px-1.5 py-0.5 sm:px-2 rounded text-xs"
                         style={{ backgroundColor: '#1e1e40', color: '#a07de0' }}
                       >
                         {L.houseCell(planet.house)}
                       </span>
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-2 py-1.5 sm:px-4 sm:py-2">
                       {planet.retrograde && (
                         <span style={{ color: '#ff8888', fontSize: '0.75rem' }}>℞</span>
                       )}
@@ -142,7 +144,7 @@ export default function PlanetTable({ planets, language = 'zh', analyses = {} })
                   </tr>
                   {analysis && (
                     <tr style={{ borderBottom: '1px solid #1a1a3a' }}>
-                      <td colSpan={5} style={{ padding: '6px 16px 12px', color: '#9090b8', fontSize: '0.82rem', lineHeight: 1.8, background: '#0e0e1e' }}>
+                      <td colSpan={5} style={{ padding: '6px 12px 10px', color: '#9090b8', fontSize: '0.82rem', lineHeight: 1.8, background: '#0e0e1e' }}>
                         {analysis}
                       </td>
                     </tr>
