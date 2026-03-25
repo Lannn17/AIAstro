@@ -58,6 +58,17 @@ CREATE TABLE IF NOT EXISTS planet_analysis_cache (
 )
 """
 
+_CREATE_QUERY_ANALYTICS = """
+CREATE TABLE IF NOT EXISTS query_analytics (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    query_hash    TEXT    NOT NULL,
+    label         TEXT    NOT NULL,
+    max_rag_score REAL    NOT NULL,
+    any_cited     INTEGER NOT NULL,
+    created_at    TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,7 +181,8 @@ def _has_column(table: str, column: str) -> bool:
 
 
 def create_tables():
-    for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL, _CREATE_PLANET_CACHE]:
+    for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL,
+                _CREATE_PLANET_CACHE, _CREATE_QUERY_ANALYTICS]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -334,3 +346,21 @@ def db_save_planet_cache(chart_id: int, chart_hash: str, analyses_json: str):
         _turso_exec(sql, [chart_id, chart_hash, analyses_json])
     else:
         _sqlite_write(sql, [chart_id, chart_hash, analyses_json])
+
+
+# ── Query analytics ───────────────────────────────────────────────
+
+def db_log_query_analytics(query_hash: str, label: str,
+                           max_rag_score: float, any_cited: bool):
+    sql = """
+        INSERT INTO query_analytics (query_hash, label, max_rag_score, any_cited)
+        VALUES (?, ?, ?, ?)
+    """
+    params = [query_hash, label, round(max_rag_score, 4), 1 if any_cited else 0]
+    try:
+        if USE_TURSO:
+            _turso_exec(sql, params)
+        else:
+            _sqlite_write(sql, params)
+    except Exception as e:
+        print(f"[Analytics] log failed (non-fatal): {e}", flush=True)
