@@ -1,3 +1,5 @@
+import asyncio
+import hashlib
 from datetime import date as date_type
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
@@ -72,6 +74,7 @@ async def interpret_chat(body: ChatRequest):
         history = [{"role": m.role, "text": m.text} for m in body.history]
         result = chat_with_chart(body.query, body.chart_data, k=body.k,
                                  history=history, summary=body.summary)
+        asyncio.create_task(_log_chat_analytics(body.query, result))
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -80,6 +83,22 @@ async def interpret_chat(body: ChatRequest):
         tb = traceback.format_exc()
         print(f"[CHAT ERROR]\n{tb}", flush=True)
         raise HTTPException(status_code=500, detail=f"Chat error: {type(e).__name__}: {e}")
+
+
+async def _log_chat_analytics(query: str, result: dict):
+    """非阻塞后台任务：分类 query 并写入 query_analytics。"""
+    try:
+        from ..rag import classify_query
+        from ..db import db_log_query_analytics
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        label = classify_query(query)
+        sources = result.get("sources", [])
+        max_score = max((s.get("score", 0.0) for s in sources), default=0.0)
+        any_cited = any(s.get("cited", False) for s in sources)
+        db_log_query_analytics(query_hash, label, max_score, any_cited)
+        print(f"[Analytics] label={label} score={max_score:.3f} cited={any_cited}", flush=True)
+    except Exception as e:
+        print(f"[Analytics] log failed (non-fatal): {e}", flush=True)
 
 
 class TransitInterpretRequest(BaseModel):
