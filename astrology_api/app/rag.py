@@ -1,7 +1,7 @@
 """
 app/rag.py — RAG 核心模块
 
-流程：query → fastembed(e5) → Qdrant检索 → Gemini生成答案
+流程：query → sentence-transformers(e5) → Qdrant检索 → Gemini生成答案
 """
 
 import os

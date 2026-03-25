@@ -1,9 +1,11 @@
 """
 migrate_to_qdrant.py — 把本地 e5_index 一次性迁移到 Qdrant Cloud
 
-运行：venv/Scripts/python migrate_to_qdrant.py
+运行：
+    venv/Scripts/python migrate_to_qdrant.py               # 续传模式
+    venv/Scripts/python migrate_to_qdrant.py --force       # 删除旧 collection 重建
 """
-import os, json, struct, pathlib
+import os, json, pathlib, sys
 import numpy as np
 import faiss
 from dotenv import load_dotenv
@@ -16,6 +18,7 @@ QDRANT_URL     = os.getenv("QDRANT_URL", "")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 COLLECTION     = "astro_chunks"
 BATCH_SIZE     = 200
+FORCE_RECREATE = "--force" in sys.argv
 
 if not QDRANT_URL or not QDRANT_API_KEY:
     raise RuntimeError("请在 .env 中设置 QDRANT_URL 和 QDRANT_API_KEY")
@@ -42,8 +45,13 @@ print(f"✅ 向量维度: {dim}, 总数: {total}, chunks: {len(chunks)}")
 print(f"\n=== Step 3: 创建 Qdrant Collection ({COLLECTION}) ===")
 existing = [c.name for c in client.get_collections().collections]
 if COLLECTION in existing:
-    print(f"⚠️  collection '{COLLECTION}' 已存在，跳过创建")
-else:
+    if FORCE_RECREATE:
+        client.delete_collection(COLLECTION)
+        print(f"🗑️  已删除旧 collection '{COLLECTION}'")
+    else:
+        print(f"⚠️  collection '{COLLECTION}' 已存在，续传模式（用 --force 强制重建）")
+
+if COLLECTION not in existing or FORCE_RECREATE:
     client.create_collection(
         collection_name=COLLECTION,
         vectors_config=VectorParams(size=dim, distance=Distance.COSINE),

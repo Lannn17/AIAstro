@@ -19,7 +19,7 @@ import json
 import pathlib
 import numpy as np
 import faiss
-from fastembed import TextEmbedding
+from sentence_transformers import SentenceTransformer
 
 TEXTS_DIR  = pathlib.Path("data/processed_texts")
 INDEX_DIR  = pathlib.Path("data/e5_index")
@@ -27,6 +27,7 @@ CHUNK_SIZE = 600
 OVERLAP    = 100
 SKIP       = {"exemplo_interpretacoes.txt"}
 MODEL_NAME = "intfloat/multilingual-e5-small"
+BATCH_SIZE = 64
 
 INDEX_DIR.mkdir(parents=True, exist_ok=True)
 CHUNKS_FILE     = INDEX_DIR / "chunks.json"
@@ -71,16 +72,20 @@ def main():
 
     print(f"\n=== Step 2: Loading model: {MODEL_NAME} ===")
     print("(First run: auto-downloading model ~120MB)")
-    model = TextEmbedding(MODEL_NAME)
+    model = SentenceTransformer(MODEL_NAME)
 
     print(f"\n=== Step 3: Generating embeddings (batch_size={BATCH_SIZE}) ===")
     # e5 requires "passage: " prefix for documents
     texts = [f"passage: {c['text']}" for c in chunks]
     total = len(texts)
 
-    # fastembed returns a generator; collect all at once (handles batching internally)
-    all_vectors = list(model.embed(texts))
-    vectors = np.array(all_vectors, dtype=np.float32)
+    vectors = model.encode(
+        texts,
+        batch_size=BATCH_SIZE,
+        normalize_embeddings=True,
+        show_progress_bar=True,
+        convert_to_numpy=True,
+    ).astype(np.float32)
     print(f"\nDone: {vectors.shape}")
 
     print(f"\n=== Step 4: Building FAISS IndexFlatIP ===")
