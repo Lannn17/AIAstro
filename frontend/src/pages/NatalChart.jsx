@@ -4,6 +4,7 @@ import ChartForm from '../components/ChartForm'
 import PlanetTable from '../components/PlanetTable'
 import ChartWheel from '../components/ChartWheel'
 import GuestSaveConfirmModal from '../components/GuestSaveConfirmModal'
+import GuestSessionList from '../components/GuestSessionList'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 
@@ -83,7 +84,7 @@ const RECTIFY_DOMAINS = [
 
 export default function NatalChart() {
   const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
-  const { sessionChart, setSessionChart } = useChartSession()
+  const { currentSessionChart, addSessionChart } = useChartSession()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -95,6 +96,9 @@ export default function NatalChart() {
   const [pendingCharts, setPendingCharts] = useState([])
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState(null)  // id of currently loaded saved chart
+  const [editingChartId, setEditingChartId] = useState(null)  // id being edited (patch target)
+  const [chartFormKey, setChartFormKey] = useState(0)  // increment to remount ChartForm with new data
+  const [chartFormInitialData, setChartFormInitialData] = useState(null)
 
   const [messages, setMessages] = useState([])
   const [chatSummary, setChatSummary] = useState('')
@@ -135,11 +139,11 @@ export default function NatalChart() {
 
   // Restore guest session chart when returning to this tab
   useEffect(() => {
-    if (isGuest && result === null && sessionChart) {
-      setResult(sessionChart.chartData)
-      setSvgContent(sessionChart.svgData || null)
-      setLastFormData(sessionChart.formData)
-      setLastLocationName(sessionChart.locationName)
+    if (isGuest && result === null && currentSessionChart) {
+      setResult(currentSessionChart.chartData)
+      setSvgContent(currentSessionChart.svgData || null)
+      setLastFormData(currentSessionChart.formData)
+      setLastLocationName(currentSessionChart.locationName)
     }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -237,7 +241,7 @@ export default function NatalChart() {
       })
       const svgData = svgRes.ok ? await svgRes.text() : null
       if (svgData) setSvgContent(svgData)
-      setSessionChart({ chartData: data, formData, locationName, svgData })
+      addSessionChart({ name: formData.name || '未命名', chartData: data, formData, locationName, svgData })
     } catch (e) {
       setError(e.message)
     } finally {
@@ -289,7 +293,7 @@ export default function NatalChart() {
         }),
       })
       if (svgRes.ok) { svgData = await svgRes.text(); setSvgContent(svgData) }
-      setSessionChart({ chartData, formData, locationName, svgData })
+      addSessionChart({ name: formData.name || '未命名', chartData, formData, locationName, svgData })
     } catch (e) {
       setError(e.message)
       setLoading(false)
@@ -362,6 +366,8 @@ export default function NatalChart() {
       }
       const saved = await res.json()
       setSavedId(saved.id)
+      setEditingChartId(null)
+      setChartFormInitialData(null)
       await fetchSavedCharts()
     } catch (e) {
       setError(`保存失败: ${e.message}`)
@@ -628,6 +634,52 @@ export default function NatalChart() {
     await fetchSavedCharts()
   }
 
+  function handleEdit() {
+    if (!savedId || !lastFormData) return
+    setEditingChartId(savedId)
+    setChartFormInitialData({ ...lastFormData, locationName: lastLocationName })
+    setChartFormKey(k => k + 1)
+  }
+
+  async function handleUpdate() {
+    if (!result || !lastFormData || !editingChartId) return
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/charts/${editingChartId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          name: lastFormData.name || null,
+          birth_year: lastFormData.year,
+          birth_month: lastFormData.month,
+          birth_day: lastFormData.day,
+          birth_hour: lastFormData.hour,
+          birth_minute: lastFormData.minute,
+          location_name: lastLocationName || null,
+          latitude: lastFormData.latitude,
+          longitude: lastFormData.longitude,
+          tz_str: lastFormData.tz_str,
+          house_system: lastFormData.house_system,
+          language: lastFormData.language,
+          chart_data: result,
+          svg_data: svgContent || null,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(`${res.status} ${body.detail || ''}`)
+      }
+      setSavedId(editingChartId)
+      setEditingChartId(null)
+      setChartFormInitialData(null)
+      await fetchSavedCharts()
+    } catch (e) {
+      setError(`更新失败: ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const labelStyle = { color: '#9a8acc', fontSize: '0.78rem', fontWeight: 600, marginBottom: '6px' }
   const inputSm = { background: '#0e0e24', border: '1px solid #2a2a5a', color: '#d0d0e0', borderRadius: '5px', padding: '6px 8px', fontSize: '0.82rem', boxSizing: 'border-box' }
 
@@ -641,9 +693,10 @@ export default function NatalChart() {
         />
       )}
 
-      {/* Sidebar: only visible when logged in */}
-      <div className="page-sidebar" style={{ display: isAuthenticated ? undefined : 'none' }}>
-
+      {/* Sidebar */}
+      <div className="page-sidebar">
+      {isAuthenticated ? (
+        <>
         {/* Pending charts (guest submissions awaiting approval) */}
         {pendingCharts.length > 0 && (
           <div style={{
@@ -789,6 +842,10 @@ export default function NatalChart() {
             </ul>
           )}
         </div>
+        </>
+      ) : (
+        <GuestSessionList />
+      )}
       </div>
 
       {/* Main area */}
@@ -796,7 +853,12 @@ export default function NatalChart() {
 
         {/* Left column: form */}
         <div className="page-form-col">
-          <ChartForm onSubmit={handleSubmit} loading={loading} />
+          <ChartForm
+            key={chartFormKey}
+            onSubmit={handleSubmit}
+            loading={loading}
+            initialData={chartFormInitialData}
+          />
 
           {error && (
             <div className="mt-4 p-3 rounded-lg text-sm"
@@ -806,26 +868,85 @@ export default function NatalChart() {
           )}
 
           {result && !savedId && !loading && svgContent && !isGuest && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="mt-3 w-full py-2 rounded-lg tracking-wider transition-opacity"
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid #c9a84c',
-                color: '#c9a84c',
-                fontSize: '0.85rem',
-                opacity: saving ? 0.5 : 1,
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {saving ? '保存中…' : '✦ 保存此星盘'}
-            </button>
+            editingChartId ? (
+              <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  onClick={handleUpdate}
+                  disabled={saving}
+                  className="w-full py-2 rounded-lg tracking-wider transition-opacity"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: '1px solid #c9a84c',
+                    color: '#c9a84c',
+                    fontSize: '0.85rem',
+                    opacity: saving ? 0.5 : 1,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {saving ? '更新中…' : '✦ 更新已保存星盘'}
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="w-full py-2 rounded-lg tracking-wider transition-opacity"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: '1px solid #5a5a8a',
+                    color: '#9090cc',
+                    fontSize: '0.82rem',
+                    opacity: saving ? 0.5 : 1,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  另存为新星盘
+                </button>
+                <button
+                  onClick={() => { setEditingChartId(null); setChartFormInitialData(null) }}
+                  style={{
+                    background: 'none', border: 'none', color: '#666688',
+                    fontSize: '0.75rem', cursor: 'pointer', padding: '2px 0',
+                  }}
+                >
+                  × 取消编辑
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="mt-3 w-full py-2 rounded-lg tracking-wider transition-opacity"
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid #c9a84c',
+                  color: '#c9a84c',
+                  fontSize: '0.85rem',
+                  opacity: saving ? 0.5 : 1,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {saving ? '保存中…' : '✦ 保存此星盘'}
+              </button>
+            )
           )}
 
           {savedId && (
-            <div className="mt-3" style={{ color: '#4a8a4a', fontSize: '0.78rem', textAlign: 'center' }}>
-              ✓ 已保存
+            <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+              <div style={{ color: '#4a8a4a', fontSize: '0.78rem' }}>✓ 已保存</div>
+              <button
+                onClick={handleEdit}
+                style={{
+                  background: 'none',
+                  border: '1px solid #2a2a5a',
+                  color: '#7878aa',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  padding: '4px 12px',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                ✏ 编辑此星盘
+              </button>
             </div>
           )}
 
