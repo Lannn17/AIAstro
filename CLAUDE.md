@@ -13,7 +13,7 @@
 
 ## Current version / 当前版本
 
-**v0.7.0** — JWT 登录 + 访客模式 + 行运分析 + 占星对话（RAG）+ 校正系统 + RAG 质量分析后台。
+**v0.7.0** — JWT 登录 + 访客模式 + 行运分析 + 占星对话（RAG）+ 校正系统 + RAG 质量分析后台 + 合盘（Synastry）功能。
 See `CHANGELOG.md` for full history.
 
 ---
