@@ -8,6 +8,78 @@ import { useAuth } from '../contexts/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
+const RECTIFY_DOMAINS = [
+  {
+    id: 'career', label: '职业 / 事业',
+    question: '你的职业生涯中是否有重大事件？',
+    types: [
+      { value: 'career_up', label: '晋升 / 加薪' },
+      { value: 'career_down', label: '降职 / 失业' },
+      { value: 'career_change', label: '职业转型' },
+      { value: 'business_start', label: '创业 / 开业' },
+      { value: 'business_end', label: '关闭生意' },
+      { value: 'retirement', label: '退休' },
+    ],
+  },
+  {
+    id: 'romance', label: '感情 / 婚恋',
+    question: '你的感情关系中是否有重大事件？',
+    types: [
+      { value: 'marriage', label: '结婚' },
+      { value: 'divorce', label: '离婚' },
+      { value: 'new_relationship', label: '确立恋情' },
+      { value: 'breakup', label: '分手 / 分居' },
+    ],
+  },
+  {
+    id: 'family', label: '家庭 / 亲子',
+    question: '你的家庭生活中是否有重大变化？',
+    types: [
+      { value: 'childbirth', label: '子女出生 / 收养' },
+      { value: 'bereavement_parent', label: '父母去世' },
+      { value: 'bereavement_spouse', label: '配偶去世' },
+      { value: 'bereavement_child', label: '子女去世' },
+      { value: 'bereavement_other', label: '其他亲友去世' },
+      { value: 'family_bond_change', label: '家庭关系重大转变（决裂 / 和解）' },
+    ],
+  },
+  {
+    id: 'health', label: '健康 / 身体',
+    question: '你是否经历过重大健康事件？',
+    types: [
+      { value: 'serious_illness', label: '重病确诊' },
+      { value: 'accident', label: '意外事故' },
+      { value: 'surgery', label: '重大手术' },
+      { value: 'mental_health_crisis', label: '精神健康危机' },
+    ],
+  },
+  {
+    id: 'finance', label: '财务 / 资产',
+    question: '你是否经历过重大财务变动？',
+    types: [
+      { value: 'financial_gain', label: '重大收益' },
+      { value: 'financial_loss', label: '重大损失' },
+      { value: 'major_investment', label: '重大投资 / 购房' },
+      { value: 'inheritance', label: '继承遗产' },
+      { value: 'bankruptcy', label: '破产' },
+    ],
+  },
+  {
+    id: 'relocation', label: '出行 / 移居 / 求学',
+    question: '你是否有过重大迁移、求学或法律经历？',
+    types: [
+      { value: 'relocation_domestic', label: '国内搬迁' },
+      { value: 'relocation_international', label: '跨国移居' },
+      { value: 'study_abroad', label: '留学 / 出国求学' },
+      { value: 'major_exam', label: '重要考试 / 升学' },
+      { value: 'graduation', label: '毕业 / 重要学历' },
+      { value: 'legal_win', label: '胜诉' },
+      { value: 'legal_loss', label: '败诉 / 法律纠纷' },
+      { value: 'spiritual_awakening', label: '精神觉醒 / 信仰转变' },
+    ],
+  },
+]
+
 export default function NatalChart() {
   const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
   const [result, setResult] = useState(null)
@@ -34,9 +106,9 @@ export default function NatalChart() {
   const [analysesError, setAnalysesError] = useState(null)
 
   const [rectifyOpen, setRectifyOpen] = useState(false)
-  const [rectifyEvents, setRectifyEvents] = useState([
-    { year: '', month: '', day: '', event_type: 'marriage', weight: 2 }
-  ])
+  const [rectifyEvents, setRectifyEvents] = useState([])
+  const [rectifyWizardStep, setRectifyWizardStep] = useState(0)  // 0-5=domain, 6=turning point
+  const [currentDomainEvent, setCurrentDomainEvent] = useState(null)
   const [approxHour, setApproxHour] = useState('')
   const [timeRangeHours, setTimeRangeHours] = useState('')
   const [rectifyLoading, setRectifyLoading] = useState(false)
@@ -431,7 +503,7 @@ export default function NatalChart() {
     if (!lastFormData) return
     const events = rectifyEvents
       .filter(e => e.year && e.month && e.day)
-      .map(e => ({ year: Number(e.year), month: Number(e.month), day: Number(e.day), event_type: e.event_type, weight: Number(e.weight) }))
+      .map(e => ({ year: Number(e.year), month: Number(e.month), day: Number(e.day), event_type: e.event_type, weight: Number(e.weight), is_turning_point: e.is_turning_point || false }))
     if (events.length === 0) { setRectifyError('请至少填写一个完整事件'); return }
     setRectifyLoading(true)
     setRectifyError(null)
@@ -1000,91 +1072,159 @@ export default function NatalChart() {
                 </div>
               </div>
 
-              {/* 事件列表 */}
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ ...labelStyle, marginBottom: '10px' }}>重大人生事件（最多 5 条）</div>
-                {rectifyEvents.map((ev, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input type="number" placeholder="年" value={ev.year} onChange={e => updateEvent(i, 'year', e.target.value)}
-                      style={{ ...inputSm, width: '62px' }} />
-                    <input type="number" placeholder="月" min="1" max="12" value={ev.month} onChange={e => updateEvent(i, 'month', e.target.value)}
-                      style={{ ...inputSm, width: '46px' }} />
-                    <input type="number" placeholder="日" min="1" max="31" value={ev.day} onChange={e => updateEvent(i, 'day', e.target.value)}
-                      style={{ ...inputSm, width: '46px' }} />
-                    <select value={ev.event_type} onChange={e => updateEvent(i, 'event_type', e.target.value)}
-                      style={{ ...inputSm, flex: 1, minWidth: '120px' }}>
-                      <optgroup label="感情">
-                        <option value="marriage">结婚</option>
-                        <option value="divorce">离婚</option>
-                        <option value="new_relationship">确立恋情</option>
-                        <option value="breakup">分手/分居</option>
-                      </optgroup>
-                      <optgroup label="事业">
-                        <option value="career_up">晋升/加薪</option>
-                        <option value="career_down">降职/失业</option>
-                        <option value="career_change">职业转型</option>
-                        <option value="business_start">创业/开业</option>
-                        <option value="business_end">关闭生意</option>
-                        <option value="retirement">退休</option>
-                      </optgroup>
-                      <optgroup label="家庭">
-                        <option value="childbirth">子女出生/收养</option>
-                        <option value="bereavement_parent">父母去世</option>
-                        <option value="bereavement_spouse">配偶去世</option>
-                        <option value="bereavement_child">子女去世</option>
-                        <option value="bereavement_other">其他亲友去世</option>
-                      </optgroup>
-                      <optgroup label="健康">
-                        <option value="serious_illness">重病确诊</option>
-                        <option value="accident">意外事故</option>
-                        <option value="surgery">重大手术</option>
-                      </optgroup>
-                      <optgroup label="居住/迁移">
-                        <option value="relocation_domestic">国内搬迁</option>
-                        <option value="relocation_international">跨国移居</option>
-                      </optgroup>
-                      <optgroup label="财务">
-                        <option value="financial_gain">重大收益</option>
-                        <option value="financial_loss">重大损失</option>
-                        <option value="inheritance">继承遗产</option>
-                        <option value="bankruptcy">破产</option>
-                      </optgroup>
-                      <optgroup label="教育/法律">
-                        <option value="graduation">毕业/重要学历</option>
-                        <option value="legal_win">胜诉</option>
-                        <option value="legal_loss">败诉/法律纠纷</option>
-                      </optgroup>
-                      <optgroup label="其他">
-                        <option value="spiritual_awakening">精神觉醒</option>
-                        <option value="other">其他</option>
-                      </optgroup>
-                    </select>
-                    <select value={ev.weight} onChange={e => updateEvent(i, 'weight', e.target.value)}
-                      style={{ ...inputSm, width: '78px' }}>
-                      <option value={1}>一般</option>
-                      <option value={2}>重要</option>
-                      <option value={3}>非常重要</option>
-                    </select>
-                    {rectifyEvents.length > 1 && (
-                      <button onClick={() => removeEvent(i)}
-                        style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.85rem', padding: '0 4px' }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✕</button>
+              {/* 事件向导 */}
+              {rectifyWizardStep <= 5 && (() => {
+                const domain = RECTIFY_DOMAINS[rectifyWizardStep]
+                const domEvents = rectifyEvents.filter(e => e.domainId === domain.id)
+                return (
+                  <div style={{ marginBottom: '12px' }}>
+                    {/* 进度条 */}
+                    <div style={{ display: 'flex', gap: '3px', marginBottom: '14px' }}>
+                      {RECTIFY_DOMAINS.map((_, i) => (
+                        <div key={i} style={{ flex: 1, height: '3px', borderRadius: '2px', backgroundColor: i < rectifyWizardStep ? '#7a6aaa' : i === rectifyWizardStep ? '#c9a84c' : '#2a2a5a', cursor: i < rectifyWizardStep ? 'pointer' : 'default' }}
+                          onClick={() => { if (i < rectifyWizardStep) { setRectifyWizardStep(i); setCurrentDomainEvent(null) } }} />
+                      ))}
+                    </div>
+                    {/* 域标签 + 问题 */}
+                    <div style={{ color: '#c9a84c', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '5px' }}>
+                      {rectifyWizardStep + 1} / {RECTIFY_DOMAINS.length} · {domain.label}
+                    </div>
+                    <div style={{ color: '#d0d0e0', fontSize: '0.88rem', marginBottom: '12px' }}>{domain.question}</div>
+                    {/* 已填事件 */}
+                    {domEvents.map(ev => {
+                      const gi = rectifyEvents.indexOf(ev)
+                      const typeLabel = domain.types.find(t => t.value === ev.event_type)?.label || ev.event_type
+                      return (
+                        <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', padding: '6px 10px', background: '#1a1a30', borderRadius: '6px' }}>
+                          <span style={{ color: '#9a8acc', fontSize: '0.8rem', flex: 1 }}>{ev.year}/{String(ev.month).padStart(2,'0')}/{String(ev.day).padStart(2,'0')} · {typeLabel}</span>
+                          <button onClick={() => removeEvent(gi)} style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.8rem', padding: '0 2px' }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✕</button>
+                        </div>
+                      )
+                    })}
+                    {/* 填写表单 */}
+                    {currentDomainEvent ? (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                          <input type="number" placeholder="年" value={currentDomainEvent.year}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, year: e.target.value }))}
+                            style={{ ...inputSm, width: '62px' }} />
+                          <input type="number" placeholder="月" min="1" max="12" value={currentDomainEvent.month}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, month: e.target.value }))}
+                            style={{ ...inputSm, width: '46px' }} />
+                          <input type="number" placeholder="日" min="1" max="31" value={currentDomainEvent.day}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, day: e.target.value }))}
+                            style={{ ...inputSm, width: '46px' }} />
+                          <select value={currentDomainEvent.event_type}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, event_type: e.target.value }))}
+                            style={{ ...inputSm, flex: 1, minWidth: '120px' }}>
+                            {domain.types.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                          <select value={currentDomainEvent.weight}
+                            onChange={e => setCurrentDomainEvent(p => ({ ...p, weight: Number(e.target.value) }))}
+                            style={{ ...inputSm, width: '78px' }}>
+                            <option value={1}>一般</option>
+                            <option value={2}>重要</option>
+                            <option value={3}>非常重要</option>
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => {
+                              if (!currentDomainEvent.year || !currentDomainEvent.month || !currentDomainEvent.day) return
+                              setRectifyEvents(prev => [...prev, { ...currentDomainEvent }])
+                              setCurrentDomainEvent(null)
+                            }}
+                            style={{ flex: 1, padding: '7px', background: '#2a2a5a', border: '1px solid #4a4a8a', color: '#d0d0f0', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem' }}>
+                            保存
+                          </button>
+                          <button onClick={() => setCurrentDomainEvent(null)}
+                            style={{ padding: '7px 14px', background: 'none', border: '1px solid #3a3a5a', color: '#7a7a9a', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem' }}>
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                        <button
+                          onClick={() => setCurrentDomainEvent({ year: '', month: '', day: '', event_type: domain.types[0].value, weight: 2, domainId: domain.id, is_turning_point: false })}
+                          style={{ padding: '8px 12px', background: '#1e1e40', border: '1px solid #4a4a8a', color: '#c0c0e0', borderRadius: '6px', cursor: 'pointer', fontSize: '0.84rem', textAlign: 'left' }}>
+                          {domEvents.length > 0 ? '+ 继续添加此领域事件' : '填写事件'}
+                        </button>
+                        {domEvents.length === 0 && (<>
+                          <button onClick={() => { setRectifyWizardStep(s => s + 1); setCurrentDomainEvent(null) }}
+                            style={{ padding: '8px 12px', background: 'none', border: '1px solid #2a2a5a', color: '#7a7a9a', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', textAlign: 'left' }}>
+                            此领域无重大事件
+                          </button>
+                          <button onClick={() => { setRectifyWizardStep(s => s + 1); setCurrentDomainEvent(null) }}
+                            style={{ padding: '8px 12px', background: 'none', border: '1px solid #2a2a5a', color: '#5a5a7a', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', textAlign: 'left' }}>
+                            此领域有经历，但不便透露
+                          </button>
+                        </>)}
+                        {domEvents.length > 0 && (
+                          <button onClick={() => { setRectifyWizardStep(s => s + 1); setCurrentDomainEvent(null) }}
+                            style={{ padding: '8px 12px', background: '#1e1a38', border: '1px solid #7a6aaa', color: '#c0b0e0', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                            下一领域 →
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                ))}
-                {rectifyEvents.length < 5 && (
-                  <button onClick={addEvent}
-                    style={{ color: '#7a6aaa', background: 'none', border: '1px dashed #4a4a7a', borderRadius: '6px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', marginTop: '4px' }}>
-                    + 添加事件
-                  </button>
-                )}
-              </div>
+                )
+              })()}
 
-              <button onClick={handleRectify} disabled={rectifyLoading}
-                style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: rectifyLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
-                {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
-              </button>
+              {/* 转折点选择 */}
+              {rectifyWizardStep === 6 && (() => {
+                const validEvents = rectifyEvents.filter(e => e.year && e.month && e.day)
+                const tpCount = validEvents.filter(e => e.is_turning_point).length
+                return (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ color: '#c9a84c', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      标记人生转折点
+                    </div>
+                    {validEvents.length === 0 ? (
+                      <p style={{ color: '#7a7a9a', fontSize: '0.82rem', marginBottom: '10px' }}>未填写任何事件，请返回补充。</p>
+                    ) : (<>
+                      <div style={{ color: '#9a8acc', fontSize: '0.78rem', marginBottom: '10px' }}>
+                        哪些事件从根本上改变了你的人生方向或自我认知？（通常 1–3 个）
+                      </div>
+                      {validEvents.map(ev => {
+                        const gi = rectifyEvents.indexOf(ev)
+                        const domain = RECTIFY_DOMAINS.find(d => d.id === ev.domainId)
+                        const typeLabel = domain?.types.find(t => t.value === ev.event_type)?.label || ev.event_type
+                        const isTP = ev.is_turning_point
+                        return (
+                          <div key={gi} onClick={() => updateEvent(gi, 'is_turning_point', !isTP)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', padding: '8px 12px', background: isTP ? '#1e1a38' : '#14142a', border: `1px solid ${isTP ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '8px', cursor: 'pointer' }}>
+                            <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `2px solid ${isTP ? '#9a8acc' : '#4a4a6a'}`, background: isTP ? '#7a6aaa' : 'transparent', flexShrink: 0 }} />
+                            <div style={{ flex: 1 }}>
+                              <span style={{ color: '#d0d0e0', fontSize: '0.82rem' }}>{ev.year}/{String(ev.month).padStart(2,'0')}/{String(ev.day).padStart(2,'0')} · {typeLabel}</span>
+                              {domain && <span style={{ color: '#5a5a7a', fontSize: '0.72rem', marginLeft: '6px' }}>{domain.label}</span>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {tpCount > 4 && (
+                        <div style={{ color: '#c9a84c', fontSize: '0.78rem', marginTop: '8px', padding: '6px 10px', background: '#1a1600', borderRadius: '6px', border: '1px solid #3a3000' }}>
+                          转折点越集中，校对越精准。确定这些都是根本性的转变吗？
+                        </div>
+                      )}
+                    </>)}
+                    <button onClick={() => { setRectifyWizardStep(0); setCurrentDomainEvent(null) }}
+                      style={{ marginTop: '10px', background: 'none', border: 'none', color: '#5a5a7a', cursor: 'pointer', fontSize: '0.78rem', padding: '0' }}>
+                      ← 返回修改事件
+                    </button>
+                  </div>
+                )
+              })()}
+
+              {rectifyWizardStep === 6 && (
+                <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year && e.month && e.day).length === 0}
+                  style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year && e.month && e.day).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                  {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
+                </button>
+              )}
 
               {rectifyError && <p style={{ color: '#ff7070', fontSize: '0.88rem', marginTop: '10px' }}>{rectifyError}</p>}
 

@@ -91,8 +91,16 @@ EVENT_TYPE_WEIGHT = {
     'bankruptcy':              1.5,
     # 教育/法律
     'graduation':              1.0,
+    'study_abroad':            1.3,
+    'major_exam':              1.0,
     'legal_win':               1.2,
     'legal_loss':              1.2,
+    # 健康（补充）
+    'mental_health_crisis':    1.5,
+    # 财务（补充）
+    'major_investment':        1.2,
+    # 家庭（补充）
+    'family_bond_change':      1.5,
     # 精神
     'spiritual_awakening':     1.2,
     # 其他
@@ -138,8 +146,16 @@ EVENT_HOUSE_MAP: dict[str, list[tuple[str, float]]] = {
     'bankruptcy':              [('second_house', 2.5), ('eighth_house', 2.0), ('twelfth_house', 1.8)],
     # 教育/法律
     'graduation':              [('ninth_house', 2.5), ('third_house', 1.5), ('tenth_house', 1.2)],
+    'study_abroad':            [('ninth_house', 2.5), ('third_house', 1.5), ('fourth_house', 1.0)],
+    'major_exam':              [('ninth_house', 2.0), ('tenth_house', 1.5), ('third_house', 1.2)],
     'legal_win':               [('ninth_house', 2.0), ('seventh_house', 1.8), ('tenth_house', 1.5)],
     'legal_loss':              [('ninth_house', 1.8), ('seventh_house', 1.8), ('twelfth_house', 2.0)],
+    # 健康（补充）
+    'mental_health_crisis':    [('twelfth_house', 2.5), ('first_house', 2.0), ('sixth_house', 1.5)],
+    # 财务（补充）
+    'major_investment':        [('second_house', 2.0), ('fourth_house', 1.8), ('eighth_house', 1.2)],
+    # 家庭（补充）
+    'family_bond_change':      [('fourth_house', 2.5), ('eighth_house', 1.2), ('first_house', 1.0)],
     # 精神/其他
     'spiritual_awakening':     [('twelfth_house', 2.5), ('ninth_house', 2.0), ('eighth_house', 1.5)],
     'other':                   [('first_house', 1.0), ('tenth_house', 1.0)],
@@ -351,6 +367,8 @@ def _score_candidate(h: int, m: int,
         ev_date = date(ev['year'], ev['month'], ev['day'])
         ev_type = ev.get('event_type', 'other')
         ew = ev.get('weight', 1.0) * EVENT_TYPE_WEIGHT.get(ev_type, 1.0)
+        if ev.get('is_turning_point', False):
+            ew *= 2.0  # 人生转折点：权重翻倍
 
         # 快速维度（Phase1 + Phase2）
         needs_ev_subj = strategy.get('transits') or strategy.get('cusp_hits')

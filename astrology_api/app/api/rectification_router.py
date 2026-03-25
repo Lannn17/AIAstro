@@ -70,6 +70,7 @@ class EventInput(BaseModel):
     day: int
     event_type: str  # marriage/divorce/career_up/career_down/bereavement/illness/relocation/accident/other
     weight: float = 1.0  # 1=一般, 2=重要, 3=非常重要
+    is_turning_point: bool = False  # 用户标记为人生转折点 → 评分权重 ×2
 
 
 class RectifyRequest(BaseModel):
