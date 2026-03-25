@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { useChartSession } from '../contexts/ChartSessionContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -54,6 +56,9 @@ function todayStr() {
 // ── 组件 ─────────────────────────────────────────────────────────
 
 export default function Transits() {
+  const { isAuthenticated, authHeaders } = useAuth()
+  const { sessionChart } = useChartSession()
+
   const [savedCharts, setSavedCharts]     = useState([])
   const [selectedId, setSelectedId]       = useState('')
   const [selectedChart, setSelectedChart] = useState(null)
@@ -64,19 +69,35 @@ export default function Transits() {
   const [forceRefresh, setForceRefresh]   = useState(false)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/charts`)
+    if (!isAuthenticated) return
+    fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(setSavedCharts)
       .catch(() => {})
-  }, [])
+  }, [isAuthenticated])
 
   async function handleSelectChart(id) {
     setSelectedId(id)
     setResult(null)
     setError(null)
     if (!id) { setSelectedChart(null); return }
+    if (id === '__session__') {
+      if (!sessionChart) { setSelectedChart(null); return }
+      const f = sessionChart.formData
+      setSelectedChart({
+        birth_year: f.year, birth_month: f.month, birth_day: f.day,
+        birth_hour: f.hour, birth_minute: f.minute,
+        latitude: f.latitude, longitude: f.longitude,
+        tz_str: f.tz_str, house_system: f.house_system,
+        language: f.language,
+        chart_data: sessionChart.chartData,
+        location_name: sessionChart.locationName,
+      })
+      return
+    }
     try {
-      const r = await fetch(`${API_BASE}/api/charts/${id}`)
+      const headers = authHeaders()
+      const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers })
       if (r.ok) setSelectedChart(await r.json())
     } catch { setError('加载星盘失败') }
   }
@@ -104,7 +125,7 @@ export default function Transits() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chart_id:         Number(selectedId),
+          chart_id:         selectedId === '__session__' ? 0 : Number(selectedId),
           natal_info:       natalInfo,
           natal_chart_data: natalChartData,
           query_date:       queryDate,
@@ -149,13 +170,18 @@ export default function Transits() {
               style={{ ...inputStyle, marginBottom: '4px' }}
             >
               <option value="">-- 请选择 --</option>
+              {sessionChart && (
+                <option value="__session__">
+                  {sessionChart.formData?.name || '当前星盘'}（未保存）
+                </option>
+              )}
               {savedCharts.map(c => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
-            {savedCharts.length === 0 && (
+            {savedCharts.length === 0 && !sessionChart && (
               <p style={{ color: '#555577', fontSize: '0.78rem', marginTop: '6px' }}>
-                请先在「星盘」页面保存本命盘
+                请先在「星盘」页面计算本命盘
               </p>
             )}
 

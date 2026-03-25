@@ -5,6 +5,7 @@ import PlanetTable from '../components/PlanetTable'
 import ChartWheel from '../components/ChartWheel'
 import GuestSaveConfirmModal from '../components/GuestSaveConfirmModal'
 import { useAuth } from '../contexts/AuthContext'
+import { useChartSession } from '../contexts/ChartSessionContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -82,6 +83,7 @@ const RECTIFY_DOMAINS = [
 
 export default function NatalChart() {
   const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
+  const { setSessionChart } = useChartSession()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -211,6 +213,7 @@ export default function NatalChart() {
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
       setResult(data)
+      setSessionChart({ chartData: data, formData, locationName })
 
       const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
@@ -262,6 +265,7 @@ export default function NatalChart() {
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       chartData = await res.json()
       setResult(chartData)
+      setSessionChart({ chartData, formData, locationName })
 
       const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',

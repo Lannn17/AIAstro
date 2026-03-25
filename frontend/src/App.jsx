@@ -7,6 +7,7 @@ import Progressions from './pages/Progressions'
 import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ChartSessionProvider } from './contexts/ChartSessionContext'
 import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 
@@ -146,7 +147,9 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <ChartSessionProvider>
+        <AppInner />
+      </ChartSessionProvider>
     </AuthProvider>
   )
 }
