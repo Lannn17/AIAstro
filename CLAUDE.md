@@ -7,7 +7,7 @@
 ## Hard rules / 硬性规则
 
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
-- **每次代码改动后立即 `git commit`，但不自动 push。** 只有当用户明确说"push"/"部署"/"推一下"时，才同时执行 `git push origin main`（GitHub）和 `git push hf main`（HuggingFace）。
+- **每次代码改动后立即 commit 并推两端**：`git push origin main && git push hf main`。版本号更新和 CHANGELOG 只在用户明确要求时才做。
 
 ---
 
@@ -185,20 +185,14 @@ Schema 通过 `create_tables()` 启动时自动创建。无迁移工具——sch
 
 ## Workflow / 工作流程
 
-### Commit
-每次代码改动后立即 commit，使用 Conventional Commits 格式，英文，72 字符以内：
-```
-feat(natal): add saved charts sidebar
-fix(rag): split camelCase filenames in citation detection
-chore(db): add query_analytics table
-```
-
-### Push
-用户说"push"/"部署"/"推一下"时，同时推两端：
+### Commit + Push
+每次代码改动后立即 commit 并同时推两端：
 ```bash
-git push origin main   # GitHub
-git push hf main       # HuggingFace（触发重新部署）
+git add <files>
+git commit -m "type(scope): description"
+git push origin main && git push hf main
 ```
+Conventional Commits 格式，英文，72 字符以内。
 
 ### 版本发布（仅当用户明确要求时）
 1. Bump version in `frontend/package.json`
