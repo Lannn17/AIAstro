@@ -83,7 +83,7 @@ const RECTIFY_DOMAINS = [
 
 export default function NatalChart() {
   const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
-  const { setSessionChart } = useChartSession()
+  const { sessionChart, setSessionChart } = useChartSession()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -132,6 +132,16 @@ export default function NatalChart() {
   const [showGuestConfirm, setShowGuestConfirm] = useState(false)
   const [pendingFormData, setPendingFormData] = useState(null)
   const [pendingLocationName, setPendingLocationName] = useState(null)
+
+  // Restore guest session chart when returning to this tab
+  useEffect(() => {
+    if (result === null && sessionChart) {
+      setResult(sessionChart.chartData)
+      setSvgContent(sessionChart.svgData || null)
+      setLastFormData(sessionChart.formData)
+      setLastLocationName(sessionChart.locationName)
+    }
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -213,7 +223,6 @@ export default function NatalChart() {
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
       setResult(data)
-      setSessionChart({ chartData: data, formData, locationName })
 
       const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
@@ -226,7 +235,9 @@ export default function NatalChart() {
           theme: 'dark',
         }),
       })
-      if (svgRes.ok) setSvgContent(await svgRes.text())
+      const svgData = svgRes.ok ? await svgRes.text() : null
+      if (svgData) setSvgContent(svgData)
+      setSessionChart({ chartData: data, formData, locationName, svgData })
     } catch (e) {
       setError(e.message)
     } finally {
@@ -265,7 +276,6 @@ export default function NatalChart() {
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       chartData = await res.json()
       setResult(chartData)
-      setSessionChart({ chartData, formData, locationName })
 
       const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
@@ -279,6 +289,7 @@ export default function NatalChart() {
         }),
       })
       if (svgRes.ok) { svgData = await svgRes.text(); setSvgContent(svgData) }
+      setSessionChart({ chartData, formData, locationName, svgData })
     } catch (e) {
       setError(e.message)
       setLoading(false)
