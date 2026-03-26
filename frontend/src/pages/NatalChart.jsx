@@ -99,6 +99,7 @@ export default function NatalChart() {
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState(null)  // id of currently loaded saved chart
   const [editingChartId, setEditingChartId] = useState(null)  // id being edited (patch target)
+  const [editRecalculated, setEditRecalculated] = useState(false) // must recalc before update
   const [chartFormKey, setChartFormKey] = useState(0)  // increment to remount ChartForm with new data
   const [chartFormInitialData, setChartFormInitialData] = useState(null)
 
@@ -232,6 +233,7 @@ export default function NatalChart() {
 
   // Calculate chart (owner path — no auto-save)
   async function doCalculate(formData, locationName) {
+    const wasEditing = editingChartId  // capture before state changes
     setLoading(true)
     setError(null)
     setResult(null)
@@ -268,6 +270,7 @@ export default function NatalChart() {
       const svgData = svgRes.ok ? await svgRes.text() : null
       if (svgData) setSvgContent(svgData)
       addSessionChart({ name: formData.name || '未命名', chartData: data, formData, locationName, svgData })
+      if (wasEditing) setEditRecalculated(true)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -704,12 +707,18 @@ export default function NatalChart() {
   function handleEdit() {
     if (!savedId || !lastFormData) return
     setEditingChartId(savedId)
+    setEditRecalculated(false)
     setChartFormInitialData({ ...lastFormData, locationName: lastLocationName })
     setChartFormKey(k => k + 1)
   }
 
   async function handleUpdate() {
-    if (!result || !lastFormData || !editingChartId) return
+    if (!editingChartId) return
+    if (!editRecalculated) {
+      setError('请先点击「计算星盘」重新计算，再保存更新')
+      return
+    }
+    if (!result || !lastFormData) return
     setSaving(true)
     try {
       const res = await fetch(`${API_BASE}/api/charts/${editingChartId}`, {
@@ -939,18 +948,19 @@ export default function NatalChart() {
               <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button
                   onClick={handleUpdate}
-                  disabled={saving}
+                  disabled={saving || !editRecalculated}
                   className="w-full py-2 rounded-lg tracking-wider transition-opacity"
                   style={{
                     backgroundColor: 'transparent',
-                    border: '1px solid #c9a84c',
-                    color: '#c9a84c',
+                    border: `1px solid ${editRecalculated ? '#c9a84c' : '#4a4a6a'}`,
+                    color: editRecalculated ? '#c9a84c' : '#6666aa',
                     fontSize: '0.85rem',
                     opacity: saving ? 0.5 : 1,
-                    cursor: saving ? 'not-allowed' : 'pointer',
+                    cursor: (saving || !editRecalculated) ? 'not-allowed' : 'pointer',
                   }}
+                  title={!editRecalculated ? '请先点击「计算星盘」重新计算' : ''}
                 >
-                  {saving ? '更新中…' : '✦ 更新已保存星盘'}
+                  {saving ? '更新中…' : editRecalculated ? '✦ 更新已保存星盘' : '请先重新计算星盘'}
                 </button>
                 <button
                   onClick={handleSave}
@@ -968,7 +978,7 @@ export default function NatalChart() {
                   另存为新星盘
                 </button>
                 <button
-                  onClick={() => { setEditingChartId(null); setChartFormInitialData(null) }}
+                  onClick={() => { setEditingChartId(null); setEditRecalculated(false); setChartFormInitialData(null) }}
                   style={{
                     background: 'none', border: 'none', color: '#666688',
                     fontSize: '0.75rem', cursor: 'pointer', padding: '2px 0',
