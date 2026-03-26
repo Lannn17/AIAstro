@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import LocationSearch from './LocationSearch'
 
 const HOUSE_SYSTEMS_INFO = [
   {
@@ -106,13 +107,8 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
     house_system: 'Placidus',
     language: 'zh',
   })
-  const [locationQuery, setLocationQuery] = useState(initialData?.locationName || '')
-  const [suggestions, setSuggestions] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [searchFailed, setSearchFailed] = useState(false)
-  const [showManual, setShowManual] = useState(false)
+  const [locationName, setLocationName] = useState(initialData?.locationName || '')
   const [showHouseInfo, setShowHouseInfo] = useState(false)
-  const debounceRef = useRef(null)
 
   useEffect(() => {
     if (!showHouseInfo) return
@@ -125,37 +121,10 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
     setForm(f => ({ ...f, [field]: value }))
   }
 
-  function handleLocationInput(value) {
-    setLocationQuery(value)
-    set('latitude', '')
-    set('longitude', '')
-    setSuggestions([])
-    setSearchFailed(false)
-
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (value.length < 2) return
-
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=6&addressdetails=1`,
-          { headers: { 'Accept-Language': 'zh-CN,zh,en' } }
-        )
-        const data = await res.json()
-        setSuggestions(data)
-        if (data.length === 0) setSearchFailed(true)
-      } catch {
-        setSearchFailed(true)
-      } finally { setSearching(false) }
-    }, 500)
-  }
-
-  function selectLocation(item) {
-    setLocationQuery(item.display_name)
-    set('latitude', parseFloat(item.lat).toFixed(4))
-    set('longitude', parseFloat(item.lon).toFixed(4))
-    setSuggestions([])
+  function handleLocationSelect({ latitude, longitude, locationName: name }) {
+    set('latitude', latitude)
+    set('longitude', longitude)
+    setLocationName(name)
   }
 
   function handleSubmit(e) {
@@ -169,10 +138,11 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
       minute: parseInt(form.minute),
       latitude: parseFloat(form.latitude),
       longitude: parseFloat(form.longitude),
-    }, locationQuery)
+    }, locationName)
   }
 
   const locationConfirmed = form.latitude !== '' && form.longitude !== ''
+  // kept for submit button disabled check
 
   return (
     <form onSubmit={handleSubmit}
@@ -222,67 +192,12 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
         </div>
 
         {/* Location search */}
-        <div style={{ position: 'relative' }}>
-          <label style={labelStyle}>出生地</label>
-          <div style={{ position: 'relative' }}>
-            <input
-              style={{
-                ...inputStyle,
-                borderColor: locationConfirmed ? '#3a5a3a' : '#2a2a5a',
-                paddingRight: searching ? '32px' : '10px',
-              }}
-              placeholder="搜索城市或地区…"
-              value={locationQuery}
-              onChange={e => handleLocationInput(e.target.value)}
-              autoComplete="off"
-            />
-            {searching && (
-              <span style={{
-                position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-                color: '#8888aa', fontSize: '0.75rem',
-              }}>…</span>
-            )}
-          </div>
-
-          {/* Coordinates hint */}
-          {locationConfirmed && (
-            <div style={{ color: '#4a8a4a', fontSize: '0.7rem', marginTop: '4px' }}>
-              ✓ {form.latitude}°, {form.longitude}°
-            </div>
-          )}
-
-          {/* Dropdown */}
-          {suggestions.length > 0 && (
-            <ul style={{
-              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-              backgroundColor: '#1a1a35',
-              border: '1px solid #2a2a5a',
-              borderRadius: '6px',
-              marginTop: '2px',
-              listStyle: 'none',
-              padding: 0,
-              maxHeight: '240px',
-              overflowY: 'auto',
-            }}>
-              {suggestions.map(item => (
-                <li key={item.place_id}
-                  onClick={() => selectLocation(item)}
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    color: '#c8c8e8',
-                    borderBottom: '1px solid #1e1e3a',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#22224a'}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  {item.display_name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <LocationSearch
+          initialValue={initialData?.locationName || ''}
+          latitude={form.latitude}
+          longitude={form.longitude}
+          onSelect={handleLocationSelect}
+        />
 
         {/* Timezone */}
         <div>

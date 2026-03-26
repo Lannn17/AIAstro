@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import LocationSearch from '../components/LocationSearch'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 
@@ -45,56 +46,6 @@ const labelStyle = {
 function SynastryManualForm({ formData, onChange }) {
   const field = (name, value) => onChange({ ...formData, [name]: value })
 
-  const [locationQuery, setLocationQuery] = useState(formData.locationName || '')
-  const [suggestions, setSuggestions] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [searchFailed, setSearchFailed] = useState(false)
-  const debounceRef = useRef(null)
-
-  // Sync location display when formData.locationName changes externally (e.g. chart loaded via dropdown)
-  useEffect(() => {
-    setLocationQuery(formData.locationName || '')
-    setSuggestions([])
-  }, [formData.locationName])
-
-  function handleLocationInput(value) {
-    setLocationQuery(value)
-    onChange({ ...formData, latitude: '', longitude: '', locationName: value })
-    setSuggestions([])
-    setSearchFailed(false)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (value.length < 2) return
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=6&addressdetails=1`,
-          { headers: { 'Accept-Language': 'zh-CN,zh,en' } }
-        )
-        const data = await res.json()
-        setSuggestions(data)
-        if (data.length === 0) setSearchFailed(true)
-      } catch {
-        setSearchFailed(true)
-      } finally { setSearching(false) }
-    }, 500)
-  }
-
-  function selectLocation(item) {
-    const name = item.display_name
-    setLocationQuery(name)
-    setSuggestions([])
-    setSearchFailed(false)
-    onChange({
-      ...formData,
-      latitude: parseFloat(item.lat).toFixed(4),
-      longitude: parseFloat(item.lon).toFixed(4),
-      locationName: name,
-    })
-  }
-
-  const locationConfirmed = formData.latitude !== '' && formData.longitude !== ''
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div>
@@ -110,142 +61,56 @@ function SynastryManualForm({ formData, onChange }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
         <div>
           <label style={labelStyle}>年</label>
-          <input
-            style={inputStyle}
-            type="number"
-            value={formData.year}
-            onChange={e => field('year', e.target.value)}
-            placeholder="1990"
-          />
+          <input style={inputStyle} type="number" value={formData.year}
+            onChange={e => field('year', e.target.value)} placeholder="1990" />
         </div>
         <div>
           <label style={labelStyle}>月</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="1" max="12"
-            value={formData.month}
-            onChange={e => field('month', e.target.value)}
-            placeholder="1"
-          />
+          <input style={inputStyle} type="number" min="1" max="12" value={formData.month}
+            onChange={e => field('month', e.target.value)} placeholder="1" />
         </div>
         <div>
           <label style={labelStyle}>日</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="1" max="31"
-            value={formData.day}
-            onChange={e => field('day', e.target.value)}
-            placeholder="1"
-          />
+          <input style={inputStyle} type="number" min="1" max="31" value={formData.day}
+            onChange={e => field('day', e.target.value)} placeholder="1" />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         <div>
           <label style={labelStyle}>时</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="0" max="23"
-            value={formData.hour}
-            onChange={e => field('hour', e.target.value)}
-            placeholder="0"
-          />
+          <input style={inputStyle} type="number" min="0" max="23" value={formData.hour}
+            onChange={e => field('hour', e.target.value)} placeholder="0" />
         </div>
         <div>
           <label style={labelStyle}>分</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="0" max="59"
-            value={formData.minute}
-            onChange={e => field('minute', e.target.value)}
-            placeholder="0"
-          />
+          <input style={inputStyle} type="number" min="0" max="59" value={formData.minute}
+            onChange={e => field('minute', e.target.value)} placeholder="0" />
         </div>
       </div>
 
-      {/* Location search */}
-      <div style={{ position: 'relative' }}>
-        <label style={labelStyle}>出生地</label>
-        <div style={{ position: 'relative' }}>
-          <input
-            style={{
-              ...inputStyle,
-              borderColor: locationConfirmed ? '#3a5a3a' : '#2a2a5a',
-              paddingRight: searching ? '32px' : '10px',
-            }}
-            placeholder="搜索城市或地区…"
-            value={locationQuery}
-            onChange={e => handleLocationInput(e.target.value)}
-            autoComplete="off"
-          />
-          {searching && (
-            <span style={{
-              position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-              color: '#8888aa', fontSize: '0.75rem',
-            }}>…</span>
-          )}
-        </div>
-        {locationConfirmed && (
-          <div style={{ color: '#4a8a4a', fontSize: '0.7rem', marginTop: '4px' }}>
-            ✓ {formData.latitude}°, {formData.longitude}°
-          </div>
-        )}
-        {searchFailed && !locationConfirmed && (
-          <div style={{ color: '#8a4a4a', fontSize: '0.7rem', marginTop: '4px' }}>未找到地点，请尝试其他关键词</div>
-        )}
-        {suggestions.length > 0 && (
-          <ul style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-            backgroundColor: '#1a1a35', border: '1px solid #2a2a5a',
-            borderRadius: '6px', marginTop: '2px',
-            listStyle: 'none', padding: 0,
-            maxHeight: '200px', overflowY: 'auto',
-          }}>
-            {suggestions.map(item => (
-              <li key={item.place_id}
-                onClick={() => selectLocation(item)}
-                style={{
-                  padding: '8px 12px', cursor: 'pointer',
-                  fontSize: '0.8rem', color: '#c8c8e8',
-                  borderBottom: '1px solid #1e1e3a',
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#22224a'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                {item.display_name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <LocationSearch
+        initialValue={formData.locationName}
+        latitude={formData.latitude}
+        longitude={formData.longitude}
+        onSelect={({ latitude, longitude, locationName }) =>
+          onChange({ ...formData, latitude, longitude, locationName })
+        }
+      />
 
       <div>
         <label style={labelStyle}>时区</label>
-        <select
-          style={inputStyle}
-          value={formData.tz_str}
-          onChange={e => field('tz_str', e.target.value)}
-        >
-          {TIMEZONES.map(tz => (
-            <option key={tz} value={tz}>{tz}</option>
-          ))}
+        <select style={inputStyle} value={formData.tz_str} onChange={e => field('tz_str', e.target.value)}>
+          {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
         </select>
       </div>
 
       <div>
         <label style={labelStyle}>宫位系统</label>
-        <select
-          style={inputStyle}
-          value={formData.house_system}
-          onChange={e => field('house_system', e.target.value)}
-        >
-          {['Placidus', 'Koch', 'Whole Sign', 'Equal', 'Regiomontanus', 'Campanus'].map(hs => (
+        <select style={inputStyle} value={formData.house_system} onChange={e => field('house_system', e.target.value)}>
+          {['Placidus', 'Koch', 'Whole Sign', 'Equal', 'Regiomontanus', 'Campanus'].map(hs =>
             <option key={hs} value={hs}>{hs}</option>
-          ))}
+          )}
         </select>
       </div>
     </div>
