@@ -1535,8 +1535,8 @@ def analyze_synastry(
                     "degree": round(longitude % 30, 1),
                     "house": p_dict.get('house', None),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[synastry] skipped planet {name}: {e}", flush=True)
         return result
 
     planets1 = _planet_list(chart1_planets)
@@ -1599,7 +1599,7 @@ def analyze_synastry(
     )
 
     try:
-        result = json.loads(response.text)
+        result = _parse_json(response.text)
     except (json.JSONDecodeError, AttributeError) as e:
         raise RuntimeError(f"Gemini synastry schema parse failed: {e}\nRaw: {getattr(response, 'text', '')[:200]}")
 
