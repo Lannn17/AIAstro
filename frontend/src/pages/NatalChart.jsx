@@ -118,6 +118,7 @@ export default function NatalChart() {
   const [currentDomainEvent, setCurrentDomainEvent] = useState(null)
   const [approxHour, setApproxHour] = useState('')
   const [timeRangeHours, setTimeRangeHours] = useState('')
+  const [rectifyVersion, setRectifyVersion] = useState('v1.0')
   const [rectifyLoading, setRectifyLoading] = useState(false)
   const [rectifyResult, setRectifyResult] = useState(null)
   const [rectifyError, setRectifyError] = useState(null)
@@ -566,6 +567,7 @@ export default function NatalChart() {
           approx_minute: null,
           time_range_hours: timeRangeHours !== '' ? Number(timeRangeHours) : null,
           natal_chart_data: result || {},
+          version: rectifyVersion,
         }),
       })
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `错误 ${res.status}`) }
@@ -1367,10 +1369,22 @@ export default function NatalChart() {
               })()}
 
               {rectifyWizardStep === 6 && (
-                <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year).length === 0}
-                  style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
-                  {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
-                </button>
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#7a7a9a', whiteSpace: 'nowrap' }}>算法版本</span>
+                    <select value={rectifyVersion} onChange={e => setRectifyVersion(e.target.value)}
+                      style={{ flex: 1, padding: '4px 8px', background: '#1e1e3a', color: '#c0b8e8', border: '1px solid #3a3a6a', borderRadius: '6px', fontSize: '0.78rem', cursor: 'pointer' }}>
+                      <option value="v1.0">v1.0 — 基础版</option>
+                      <option value="v1.1">v1.1 — 含初级推运</option>
+                      <option value="v1.2">v1.2 — 12宫事件映射</option>
+                      <option value="v1.3">v1.3 — 动态赋权+慢星</option>
+                    </select>
+                  </div>
+                  <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year).length === 0}
+                    style={{ width: '100%', padding: '10px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                    {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
+                  </button>
+                </div>
               )}
 
               {rectifyError && <p style={{ color: '#ff7070', fontSize: '0.88rem', marginTop: '10px' }}>{rectifyError}</p>}
