@@ -81,7 +81,7 @@ const labelStyle = {
   marginBottom: '4px',
 }
 
-export default function ChartForm({ onSubmit, loading, initialData }) {
+export default function ChartForm({ onSubmit, loading, initialData, onFormChange }) {
   const [form, setForm] = useState(() => initialData ? {
     name: initialData.name || '',
     year: String(initialData.year ?? ''),
@@ -118,12 +118,19 @@ export default function ChartForm({ onSubmit, loading, initialData }) {
   }, [showHouseInfo])
 
   function set(field, value) {
-    setForm(f => ({ ...f, [field]: value }))
+    setForm(f => {
+      const next = { ...f, [field]: value }
+      onFormChange?.(next, locationName)
+      return next
+    })
   }
 
   function handleLocationSelect({ latitude, longitude, locationName: name }) {
-    set('latitude', latitude)
-    set('longitude', longitude)
+    setForm(f => {
+      const next = { ...f, latitude, longitude }
+      onFormChange?.(next, name)
+      return next
+    })
     setLocationName(name)
   }
 

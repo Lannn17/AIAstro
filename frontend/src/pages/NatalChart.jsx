@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useInterpret } from '../hooks/useInterpret'
 import { SourcesSection } from '../components/AIPanel'
 import ReactMarkdown from 'react-markdown'
@@ -99,7 +99,7 @@ export default function NatalChart() {
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState(null)  // id of currently loaded saved chart
   const [editingChartId, setEditingChartId] = useState(null)  // id being edited (patch target)
-  const [editRecalculated, setEditRecalculated] = useState(false) // must recalc before update
+  const currentEditFormRef = useRef(null)  // live form data tracked during editing
   const [chartFormKey, setChartFormKey] = useState(0)  // increment to remount ChartForm with new data
   const [chartFormInitialData, setChartFormInitialData] = useState(null)
 
@@ -233,7 +233,6 @@ export default function NatalChart() {
 
   // Calculate chart (owner path — no auto-save)
   async function doCalculate(formData, locationName) {
-    const wasEditing = editingChartId  // capture before state changes
     setLoading(true)
     setError(null)
     setResult(null)
@@ -270,7 +269,6 @@ export default function NatalChart() {
       const svgData = svgRes.ok ? await svgRes.text() : null
       if (svgData) setSvgContent(svgData)
       addSessionChart({ name: formData.name || '未命名', chartData: data, formData, locationName, svgData })
-      if (wasEditing) setEditRecalculated(true)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -707,36 +705,38 @@ export default function NatalChart() {
   function handleEdit() {
     if (!savedId || !lastFormData) return
     setEditingChartId(savedId)
-    setEditRecalculated(false)
+    currentEditFormRef.current = null  // will be populated by onFormChange once form mounts
     setChartFormInitialData({ ...lastFormData, locationName: lastLocationName })
     setChartFormKey(k => k + 1)
   }
 
   async function handleUpdate() {
     if (!editingChartId) return
-    if (!editRecalculated) {
-      setError('请先点击「计算星盘」重新计算，再保存更新')
-      return
-    }
-    if (!result || !lastFormData) return
+    // Use live form data if available (tracks every keystroke), fall back to lastFormData
+    const fd = currentEditFormRef.current || lastFormData
+    if (!fd) return
     setSaving(true)
     try {
+      const label = fd.name
+        ? `${fd.name} · ${fd.year}/${fd.month}/${fd.day}`
+        : `星盘 ${fd.year}/${fd.month}/${fd.day}`
       const res = await fetch(`${API_BASE}/api/charts/${editingChartId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
-          name: lastFormData.name || null,
-          birth_year: lastFormData.year,
-          birth_month: lastFormData.month,
-          birth_day: lastFormData.day,
-          birth_hour: lastFormData.hour,
-          birth_minute: lastFormData.minute,
-          location_name: lastLocationName || null,
-          latitude: lastFormData.latitude,
-          longitude: lastFormData.longitude,
-          tz_str: lastFormData.tz_str,
-          house_system: lastFormData.house_system,
-          language: lastFormData.language,
+          label,
+          name: fd.name || null,
+          birth_year: Number(fd.year),
+          birth_month: Number(fd.month),
+          birth_day: Number(fd.day),
+          birth_hour: Number(fd.hour),
+          birth_minute: Number(fd.minute),
+          location_name: fd.locationName ?? lastLocationName ?? null,
+          latitude: Number(fd.latitude),
+          longitude: Number(fd.longitude),
+          tz_str: fd.tz_str,
+          house_system: fd.house_system,
+          language: fd.language,
           chart_data: result,
           svg_data: svgContent || null,
         }),
@@ -745,6 +745,9 @@ export default function NatalChart() {
         const body = await res.json().catch(() => ({}))
         throw new Error(`${res.status} ${body.detail || ''}`)
       }
+      // Sync lastFormData so subsequent UI reads are consistent
+      if (currentEditFormRef.current) setLastFormData(currentEditFormRef.current)
+      currentEditFormRef.current = null
       setSavedId(editingChartId)
       setEditingChartId(null)
       setChartFormInitialData(null)
@@ -934,6 +937,9 @@ export default function NatalChart() {
             onSubmit={handleSubmit}
             loading={loading}
             initialData={chartFormInitialData}
+            onFormChange={editingChartId ? (form, locName) => {
+              currentEditFormRef.current = { ...form, locationName: locName }
+            } : undefined}
           />
 
           {error && (
@@ -948,19 +954,18 @@ export default function NatalChart() {
               <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button
                   onClick={handleUpdate}
-                  disabled={saving || !editRecalculated}
+                  disabled={saving}
                   className="w-full py-2 rounded-lg tracking-wider transition-opacity"
                   style={{
                     backgroundColor: 'transparent',
-                    border: `1px solid ${editRecalculated ? '#c9a84c' : '#4a4a6a'}`,
-                    color: editRecalculated ? '#c9a84c' : '#6666aa',
+                    border: '1px solid #c9a84c',
+                    color: '#c9a84c',
                     fontSize: '0.85rem',
                     opacity: saving ? 0.5 : 1,
-                    cursor: (saving || !editRecalculated) ? 'not-allowed' : 'pointer',
+                    cursor: saving ? 'not-allowed' : 'pointer',
                   }}
-                  title={!editRecalculated ? '请先点击「计算星盘」重新计算' : ''}
                 >
-                  {saving ? '更新中…' : editRecalculated ? '✦ 更新已保存星盘' : '请先重新计算星盘'}
+                  {saving ? '更新中…' : '✦ 更新已保存星盘'}
                 </button>
                 <button
                   onClick={handleSave}
@@ -978,7 +983,7 @@ export default function NatalChart() {
                   另存为新星盘
                 </button>
                 <button
-                  onClick={() => { setEditingChartId(null); setEditRecalculated(false); setChartFormInitialData(null) }}
+                  onClick={() => { currentEditFormRef.current = null; setEditingChartId(null); setChartFormInitialData(null) }}
                   style={{
                     background: 'none', border: 'none', color: '#666688',
                     fontSize: '0.75rem', cursor: 'pointer', padding: '2px 0',
