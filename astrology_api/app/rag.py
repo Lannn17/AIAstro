@@ -1339,7 +1339,8 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             for i, c in enumerate(rag_chunks, 1)
         ]
         rag_context = (
-            "\n\n---\n参考书籍片段（可选引用，若引用请在 source_refs 中注明编号和中文概括）：\n\n"
+            "\n\n---\n参考书籍片段（仅供内部参考，不得在行星解读文字中引用英文原文或标注书名；"
+            "若引用，请只在 source_refs 字段中填写编号和中文概括，不得在解读正文中出现任何英文或引用格式）：\n\n"
             + "\n\n".join(parts)
         )
 
@@ -1374,6 +1375,8 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 - health: 健康与身体领域分析，附占星依据，60-80 字
 
 **必须为以上列出的每一颗行星（包括凯龙、北交点、南交点、莉莉丝等小行星）生成解读，不得遗漏任何一个。**
+
+**严格禁止**在任何行星解读文字（JSON 值）中出现：英文引用原文、书名标注、「参考《...》」格式、或任何引用注记。行星解读必须是纯中文分析文字。引用信息只能通过 source_refs 字段以中文概括表达。
 
 以 JSON 格式返回（严格使用以下 key，每个 key 对应一段解读文字，overall 为嵌套对象；source_refs 仅填写实际引用的参考编号）：
 {json_template}{rag_context}"""
