@@ -212,18 +212,20 @@ async def summarize_chat(body: SummarizeRequest):
 
 
 class SynastryInterpretRequest(BaseModel):
-    chart1_summary: Dict[str, Any]   # {name, ...} 用于 prompt 中称呼
+    chart1_summary: Dict[str, Any]      # {name, ...}
     chart2_summary: Dict[str, Any]
-    aspects: List[Dict[str, Any]]    # 来自 /api/synastry 返回的 aspects 列表
+    aspects: List[Dict[str, Any]]       # from /api/synastry response
+    chart1_planets: Dict[str, Any] = {} # from /api/synastry response
+    chart2_planets: Dict[str, Any] = {} # from /api/synastry response
 
 
 @router.post("/interpret/synastry")
 async def interpret_synastry(body: SynastryInterpretRequest):
-    """合盘 RAG 解读：Qdrant 检索 + Gemini 生成关系分析，带 DB 缓存 + analytics。"""
+    """合盘 AI 解读：Gemini 全量数据推理 + response_schema 强制结构，带 DB 缓存。"""
     import hashlib, json
     from ..db import db_get_synastry_cache, db_save_synastry_cache
     try:
-        # ── 缓存键：所有相位按 key 排序后 hash ─────────────────────────
+        # ── 缓存键：所有相位按 key 排序后 hash ──────────────────────────
         aspects_str = json.dumps(
             sorted([f"{a.get('p1_name','')}{a.get('aspect','')}{a.get('p2_name','')}" for a in body.aspects])
         )
@@ -231,15 +233,26 @@ async def interpret_synastry(body: SynastryInterpretRequest):
 
         cached = db_get_synastry_cache(aspects_hash)
         if cached:
-            return cached
+            answer_val = cached.get("answer", "")
+            # Try to deserialise as new structured JSON
+            try:
+                parsed = json.loads(answer_val) if isinstance(answer_val, str) else answer_val
+                if isinstance(parsed, dict) and "texture_labels" in parsed:
+                    return parsed  # new-format cache hit
+                # Old-format text entry — fall through to regenerate
+            except (json.JSONDecodeError, TypeError):
+                pass  # Old-format — regenerate
 
         from ..rag import analyze_synastry
         result = analyze_synastry(
-            chart1_summary=body.chart1_summary,
-            chart2_summary=body.chart2_summary,
+            chart1_name=body.chart1_summary.get("name", "甲"),
+            chart2_name=body.chart2_summary.get("name", "乙"),
+            chart1_planets=body.chart1_planets,
+            chart2_planets=body.chart2_planets,
             aspects=body.aspects,
         )
-        db_save_synastry_cache(aspects_hash, result["answer"], result.get("sources", []))
+        # Serialise full structured JSON into the answer column
+        db_save_synastry_cache(aspects_hash, json.dumps(result, ensure_ascii=False), [])
 
         query = " ".join(
             f"{a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}"
