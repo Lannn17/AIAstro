@@ -1090,7 +1090,7 @@ export default function NatalChart() {
               {result && (
                 <div className="space-y-6">
                   {svgContent && <ChartWheel svgContent={svgContent} language={result.input_data?.language} />}
-                  <PlanetTable planets={result.planets} language={result.input_data?.language} analyses={planetAnalyses} />
+                  <PlanetTable planets={result.planets} language={result.input_data?.language} analyses={planetAnalyses} ascendant={result.ascendant} midheaven={result.midheaven} />
                   {/* 行星解读按钮 / 综合概述 */}
                   {planetInterp.error && (
                     <div style={{ color: '#e07070', fontSize: '0.82rem', padding: '8px 12px', background: '#1a0f0f', border: '1px solid #5a2a2a', borderRadius: '6px' }}>

@@ -54,13 +54,27 @@ const SIGN_NAMES = {
 }
 
 const UI_LABELS = {
-  zh: { title: '✦ 行星', planet: '行星', sign: '星座', degree: '度数', house: '宫位', retro: '逆行', houseCell: n => `第${n}宫` },
-  ja: { title: '✦ 惑星', planet: '惑星', sign: '星座', degree: '度数', house: 'ハウス', retro: '逆行', houseCell: n => `第${n}H` },
-  en: { title: '✦ PLANETS', planet: 'Planet', sign: 'Sign', degree: 'Degree', house: 'House', retro: 'Rx', houseCell: n => `House ${n}` },
-  pt: { title: '✦ PLANETAS', planet: 'Planeta', sign: 'Signo', degree: 'Grau', house: 'Casa', retro: 'Ret.', houseCell: n => `Casa ${n}` },
-  es: { title: '✦ PLANETAS', planet: 'Planeta', sign: 'Signo', degree: 'Grado', house: 'Casa', retro: 'Ret.', houseCell: n => `Casa ${n}` },
-  fr: { title: '✦ PLANÈTES', planet: 'Planète', sign: 'Signe', degree: 'Degré', house: 'Maison', retro: 'Rét.', houseCell: n => `Maison ${n}` },
-  de: { title: '✦ PLANETEN', planet: 'Planet', sign: 'Zeichen', degree: 'Grad', house: 'Haus', retro: 'Ret.', houseCell: n => `Haus ${n}` },
+  zh: { title: '✦ 行星', planet: '行星', sign: '星座', degree: '度数', house: '宫位', retro: '逆行', houseCell: n => `第${n}宫`,
+        angles: '轴点', asc: '上升 ASC', dsc: '下降 DSC', mc: '天顶 MC', ic: '天底 IC' },
+  ja: { title: '✦ 惑星', planet: '惑星', sign: '星座', degree: '度数', house: 'ハウス', retro: '逆行', houseCell: n => `第${n}H`,
+        angles: '軸点', asc: 'AC', dsc: 'DC', mc: 'MC', ic: 'IC' },
+  en: { title: '✦ PLANETS', planet: 'Planet', sign: 'Sign', degree: 'Degree', house: 'House', retro: 'Rx', houseCell: n => `House ${n}`,
+        angles: 'Angles', asc: 'ASC', dsc: 'DSC', mc: 'MC', ic: 'IC' },
+  pt: { title: '✦ PLANETAS', planet: 'Planeta', sign: 'Signo', degree: 'Grau', house: 'Casa', retro: 'Ret.', houseCell: n => `Casa ${n}`,
+        angles: 'Ângulos', asc: 'ASC', dsc: 'DSC', mc: 'MC', ic: 'IC' },
+  es: { title: '✦ PLANETAS', planet: 'Planeta', sign: 'Signo', degree: 'Grado', house: 'Casa', retro: 'Ret.', houseCell: n => `Casa ${n}`,
+        angles: 'Ángulos', asc: 'ASC', dsc: 'DSC', mc: 'MC', ic: 'IC' },
+  fr: { title: '✦ PLANÈTES', planet: 'Planète', sign: 'Signe', degree: 'Degré', house: 'Maison', retro: 'Rét.', houseCell: n => `Maison ${n}`,
+        angles: 'Angles', asc: 'ASC', dsc: 'DSC', mc: 'MC', ic: 'IC' },
+  de: { title: '✦ PLANETEN', planet: 'Planet', sign: 'Zeichen', degree: 'Grad', house: 'Haus', retro: 'Ret.', houseCell: n => `Haus ${n}`,
+        angles: 'Winkel', asc: 'ASC', dsc: 'DSC', mc: 'MC', ic: 'IC' },
+}
+
+// Opposite sign lookup (ASC→DSC, MC→IC)
+const OPPOSITE_SIGN_EN = {
+  Aries: 'Libra', Taurus: 'Scorpio', Gemini: 'Sagittarius', Cancer: 'Capricorn',
+  Leo: 'Aquarius', Virgo: 'Pisces', Libra: 'Aries', Scorpio: 'Taurus',
+  Sagittarius: 'Gemini', Capricorn: 'Cancer', Aquarius: 'Leo', Pisces: 'Virgo',
 }
 
 function formatDegree(longitude) {
@@ -69,12 +83,48 @@ function formatDegree(longitude) {
   return `${deg}°${String(min).padStart(2, '0')}'`
 }
 
-export default function PlanetTable({ planets, language = 'zh', analyses = {} }) {
+function AngleRow({ label, cusp, language }) {
+  if (!cusp) return null
+  const L = UI_LABELS[language] || UI_LABELS['en']
+  const signEn = cusp.sign_original || cusp.sign
+  const signDisplay = SIGN_NAMES[language]?.[signEn] || cusp.sign
+  return (
+    <tr style={{ borderBottom: '1px solid #1a1a3a' }}>
+      <td className="px-2 py-1.5 sm:px-4 sm:py-2 font-medium">
+        <span className="mr-1 sm:mr-2 text-base" style={{ color: '#c9a84c' }}>⊕</span>
+        <span className="text-xs sm:text-sm" style={{ color: '#c9a84c' }}>{label}</span>
+      </td>
+      <td className="px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm">
+        <span className="mr-0.5 sm:mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
+        {signDisplay}
+      </td>
+      <td className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
+        {formatDegree(cusp.longitude)}
+      </td>
+      <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
+      <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
+    </tr>
+  )
+}
+
+export default function PlanetTable({ planets, language = 'zh', analyses = {}, ascendant, midheaven }) {
   if (!planets) return null
 
   const L = UI_LABELS[language] || UI_LABELS['en']
   const SKIP_PLANETS = new Set(['true_node', 'true_lilith', 'true_south_node'])
   const rows = Object.entries(planets).filter(([k]) => !SKIP_PLANETS.has(k))
+
+  // Derive DSC and IC from ASC/MC by flipping sign and adjusting longitude
+  const dsc = ascendant ? {
+    longitude: (ascendant.longitude + 180) % 360,
+    sign: SIGN_NAMES[language]?.[OPPOSITE_SIGN_EN[ascendant.sign_original || '']] || ascendant.sign,
+    sign_original: OPPOSITE_SIGN_EN[ascendant.sign_original || ''] || '',
+  } : null
+  const ic = midheaven ? {
+    longitude: (midheaven.longitude + 180) % 360,
+    sign: SIGN_NAMES[language]?.[OPPOSITE_SIGN_EN[midheaven.sign_original || '']] || midheaven.sign,
+    sign_original: OPPOSITE_SIGN_EN[midheaven.sign_original || ''] || '',
+  } : null
 
   return (
     <div className="rounded-xl overflow-hidden"
@@ -152,6 +202,19 @@ export default function PlanetTable({ planets, language = 'zh', analyses = {} })
                 </React.Fragment>
               )
             })}
+            {(ascendant || midheaven) && (
+              <>
+                <tr>
+                  <td colSpan={5} style={{ padding: '4px 12px', fontSize: '0.72rem', color: '#6666aa', letterSpacing: '0.1em', borderTop: '1px solid #2a2a5a', borderBottom: '1px solid #2a2a5a', background: '#0e0e22' }}>
+                    {L.angles}
+                  </td>
+                </tr>
+                <AngleRow label={L.asc} cusp={ascendant} language={language} />
+                <AngleRow label={L.dsc} cusp={dsc} language={language} />
+                <AngleRow label={L.mc} cusp={midheaven} language={language} />
+                <AngleRow label={L.ic} cusp={ic} language={language} />
+              </>
+            )}
           </tbody>
         </table>
       </div>
