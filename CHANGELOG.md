@@ -12,6 +12,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] - 2026-03-26
+
+### Added
+- **Gemini 模型自动 fallback** — 主模型 503/UNAVAILABLE 时自动按序尝试备用模型（3.1-flash-lite → 3-flash → 2.5-flash → 2.5-flash-lite）
+- **模型标签显示** — 行星解读、合盘解读、AI 对话结果上均显示实际使用的模型名（或"缓存"），方便对比不同模型的输出质量
+- **合盘完整星盘数据传入** — `/api/interpret/synastry` 现在接收并传递完整行星数据给 Gemini，提升分析深度
+
+### Fixed
+- **i18n** — `analyze_planets` 和 `analyze_synastry` 中行星名、星座名统一翻译为目标语言后再传入 Gemini
+
+---
+
 ## [0.7.0] - 2026-03-26
 
 ### Added
