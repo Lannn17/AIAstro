@@ -1476,6 +1476,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             system_instruction=_SYSTEM_PROMPT_UNIFIED,
             response_mime_type="application/json",
             temperature=0.3,
+            max_output_tokens=8192,
         ),
     )
     try:
@@ -1483,6 +1484,43 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     except Exception as e:
         print(f"[planets] JSON parse error: {e}")
         return {"analyses": {}, "sources": []}
+
+    # Detect any planet keys Gemini silently dropped (output token pressure)
+    missing_keys = [k for k in planet_keys if k not in parsed]
+    if missing_keys:
+        print(f"[planets] Gemini dropped {missing_keys}, retrying for missing planets", flush=True)
+        missing_lines = [l for l in lines if any(f"(key: {k})" in l for k in missing_keys)]
+        missing_entries = ',\n  '.join(f'"{k}": "..."' for k in missing_keys)
+        retry_prompt = f"""请为以下本命盘行星位置生成占星解读，仅针对列出的行星。
+
+上升星座：{asc_sign}
+
+行星位置：
+{chr(10).join(missing_lines)}
+
+宫位起点星座：
+{house_summary}
+
+主要相位：
+{aspect_summary}
+
+每颗行星 80-120 字，专业简洁。以 JSON 格式返回：
+{{\n  {missing_entries}\n}}"""
+        try:
+            retry_resp = client.models.generate_content(
+                model=GENERATE_MODEL,
+                contents=retry_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT_UNIFIED,
+                    response_mime_type="application/json",
+                    temperature=0.3,
+                    max_output_tokens=4096,
+                ),
+            )
+            retry_parsed = _parse_json(retry_resp.text)
+            parsed.update(retry_parsed)
+        except Exception as e:
+            print(f"[planets] retry for missing planets failed: {e}", flush=True)
 
     source_refs = parsed.pop("source_refs", {}) or {}
     rag_sources = []
