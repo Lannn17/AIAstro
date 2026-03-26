@@ -965,6 +965,19 @@ def analyze_rectification(
             + "\n\n".join(parts)
         )
 
+    candidate_json_items = []
+    for i, t in enumerate(top3, 1):
+        asc = t.get('asc_sign', '')
+        asc_str = f"，上升{asc}" if asc else ''
+        candidate_json_items.append(
+            f'    {{\n'
+            f'      "rank": {i},\n'
+            f'      "reason": "仅分析 {t["hour"]:02d}:{t["minute"]:02d}{asc_str} 这个候选时间本身：'
+            f'该上升星座的性格特征、哪些宫位或角点在用户事件日期被行运激活、与事件模式的吻合或不吻合之处（100-150字，不要提及其他候选时间）"\n'
+            f'    }}'
+        )
+    candidates_template = ",\n".join(candidate_json_items)
+
     prompt = f"""出生时间校对结果：
 
 {chart_summary}
@@ -976,21 +989,10 @@ def analyze_rectification(
 {chr(10).join(top3_lines)}
 
 ---
-请以 JSON 格式返回分析结果，结构如下：
+请以 JSON 格式返回分析结果。每个 candidates 条目只分析自身对应的那个候选时间，不要在 reason 中提及或比较其他候选时间。结构如下：
 {{
   "candidates": [
-    {{
-      "rank": 1,
-      "reason": "候选1的具体占星理由：上升星座特征、哪些宫位或角点在事件日期被行运/推运激活、与用户事件模式的吻合度（100-150字）"
-    }},
-    {{
-      "rank": 2,
-      "reason": "候选2的具体占星理由（100-150字）"
-    }},
-    {{
-      "rank": 3,
-      "reason": "候选3的具体占星理由（100-150字）"
-    }}
+{candidates_template}
   ],
   "overall": "综合推荐与验证建议：明确指出最推荐哪个候选及原因，并给出用户可用其他事件进一步验证的方法（150-200字）"
 }}{rag_section}"""
