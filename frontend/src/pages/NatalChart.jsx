@@ -949,7 +949,7 @@ export default function NatalChart() {
             </div>
           )}
 
-          {result && (!savedId || editingChartId) && !loading && svgContent && !isGuest && (
+          {result && (!savedId || editingChartId) && !loading && !isGuest && (
             editingChartId ? (
               <div className="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button
