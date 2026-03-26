@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
+import { useInterpret } from '../hooks/useInterpret'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -62,11 +63,10 @@ export default function Transits() {
   const [savedCharts, setSavedCharts]     = useState([])
   const [selectedId, setSelectedId]       = useState('')
   const [selectedChart, setSelectedChart] = useState(null)
-  const [queryDate, setQueryDate]         = useState(todayStr)
-  const [loading, setLoading]             = useState(false)
-  const [error, setError]                 = useState(null)
-  const [result, setResult]               = useState(null)   // {active_transits, overall}
-  const [forceRefresh, setForceRefresh]   = useState(false)
+  const [queryDate, setQueryDate]   = useState(todayStr)
+  const [chartError, setChartError] = useState(null)
+  const [forceRefresh, setForceRefresh] = useState(false)
+  const transit = useInterpret('/api/interpret/transits_full')
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -78,8 +78,8 @@ export default function Transits() {
 
   async function handleSelectChart(id) {
     setSelectedId(id)
-    setResult(null)
-    setError(null)
+    transit.reset()
+    setChartError(null)
     if (!id) { setSelectedChart(null); return }
 
     // 会话盘：value 格式为 "session:<id>"
@@ -102,19 +102,14 @@ export default function Transits() {
 
     // DB 星盘
     try {
-      const headers = authHeaders()
-      const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers })
+      const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
       if (r.ok) setSelectedChart(await r.json())
-    } catch { setError('加载星盘失败') }
+    } catch { setChartError('加载星盘失败') }
   }
 
   async function generate(force = false) {
     if (!selectedChart) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
     setForceRefresh(force)
-
     const c = selectedChart
     const natalInfo = {
       year: c.birth_year, month: c.birth_month, day: c.birth_day,
@@ -125,30 +120,14 @@ export default function Transits() {
     const natalChartData = c.chart_data
       ? (typeof c.chart_data === 'string' ? JSON.parse(c.chart_data) : c.chart_data)
       : {}
-
-    try {
-      const r = await fetch(`${API_BASE}/api/interpret/transits_full`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chart_id:         selectedId?.startsWith('session:') ? 0 : Number(selectedId),
-          natal_info:       natalInfo,
-          natal_chart_data: natalChartData,
-          query_date:       queryDate,
-          language:         'zh',
-          force_refresh:    force,
-        }),
-      })
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}))
-        throw new Error(err.detail || `错误 ${r.status}`)
-      }
-      setResult(await r.json())
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+    await transit.run({
+      chart_id:         selectedId?.startsWith('session:') ? 0 : Number(selectedId),
+      natal_info:       natalInfo,
+      natal_chart_data: natalChartData,
+      query_date:       queryDate,
+      language:         'zh',
+      force_refresh:    force,
+    })
   }
 
   return (
@@ -207,38 +186,40 @@ export default function Transits() {
 
             <button
               onClick={() => generate(false)}
-              disabled={!selectedChart || loading}
+              disabled={!selectedChart || transit.loading}
               style={{
                 width: '100%', marginTop: '18px', padding: '10px',
-                background: selectedChart && !loading ? '#c9a84c' : '#1e1e3a',
-                color: selectedChart && !loading ? '#0a0a18' : '#3a3a5a',
+                background: selectedChart && !transit.loading ? '#c9a84c' : '#1e1e3a',
+                color: selectedChart && !transit.loading ? '#0a0a18' : '#3a3a5a',
                 border: 'none', borderRadius: '8px', fontWeight: 700,
-                cursor: selectedChart && !loading ? 'pointer' : 'not-allowed',
+                cursor: selectedChart && !transit.loading ? 'pointer' : 'not-allowed',
                 fontSize: '0.9rem', transition: 'background 0.2s',
               }}
             >
-              {loading && !forceRefresh ? '分析中…' : '生成行运分析'}
+              {transit.loading && !forceRefresh ? '分析中…' : '生成行运分析'}
             </button>
 
-            {result && (
+            {transit.result && (
               <button
                 onClick={() => generate(true)}
-                disabled={loading}
+                disabled={transit.loading}
                 style={{
                   width: '100%', marginTop: '8px', padding: '8px',
                   background: 'transparent',
-                  color: loading ? '#3a3a5a' : '#8888aa',
+                  color: transit.loading ? '#3a3a5a' : '#8888aa',
                   border: '1px solid #2a2a5a', borderRadius: '8px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
+                  cursor: transit.loading ? 'not-allowed' : 'pointer',
                   fontSize: '0.8rem',
                 }}
               >
-                {loading && forceRefresh ? '重新生成中…' : '↺ 重新生成 AI 解读'}
+                {transit.loading && forceRefresh ? '重新生成中…' : '↺ 重新生成 AI 解读'}
               </button>
             )}
 
-            {error && (
-              <p style={{ color: '#ff6666', fontSize: '0.8rem', marginTop: '10px' }}>{error}</p>
+            {(chartError || transit.error) && (
+              <p style={{ color: '#ff6666', fontSize: '0.8rem', marginTop: '10px' }}>
+                {chartError || transit.error}
+              </p>
             )}
           </div>
         </div>
@@ -247,7 +228,7 @@ export default function Transits() {
         <div className="transits-results">
 
           {/* 空态 */}
-          {!result && !loading && (
+          {!transit.result && !transit.loading && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               height: '320px', background: '#12122a',
@@ -258,7 +239,7 @@ export default function Transits() {
           )}
 
           {/* 加载态 */}
-          {loading && (
+          {transit.loading && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', height: '320px', gap: '16px',
@@ -272,14 +253,14 @@ export default function Transits() {
           )}
 
           {/* 结果 */}
-          {result && !loading && (
+          {transit.result && !transit.loading && (
             <>
               {/* 摘要行 */}
               <div style={{ color: '#555577', fontSize: '0.8rem', marginBottom: '16px' }}>
-                {queryDate} · 发现 {result.active_transits.length} 个活跃相位（容许度 ≤ 1°）
+                {queryDate} · 发现 {transit.result.active_transits.length} 个活跃相位（容许度 ≤ 1°）
               </div>
 
-              {result.active_transits.length === 0 && (
+              {transit.result.active_transits.length === 0 && (
                 <div style={{
                   background: '#12122a', border: '1px solid #2a2a5a', borderRadius: '12px',
                   padding: '40px', textAlign: 'center', color: '#555577',
@@ -289,14 +270,14 @@ export default function Transits() {
               )}
 
               {/* 逐相位卡片：新行运在前，缓存行运在后 */}
-              {[...result.active_transits]
+              {[...transit.result.active_transits]
                 .sort((a, b) => (a.is_new === b.is_new ? 0 : a.is_new ? -1 : 1))
                 .map(t => (
                   <TransitCard key={t.key} transit={t} />
                 ))}
 
               {/* 整体报告 */}
-              {result.overall && (
+              {transit.result.overall && (
                 <div style={{
                   background: '#12122a', border: '1px solid #3a3a6a',
                   borderRadius: '12px', padding: '24px', marginTop: '8px',
@@ -309,7 +290,7 @@ export default function Transits() {
                     color: '#d0d0e0', fontSize: '0.9rem', lineHeight: '2',
                     whiteSpace: 'pre-wrap',
                   }}>
-                    {result.overall}
+                    {transit.result.overall}
                   </div>
                 </div>
               )}

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import LocationSearch from '../components/LocationSearch'
+import AIPanel from '../components/AIPanel'
+import { useInterpret } from '../hooks/useInterpret'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 
@@ -277,8 +279,7 @@ export default function Synastry() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
-  const [interpretation, setInterpretation] = useState(null)
-  const [interpLoading, setInterpLoading] = useState(false)
+  const interp = useInterpret('/api/interpret/synastry')
 
   const canCalculate = colReady(col1) && colReady(col2)
 
@@ -302,7 +303,7 @@ export default function Synastry() {
     setLoading(true)
     setResult(null)
     setSvgContent(null)
-    setInterpretation(null)
+    interp.reset()
     try {
       const syRes = await fetch(`${API_BASE}/api/synastry`, {
         method: 'POST',
@@ -332,26 +333,13 @@ export default function Synastry() {
     }
   }
 
-  async function handleInterpret() {
-    setInterpLoading(true)
-    try {
-      if (!result?.aspects) return
-      const res = await fetch(`${API_BASE}/api/interpret/synastry`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chart1_summary: { name: col1.formData.name },
-          chart2_summary: { name: col2.formData.name },
-          aspects: result.aspects,
-        }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      setInterpretation(await res.json())
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setInterpLoading(false)
-    }
+  function handleInterpret() {
+    if (!result?.aspects) return
+    interp.run({
+      chart1_summary: { name: col1.formData.name },
+      chart2_summary: { name: col2.formData.name },
+      aspects: result.aspects,
+    })
   }
 
   return (
@@ -463,31 +451,12 @@ export default function Synastry() {
 
       {/* AI interpretation */}
       {result && (
-        <div style={{ marginTop: '24px' }}>
-          <button
-            onClick={handleInterpret}
-            disabled={interpLoading}
-            style={{
-              padding: '8px 20px',
-              borderRadius: '8px',
-              cursor: interpLoading ? 'not-allowed' : 'pointer',
-              backgroundColor: '#2a2a5a',
-              border: '1px solid #4a4a8a',
-              color: '#c9a84c',
-              fontSize: '0.85rem',
-            }}
-          >
-            {interpLoading ? '生成中…' : '生成 AI 解读'}
-          </button>
-
-          {interpretation && (
-            <div style={{ marginTop: '16px', color: '#ccc', lineHeight: 1.7, fontSize: '0.88rem' }}>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                {interpretation.answer}
-              </pre>
-            </div>
-          )}
-        </div>
+        <AIPanel
+          onGenerate={handleInterpret}
+          loading={interp.loading}
+          result={interp.result}
+          error={interp.error}
+        />
       )}
     </div>
   )

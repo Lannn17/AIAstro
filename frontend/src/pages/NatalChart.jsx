@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useInterpret } from '../hooks/useInterpret'
 import ReactMarkdown from 'react-markdown'
 import ChartForm from '../components/ChartForm'
 import PlanetTable from '../components/PlanetTable'
@@ -108,8 +109,7 @@ export default function NatalChart() {
 
   // Planet interpretations
   const [planetAnalyses, setPlanetAnalyses] = useState({})
-  const [analysesLoading, setAnalysesLoading] = useState(false)
-  const [analysesError, setAnalysesError] = useState(null)
+  const planetInterp = useInterpret('/api/interpret_planets')
 
   const [rectifyOpen, setRectifyOpen] = useState(false)
   const [rectifyEvents, setRectifyEvents] = useState([])
@@ -212,7 +212,7 @@ export default function NatalChart() {
     setSvgContent(null)
     setSavedId(null)
     setPlanetAnalyses({})
-    setAnalysesError(null)
+    planetInterp.reset()
     setLastFormData(formData)
     setLastLocationName(locationName)
     setMessages([])
@@ -263,7 +263,7 @@ export default function NatalChart() {
     setSvgContent(null)
     setSavedId(null)
     setPlanetAnalyses({})
-    setAnalysesError(null)
+    planetInterp.reset()
     setLastFormData(formData)
     setLastLocationName(locationName)
     setMessages([])
@@ -496,30 +496,12 @@ export default function NatalChart() {
     const data = (chartData && chartData.planets) ? chartData : result
     const id = chartId !== undefined ? chartId : savedId
     if (!data) return
-    setAnalysesLoading(true)
-    setAnalysesError(null)
-    try {
-      const res = await fetch(`${API_BASE}/api/interpret_planets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          natal_chart: data,
-          language: data.input_data?.language || 'zh',
-          chart_id: id || null,
-        }),
-      })
-      if (res.ok) {
-        const resp = await res.json()
-        setPlanetAnalyses(resp.analyses || {})
-      } else {
-        const err = await res.json().catch(() => ({}))
-        setAnalysesError(err.detail || `请求失败 (${res.status})`)
-      }
-    } catch (e) {
-      console.error(e)
-      setAnalysesError('网络错误，请稍后重试')
-    }
-    finally { setAnalysesLoading(false) }
+    const json = await planetInterp.run({
+      natal_chart: data,
+      language: data.input_data?.language || 'zh',
+      chart_id: id || null,
+    })
+    if (json?.analyses) setPlanetAnalyses(json.analyses)
   }
 
   async function handleRectify() {
@@ -1021,22 +1003,22 @@ export default function NatalChart() {
                   {svgContent && <ChartWheel svgContent={svgContent} language={result.input_data?.language} />}
                   <PlanetTable planets={result.planets} language={result.input_data?.language} analyses={planetAnalyses} />
                   {/* 行星解读按钮 / 综合概述 */}
-                  {analysesError && (
+                  {planetInterp.error && (
                     <div style={{ color: '#e07070', fontSize: '0.82rem', padding: '8px 12px', background: '#1a0f0f', border: '1px solid #5a2a2a', borderRadius: '6px' }}>
-                      ✕ {analysesError}
+                      ✕ {planetInterp.error}
                     </div>
                   )}
                   {!Object.keys(planetAnalyses).length ? (
-                    <button onClick={() => handleInterpretPlanets()} disabled={analysesLoading}
+                    <button onClick={() => handleInterpretPlanets()} disabled={planetInterp.loading}
                       style={{
                         width: '100%', padding: '11px',
-                        background: analysesLoading ? '#1e1e3a' : 'linear-gradient(135deg, #2a1a4a, #1a1a3a)',
+                        background: planetInterp.loading ? '#1e1e3a' : 'linear-gradient(135deg, #2a1a4a, #1a1a3a)',
                         border: '1px solid #7a6aaa', borderRadius: '8px',
-                        color: analysesLoading ? '#5a5a8a' : '#c9a84c',
-                        fontWeight: 700, fontSize: '0.88rem', cursor: analysesLoading ? 'not-allowed' : 'pointer',
+                        color: planetInterp.loading ? '#5a5a8a' : '#c9a84c',
+                        fontWeight: 700, fontSize: '0.88rem', cursor: planetInterp.loading ? 'not-allowed' : 'pointer',
                         letterSpacing: '0.05em',
                       }}>
-                      {analysesLoading ? '✦ 解读生成中… 约 10-20 秒' : '✦ 生成行星解读'}
+                      {planetInterp.loading ? '✦ 解读生成中… 约 10-20 秒' : '✦ 生成行星解读'}
                     </button>
                   ) : planetAnalyses.overall ? (
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
