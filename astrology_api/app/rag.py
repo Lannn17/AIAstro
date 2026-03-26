@@ -935,9 +935,14 @@ def analyze_rectification(
         etype = _EVENT_TYPE_ZH.get(ev.get('event_type', 'other'), ev.get('event_type', ''))
         w = int(ev.get('weight', 1))
         wlabel = ['', '一般', '重要', '非常重要'][min(w, 3)]
-        event_lines.append(
-            f"  {ev['year']}/{ev['month']:02d}/{ev['day']:02d}  {etype}（{wlabel}）"
+        m = ev.get('month')
+        d = ev.get('day')
+        date_str = (
+            f"{ev['year']}/{m:02d}/{d:02d}" if m and d
+            else f"{ev['year']}/{m:02d}/xx" if m
+            else f"{ev['year']}/xx/xx"
         )
+        event_lines.append(f"  {date_str}  {etype}（{wlabel}）")
 
     top3_lines = []
     for i, t in enumerate(top3, 1):

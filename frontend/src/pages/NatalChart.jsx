@@ -1298,6 +1298,7 @@ export default function NatalChart() {
                       <div style={{ color: '#9a8acc', fontSize: '0.78rem', marginBottom: '10px' }}>
                         哪些事件从根本上改变了你的人生方向或自我认知？（通常 1–3 个）
                       </div>
+                      <div style={{ maxHeight: '220px', overflowY: 'auto', paddingRight: '2px' }}>
                       {validEvents.map(ev => {
                         const gi = rectifyEvents.indexOf(ev)
                         const domain = RECTIFY_DOMAINS.find(d => d.id === ev.domainId)
@@ -1314,6 +1315,7 @@ export default function NatalChart() {
                           </div>
                         )
                       })}
+                      </div>
                       {tpCount > 4 && (
                         <div style={{ color: '#c9a84c', fontSize: '0.78rem', marginTop: '8px', padding: '6px 10px', background: '#1a1600', borderRadius: '6px', border: '1px solid #3a3000' }}>
                           转折点越集中，校对越精准。确定这些都是根本性的转变吗？
