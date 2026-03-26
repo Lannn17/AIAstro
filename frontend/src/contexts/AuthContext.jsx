@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
 
 const AuthContext = createContext(null)
 
@@ -7,14 +7,10 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
-  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(
+    () => !localStorage.getItem('auth_token') && localStorage.getItem('guest_mode') !== 'true'
+  )
   const [sessionKey, setSessionKey] = useState(0)
-
-  useEffect(() => {
-    if (!token && !isGuest) {
-      setShowLoginModal(true)
-    }
-  }, [])
 
   async function login(username, password) {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -76,6 +72,7 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext)
 }

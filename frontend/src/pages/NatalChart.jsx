@@ -489,7 +489,7 @@ export default function NatalChart() {
         const resp = await res.json()
         if (resp.analyses) setPlanetAnalyses(resp.analyses)
       }
-    } catch (e) { /* 静默失败 */ }
+    } catch { /* silent */ }
   }
 
   async function handleInterpretPlanets(chartData, chartId) {
@@ -555,7 +555,7 @@ export default function NatalChart() {
         body: JSON.stringify({ asc_signs: signs }),
       })
       if (res.ok) setAscQuizData((await res.json()).questions)
-    } catch {}
+    } catch { /* silent */ }
     finally { setAscQuizLoading(false) }
   }
 
@@ -601,14 +601,10 @@ export default function NatalChart() {
         }),
       })
       if (res.ok) setConfidenceResult(await res.json())
-    } catch {}
+    } catch { /* silent */ }
     finally { setConfidenceLoading(false) }
   }
 
-  function addEvent() {
-    if (rectifyEvents.length >= 5) return
-    setRectifyEvents(prev => [...prev, { year: '', month: '', day: '', event_type: 'other', weight: 1 }])
-  }
   function removeEvent(i) { setRectifyEvents(prev => prev.filter((_, idx) => idx !== i)) }
   function updateEvent(i, field, value) { setRectifyEvents(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e)) }
 

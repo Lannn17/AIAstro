@@ -47,6 +47,7 @@ export function ChartSessionProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useChartSession() {
   return useContext(ChartSessionContext)
 }
