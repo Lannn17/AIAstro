@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import requests
@@ -55,6 +56,15 @@ CREATE TABLE IF NOT EXISTS planet_analysis_cache (
     chart_hash TEXT NOT NULL,
     analyses TEXT NOT NULL,
     created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
+_CREATE_SYNASTRY_CACHE = """
+CREATE TABLE IF NOT EXISTS synastry_cache (
+    aspects_hash TEXT PRIMARY KEY,
+    answer       TEXT NOT NULL,
+    sources      TEXT NOT NULL,
+    created_at   TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 )
 """
 
@@ -182,7 +192,7 @@ def _has_column(table: str, column: str) -> bool:
 
 def create_tables():
     for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL,
-                _CREATE_PLANET_CACHE, _CREATE_QUERY_ANALYTICS]:
+                _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -420,3 +430,37 @@ def db_log_query_analytics(query_hash: str, label: str,
             _sqlite_write(sql, params)
     except Exception as e:
         print(f"[Analytics] log failed (non-fatal): {e}", flush=True)
+
+
+# ── Synastry cache ─────────────────────────────────────────────────
+
+def db_get_synastry_cache(aspects_hash: str) -> dict | None:
+    sql = "SELECT answer, sources FROM synastry_cache WHERE aspects_hash = ?"
+    try:
+        if USE_TURSO:
+            rows = _to_dicts(_turso_exec(sql, [aspects_hash]))
+        else:
+            with sqlite3.connect(_db_path) as conn:
+                rows = [{"answer": r[0], "sources": r[1]}
+                        for r in conn.execute(sql, [aspects_hash]).fetchall()]
+        if rows:
+            row = rows[0]
+            return {"answer": row["answer"], "sources": json.loads(row["sources"])}
+    except Exception as e:
+        print(f"[DB] synastry cache get failed: {e}", flush=True)
+    return None
+
+
+def db_save_synastry_cache(aspects_hash: str, answer: str, sources: list):
+    sql = """
+        INSERT OR REPLACE INTO synastry_cache (aspects_hash, answer, sources)
+        VALUES (?, ?, ?)
+    """
+    params = [aspects_hash, answer, json.dumps(sources, ensure_ascii=False)]
+    try:
+        if USE_TURSO:
+            _turso_exec(sql, params)
+        else:
+            _sqlite_write(sql, params)
+    except Exception as e:
+        print(f"[DB] synastry cache save failed: {e}", flush=True)

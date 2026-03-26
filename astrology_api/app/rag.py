@@ -443,7 +443,32 @@ def _clean_source_name(raw: str) -> str:
     return name.strip()
 
 
-def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
+_REFS_DELIMITER = "===引用概括==="
+
+_REFS_INSTRUCTION = (
+    "\n\n如引用了上述参考，请在正文末尾另起一行写 ===引用概括===，"
+    "然后每行一条 [参考N] 一句简洁中文（20-40字）说明从该参考获取的核心观点，"
+    "未引用的参考无需列出。"
+)
+
+
+def _parse_answer_with_refs(raw: str, num_chunks: int) -> tuple[str, dict]:
+    """Split Gemini output on ===引用概括=== into (main_answer, {1-based index: summary_zh}).
+    Returns (raw, {}) if delimiter is absent."""
+    if _REFS_DELIMITER not in raw:
+        return raw.strip(), {}
+    main, _, refs_part = raw.partition(_REFS_DELIMITER)
+    summaries: dict[int, str] = {}
+    for line in refs_part.strip().split("\n"):
+        m = re.match(r'\[参考(\d+)\]\s*(.+)', line.strip())
+        if m:
+            idx = int(m.group(1))
+            if 1 <= idx <= num_chunks:
+                summaries[idx] = m.group(2).strip()
+    return main.strip(), summaries
+
+
+def _detect_citations(answer: str, chunks: list[dict], summaries: dict = None) -> list[dict]:
     """
     检测 AI 回答中是否引用了各 chunk 的来源书名。
     策略1：书名中长度>2的英文词子串匹配。
@@ -459,44 +484,75 @@ def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
         cited = cited_by_name or cited_by_ref
         print(f"[Citation] {name!r} by_name={cited_by_name} by_ref={cited_by_ref}", flush=True)
         result.append({
-            "source": c["source"],
-            "score":  round(c["score"], 3),
-            "cited":  cited,
-            "text":   c["text"],
+            "source":     c["source"],
+            "score":      round(c["score"], 3),
+            "cited":      cited,
+            "text":       c["text"],
+            "summary_zh": (summaries or {}).get(i, ""),
         })
     return result
+
+
+def _build_rag_section(chunks: list[dict]) -> str:
+    """将检索到的书籍片段拼成 prompt 追加块（含引用概括指令）。chunks 为空时返回空串。"""
+    if not chunks:
+        return ""
+    parts = [
+        f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+        for i, c in enumerate(chunks, 1)
+    ]
+    return (
+        "\n\n---\n以下是检索到的占星书籍片段，若与问题相关可引用作为佐证（请注明书名），不相关可忽略：\n\n"
+        + "\n\n".join(parts)
+        + _REFS_INSTRUCTION
+    )
+
+
+def rag_generate(query: str, prompt: str, *, k: int = 5, temperature: float = 0.5) -> tuple[str, list]:
+    """
+    通用 RAG 增强生成（所有业务模块的统一入口）：
+      retrieve → _build_rag_section → Gemini 生成
+      → _parse_answer_with_refs → _detect_citations
+    返回 (answer, sources)
+    """
+    _load()
+    chunks = retrieve(query, k=k)
+    full_prompt = prompt + _build_rag_section(chunks)
+    response = client.models.generate_content(
+        model=GENERATE_MODEL,
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT_UNIFIED,
+            temperature=temperature,
+        ),
+    )
+    finish = response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN"
+    if finish != "STOP":
+        print(f"[RAG] rag_generate finish_reason={finish}")
+    answer, summaries = _parse_answer_with_refs(response.text, len(chunks))
+    sources = _detect_citations(answer, chunks, summaries)
+    return answer, sources
 
 
 def chat_with_chart(query: str, chart_data: dict, k: int = 5,
                     history: list[dict] = None, summary: str = "") -> dict:
     """
     统一对话：AI 知识为主，RAG 书籍片段为可选佐证。
-    prompt 顺序：星盘 → 问题 → 书籍参考（可选）
-    始终返回来源及引用检测结果，供前端评估 RAG 质量。
+    使用 _build_rag_section 构建知识增强块，通过 _build_contents 注入对话历史。
     """
     _load()
     chunks = retrieve(query, k=k)
     chart_summary = format_chart_summary(chart_data)
 
-    context_parts = []
-    for i, c in enumerate(chunks, 1):
-        name = _clean_source_name(c["source"])
-        context_parts.append(f"[参考{i} · {name}]\n{c['text']}")
-    rag_section = "\n\n".join(context_parts)
-
-    prompt = f"""用户本命盘：
+    base_prompt = f"""用户本命盘：
 
 {chart_summary}
 
 ---
-用户问题：{query}
+用户问题：{query}"""
 
----
-以下是检索到的占星书籍片段，若与问题相关可引用作为佐证（请注明书名），不相关可忽略：
-
-{rag_section}"""
-
-    contents = _build_contents(history or [], prompt, summary=summary)
+    full_prompt = base_prompt + _build_rag_section(chunks)
+    contents = _build_contents(history or [], full_prompt, summary=summary)
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=contents,
@@ -510,9 +566,10 @@ def chat_with_chart(query: str, chart_data: dict, k: int = 5,
     if finish != "STOP":
         print(f"[RAG] chat_with_chart finish_reason={finish} — output may be truncated")
 
-    sources = _detect_citations(response.text, chunks)
+    answer, summaries = _parse_answer_with_refs(response.text, len(chunks))
+    sources = _detect_citations(answer, chunks, summaries)
     return {
-        "answer":     response.text,
+        "answer":     answer,
         "sources":    sources,
         "index_used": _index_source,
     }
@@ -551,8 +608,6 @@ def analyze_transits(
         desc_parts.append(f"{t_planet} {aspect} natal {n_planet}")
     query = "transit " + ", ".join(desc_parts) if desc_parts else "transit aspects interpretation"
 
-    chunks = retrieve(query, k=5)
-
     # 本命盘摘要（保留行星位置+宫位主星，仅截断相位列表以控制 prompt 大小）
     chart_summary = format_chart_summary(natal_chart, max_aspects=10) if natal_chart else "（无本命盘数据）"
 
@@ -582,19 +637,6 @@ def analyze_transits(
             f" (容许度{orb:.1f}° {applying})"
         )
 
-    # RAG 书籍参考
-    rag_section = ""
-    if chunks:
-        parts = [
-            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
-            for i, c in enumerate(chunks, 1)
-        ]
-        rag_section = (
-            "\n\n---\n以下是检索到的占星书籍参考片段，若与当前行运相关可引用作为佐证"
-            "（注明书名），不相关可忽略：\n\n"
-            + "\n\n".join(parts)
-        )
-
     prompt = f"""行运日期：{transit_date}
 
 {chart_summary}
@@ -610,20 +652,11 @@ def analyze_transits(
 1. 整体能量与基调
 2. 重点相位的具体影响（优先分析容许度≤2°的相位）
 3. 机遇与挑战
-4. 建议关注的事项{rag_section}"""
+4. 建议关注的事项"""
 
-    response = client.models.generate_content(
-        model=GENERATE_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT_UNIFIED,
-            temperature=0.5,
-        ),
-    )
-
-    sources = _detect_citations(response.text, chunks) if chunks else []
+    answer, sources = rag_generate(query, prompt)
     return {
-        "answer":     response.text,
+        "answer":     answer,
         "sources":    sources,
         "index_used": _index_source,
     }
@@ -685,7 +718,27 @@ def analyze_active_transits_full(
             return {"aspects": aspects, "overall": overall}
         # overall 未缓存 → 继续调用 AI（仅生成 overall）
 
-    # ── 4. 构建 prompt ────────────────────────────────────────────────
+    # ── 4. RAG 检索 ───────────────────────────────────────────────────
+    _load()
+    rag_query_parts = [
+        f"transit {t['transit_planet_zh']} {t['aspect']} {t['natal_planet_zh']}"
+        for t in sorted(active_transits, key=lambda x: -x.get("priority", 0))[:3]
+    ]
+    rag_query = ", ".join(rag_query_parts) if rag_query_parts else "transit aspects interpretation"
+    rag_chunks = retrieve(rag_query, k=5)
+    rag_context = ""
+    if rag_chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(rag_chunks, 1)
+        ]
+        rag_context = (
+            "\n\n【参考书籍片段（可选）】\n"
+            "以下占星书籍内容可作为分析佐证，若引用请在 source_refs 中按编号注明中文概括：\n\n"
+            + "\n\n".join(parts)
+        )
+
+    # ── 5. 构建 prompt ────────────────────────────────────────────────
     chart_summary = format_chart_summary(natal_chart, max_aspects=10)
 
     def _line(i, t):
@@ -700,6 +753,10 @@ def analyze_active_transits_full(
 
     all_block = "\n\n".join(_line(i, t) for i, t in enumerate(active_transits, 1))
 
+    source_refs_schema = (
+        '"source_refs": {"<参考编号>": "<20-40字中文概括>"}  // 仅填写实际引用的编号，未引用可省略或留空'
+    )
+
     if new_transits:
         new_block = "\n\n".join(_line(i, t) for i, t in enumerate(new_transits, 1))
         prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
@@ -712,7 +769,7 @@ def analyze_active_transits_full(
 
 ━━━ 以下行运需要新的逐相位解读 ━━━
 
-{new_block}
+{new_block}{rag_context}
 
 【分析要求】
 
@@ -738,7 +795,8 @@ JSON 格式返回（aspects 只包含"需要新解读"的行运）：
       "themes": ["<主题1>", "<主题2>"]
     }}
   ],
-  "overall": "<整体综述>"
+  "overall": "<整体综述>",
+  {source_refs_schema}
 }}
 """
     else:
@@ -749,7 +807,7 @@ JSON 格式返回（aspects 只包含"需要新解读"的行运）：
 
 ━━━ 当前所有活跃行运（{query_date}） ━━━
 
-{all_block}
+{all_block}{rag_context}
 
 请提供整体行运综述（约 300-400 字）：
 - 开头先点出当前阶段主要影响的人生命题（1-2 句）
@@ -758,10 +816,10 @@ JSON 格式返回（aspects 只包含"需要新解读"的行运）：
 - 语言自然，避免机械罗列
 
 JSON 格式返回：
-{{"overall": "<整体综述>"}}
+{{"overall": "<整体综述>", {source_refs_schema}}}
 """
 
-    # ── 5. 调用 Gemini ────────────────────────────────────────────────
+    # ── 6. 调用 Gemini ────────────────────────────────────────────────
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=prompt,
@@ -781,7 +839,20 @@ JSON 格式返回：
         print(f"[RAG] JSON parse error: {e}")
         ai_result = {"aspects": [], "overall": response.text}
 
-    # ── 6. 写入 DB 缓存 ───────────────────────────────────────────────
+    # ── 7. 构建 RAG sources ───────────────────────────────────────────
+    source_refs = ai_result.get("source_refs", {})
+    rag_sources = []
+    for i, c in enumerate(rag_chunks, 1):
+        summary_zh = source_refs.get(str(i), "")
+        rag_sources.append({
+            "source":     c["source"],
+            "score":      round(c["score"], 3),
+            "cited":      bool(summary_zh),
+            "text":       c["text"],
+            "summary_zh": summary_zh,
+        })
+
+    # ── 8. 写入 DB 缓存 ───────────────────────────────────────────────
     new_map: dict[str, dict] = {}
     for a in ai_result.get("aspects", []):
         key = a.get("key", "")
@@ -803,7 +874,7 @@ JSON 格式返回：
     if overall:
         db_save_overall_cache(chart_id, set_hash, overall)
 
-    # ── 7. 合并返回 ───────────────────────────────────────────────────
+    # ── 9. 合并返回 ───────────────────────────────────────────────────
     all_aspects = []
     for t in active_transits:
         key = t["key"]
@@ -821,7 +892,12 @@ JSON 格式返回：
         else:
             all_aspects.append({"key": key, "analysis": "", "tone": "", "themes": [], "is_new": True})
 
-    return {"aspects": all_aspects, "overall": overall}
+    return {
+        "aspects":     all_aspects,
+        "overall":     overall,
+        "sources":     rag_sources,
+        "index_used":  _index_source,
+    }
 
 
 # ── 出生时间校对解读 ───────────────────────────────────────────────
@@ -1217,7 +1293,9 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
         '    "love": "...",\n'
         '    "wealth": "...",\n'
         '    "health": "..."\n'
-        '  }\n}'
+        '  },\n'
+        '  "source_refs": {"<参考编号>": "<20-40字中文概括>"}  // 仅填写实际引用的编号\n'
+        '}'
     )
 
     # 宫位守星表（第N宫所在星座 → 该星座守护星）
@@ -1248,15 +1326,22 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     if chart_facts:
         facts_section = '\n\n【规则检测到的确定性事实（必须体现在 tags 中）】\n' + '\n'.join(f'- {f}' for f in chart_facts)
 
-    # 尝试从 Qdrant 检索相关片段作为参考
+    # RAG 检索（JSON 模式用 source_refs 字段标注引用）
+    _load()
     try:
-        chunks = retrieve(f"行星星座宫位解读 {asc_sign}上升", k=3)
-        rag_section = ''
-        if chunks:
-            parts = [f"[参考{i} · {c['source']}]\n{c['text']}" for i, c in enumerate(chunks, 1)]
-            rag_section = '\n\n---\n参考书籍片段（可选引用）：\n' + '\n\n'.join(parts)
+        rag_chunks = retrieve(f"行星星座宫位解读 {asc_sign}上升", k=3)
     except Exception:
-        rag_section = ''
+        rag_chunks = []
+    rag_context = ""
+    if rag_chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(rag_chunks, 1)
+        ]
+        rag_context = (
+            "\n\n---\n参考书籍片段（可选引用，若引用请在 source_refs 中注明编号和中文概括）：\n\n"
+            + "\n\n".join(parts)
+        )
 
     prompt = f"""请为以下本命盘行星位置分别生成占星解读，并在最后给出一个综合概述。
 
@@ -1290,8 +1375,8 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 
 **必须为以上列出的每一颗行星（包括凯龙、北交点、南交点、莉莉丝等小行星）生成解读，不得遗漏任何一个。**
 
-以 JSON 格式返回（严格使用以下 key，每个 key 对应一段解读文字，overall 为嵌套对象）：
-{json_template}{rag_section}"""
+以 JSON 格式返回（严格使用以下 key，每个 key 对应一段解读文字，overall 为嵌套对象；source_refs 仅填写实际引用的参考编号）：
+{json_template}{rag_context}"""
 
     response = client.models.generate_content(
         model=GENERATE_MODEL,
@@ -1303,10 +1388,23 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
         ),
     )
     try:
-        return _parse_json(response.text)
+        parsed = _parse_json(response.text)
     except Exception as e:
         print(f"[planets] JSON parse error: {e}")
-        return {}
+        return {"analyses": {}, "sources": []}
+
+    source_refs = parsed.pop("source_refs", {}) or {}
+    rag_sources = []
+    for i, c in enumerate(rag_chunks, 1):
+        summary_zh = source_refs.get(str(i), "")
+        rag_sources.append({
+            "source":     c["source"],
+            "score":      round(c["score"], 3),
+            "cited":      bool(summary_zh),
+            "text":       c["text"],
+            "summary_zh": summary_zh,
+        })
+    return {"analyses": parsed, "sources": rag_sources}
 
 
 # ── 合盘解读 ───────────────────────────────────────────────────────
@@ -1329,8 +1427,6 @@ def analyze_synastry(
         desc_parts.append(f"synastry {a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}")
     query = ", ".join(desc_parts) if desc_parts else "synastry compatibility aspects"
 
-    chunks = retrieve(query, k=5)
-
     name1 = chart1_summary.get("name", "甲")
     name2 = chart2_summary.get("name", "乙")
 
@@ -1344,17 +1440,6 @@ def analyze_synastry(
             f"{a.get('aspect','')} {a.get('p2_name','')}  容许度{a.get('orbit',0):.1f}°{dw}"
         )
 
-    rag_section = ""
-    if chunks:
-        parts = [
-            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
-            for i, c in enumerate(chunks, 1)
-        ]
-        rag_section = (
-            "\n\n---\n以下是检索到的占星书籍参考片段，若与合盘主题相关可引用（注明书名），不相关可忽略：\n\n"
-            + "\n\n".join(parts)
-        )
-
     prompt = f"""合盘分析：{name1} × {name2}
 
 【跨盘相位】（按容许度排序，★ 表示双向命中 double whammy）
@@ -1365,24 +1450,11 @@ def analyze_synastry(
 1. 情感连结（最强的正面相位体现了怎样的情感共鸣？）
 2. 沟通方式（双方沟通和理解的特点，水星/第三宫相关相位）
 3. 摩擦点（刑/对分 + 土星/火星接触带来的挑战）
-4. 整体兼容度（综合评估这段关系的基调与潜力）{rag_section}"""
+4. 整体兼容度（综合评估这段关系的基调与潜力）"""
 
-    response = client.models.generate_content(
-        model=GENERATE_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT_UNIFIED,
-            temperature=0.5,
-        ),
-    )
-
-    finish = response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN"
-    if finish != "STOP":
-        print(f"[RAG] analyze_synastry finish_reason={finish}")
-
-    sources = _detect_citations(response.text, chunks) if chunks else []
+    answer, sources = rag_generate(query, prompt)
     return {
-        "answer": response.text,
+        "answer": answer,
         "sources": sources,
         "index_used": _index_source,
     }

@@ -121,21 +121,30 @@ async def interpret_planets(body: InterpretPlanetsRequest):
     if body.chart_id:
         cached = db_get_planet_cache(body.chart_id, chart_hash)
         if cached:
-            return {"analyses": _json.loads(cached), "from_cache": True}
+            return {"analyses": _json.loads(cached), "sources": [], "from_cache": True}
 
     # 只读缓存模式：未命中时返回空，不调 AI
     if body.cache_only:
-        return {"analyses": None, "from_cache": False}
+        return {"analyses": None, "sources": [], "from_cache": False}
 
     try:
+        import asyncio
         from ..rag import analyze_planets
         result = analyze_planets(body.natal_chart, body.language)
+        analyses = result.get("analyses", {})
+        sources  = result.get("sources", [])
 
-        # 有 chart_id → 写入缓存
-        if body.chart_id and result:
-            db_save_planet_cache(body.chart_id, chart_hash, _json.dumps(result, ensure_ascii=False))
+        # 有 chart_id → 写入缓存（只缓存 analyses，不缓存 sources）
+        if body.chart_id and analyses:
+            db_save_planet_cache(body.chart_id, chart_hash, _json.dumps(analyses, ensure_ascii=False))
 
-        return {"analyses": result, "from_cache": False}
+        # 异步写入 analytics
+        from ..api.interpret_router import _log_analytics
+        asc = body.natal_chart.get("ascendant", {})
+        query = f"planets {asc.get('sign_original') or asc.get('sign', '')} natal chart"
+        asyncio.create_task(_log_analytics(query, {"sources": sources}))
+
+        return {"analyses": analyses, "sources": sources, "from_cache": False}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

@@ -48,15 +48,15 @@ export function SourcesSection({ sources }) {
                 {s.score.toFixed(3)}
               </span>
             </div>
-            {/* Excerpt */}
-            {s.text && (
+            {/* Excerpt: prefer Chinese summary, fall back to truncated English */}
+            {(s.summary_zh || s.text) && (
               <div style={{
                 marginTop: '3px', marginLeft: '16px',
                 color: '#555577', fontSize: '0.72rem', lineHeight: 1.5,
                 borderLeft: `2px solid ${s.cited ? '#3a3a7a' : '#222240'}`,
                 paddingLeft: '8px',
               }}>
-                {s.text.length > 120 ? s.text.slice(0, 120) + '…' : s.text}
+                {s.summary_zh || (s.text.length > 120 ? s.text.slice(0, 120) + '…' : s.text)}
               </div>
             )}
           </div>

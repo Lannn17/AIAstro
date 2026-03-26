@@ -74,7 +74,7 @@ async def interpret_chat(body: ChatRequest):
         history = [{"role": m.role, "text": m.text} for m in body.history]
         result = chat_with_chart(body.query, body.chart_data, k=body.k,
                                  history=history, summary=body.summary)
-        asyncio.create_task(_log_chat_analytics(body.query, result))
+        asyncio.create_task(_log_analytics(body.query, result))
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -85,8 +85,8 @@ async def interpret_chat(body: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat error: {type(e).__name__}: {e}")
 
 
-async def _log_chat_analytics(query: str, result: dict):
-    """非阻塞后台任务：分类 query 并写入 query_analytics。"""
+async def _log_analytics(query: str, result: dict):
+    """非阻塞后台任务：分类 query 并写入 query_analytics。所有 RAG 端点统一调用此函数。"""
     try:
         from ..rag import classify_query
         from ..db import db_log_query_analytics
@@ -119,6 +119,11 @@ async def interpret_transit(body: TransitInterpretRequest):
             transit_planets=body.transit_planets,
             transit_date=body.transit_date,
         )
+        query = f"transit {body.transit_date} " + " ".join(
+            f"{a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}"
+            for a in body.transit_aspects[:3]
+        )
+        asyncio.create_task(_log_analytics(query, result))
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -174,10 +179,18 @@ async def interpret_transits_full(body: TransitsFullRequest):
             t["themes"]   = a.get("themes", [])
             t["is_new"]   = a.get("is_new", False)
 
-        return {
+        result = {
             "active_transits": active,
             "overall": ai_result.get("overall", ""),
+            "sources": ai_result.get("sources", []),
+            "index_used": ai_result.get("index_used", ""),
         }
+        query = f"transits_full {body.query_date} " + " ".join(
+            t.get("transit_planet_zh", "") + " " + t.get("aspect", "")
+            for t in active[:3]
+        )
+        asyncio.create_task(_log_analytics(query, result))
+        return result
 
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -204,20 +217,33 @@ class SynastryInterpretRequest(BaseModel):
 
 @router.post("/interpret/synastry")
 async def interpret_synastry(body: SynastryInterpretRequest):
-    """合盘 RAG 解读：Qdrant 检索 + Gemini 生成关系分析，写入 query_analytics。"""
+    """合盘 RAG 解读：Qdrant 检索 + Gemini 生成关系分析，带 DB 缓存 + analytics。"""
+    import hashlib, json
+    from ..db import db_get_synastry_cache, db_save_synastry_cache
     try:
+        # ── 缓存键：所有相位按 key 排序后 hash ─────────────────────────
+        aspects_str = json.dumps(
+            sorted([f"{a.get('p1_name','')}{a.get('aspect','')}{a.get('p2_name','')}" for a in body.aspects])
+        )
+        aspects_hash = hashlib.md5(aspects_str.encode()).hexdigest()
+
+        cached = db_get_synastry_cache(aspects_hash)
+        if cached:
+            return cached
+
         from ..rag import analyze_synastry
         result = analyze_synastry(
             chart1_summary=body.chart1_summary,
             chart2_summary=body.chart2_summary,
             aspects=body.aspects,
         )
-        # 异步写入 analytics（不阻塞响应），复用已有的 _log_chat_analytics
+        db_save_synastry_cache(aspects_hash, result["answer"], result.get("sources", []))
+
         query = " ".join(
             f"{a.get('p1_name','')} {a.get('aspect','')} {a.get('p2_name','')}"
             for a in body.aspects[:5]
         )
-        asyncio.create_task(_log_chat_analytics(query, result))
+        asyncio.create_task(_log_analytics(query, result))
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
