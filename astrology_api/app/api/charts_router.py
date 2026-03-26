@@ -1,12 +1,13 @@
 import json
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from app.db import (
     db_list_charts, db_save_chart, db_get_chart, db_delete_chart,
     db_list_pending_charts, db_approve_chart, db_update_chart,
+    db_get_events, db_save_events,
 )
 from app.security import require_auth, get_optional_user
 
@@ -149,3 +150,30 @@ def delete_chart(chart_id: int, _user: str = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="Chart not found")
     db_delete_chart(chart_id)
     return {"ok": True}
+
+
+class EventItem(BaseModel):
+    year: int
+    month: Optional[int] = None
+    day: Optional[int] = None
+    event_type: str = "other"
+    weight: float = 1.0
+    is_turning_point: bool = False
+    domainId: Optional[str] = None
+
+
+@router.get("/{chart_id}/events")
+def get_events(chart_id: int, _user: str = Depends(require_auth)):
+    row = db_get_chart(chart_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Chart not found")
+    return {"events": db_get_events(chart_id)}
+
+
+@router.put("/{chart_id}/events")
+def save_events(chart_id: int, body: List[EventItem], _user: str = Depends(require_auth)):
+    row = db_get_chart(chart_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Chart not found")
+    db_save_events(chart_id, [e.model_dump() for e in body])
+    return {"saved": len(body)}

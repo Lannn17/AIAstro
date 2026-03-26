@@ -79,6 +79,22 @@ CREATE TABLE IF NOT EXISTS query_analytics (
 )
 """
 
+_CREATE_LIFE_EVENTS = """
+CREATE TABLE IF NOT EXISTS life_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chart_id INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  month INTEGER,
+  day INTEGER,
+  event_type TEXT NOT NULL DEFAULT 'other',
+  weight REAL DEFAULT 1.0,
+  is_turning_point INTEGER DEFAULT 0,
+  domain_id TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (chart_id) REFERENCES saved_charts(id) ON DELETE CASCADE
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,7 +208,8 @@ def _has_column(table: str, column: str) -> bool:
 
 def create_tables():
     for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL,
-                _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS]:
+                _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS,
+                _CREATE_LIFE_EVENTS]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -464,3 +481,50 @@ def db_save_synastry_cache(aspects_hash: str, answer: str, sources: list):
             _sqlite_write(sql, params)
     except Exception as e:
         print(f"[DB] synastry cache save failed: {e}", flush=True)
+
+
+# ── Life events ────────────────────────────────────────────────────
+
+def db_get_events(chart_id: int) -> list[dict]:
+    """Return all life events for a chart."""
+    sql = "SELECT * FROM life_events WHERE chart_id = ? ORDER BY year, month, day"
+    cols = ["id", "chart_id", "year", "month", "day", "event_type", "weight", "is_turning_point", "domain_id", "created_at"]
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [chart_id]))
+        return rows
+    return _sqlite_fetchall(sql, [chart_id])
+
+
+def db_save_events(chart_id: int, events: list[dict]) -> None:
+    """Replace all events for a chart (bulk upsert)."""
+    delete_sql = "DELETE FROM life_events WHERE chart_id = ?"
+    insert_sql = (
+        "INSERT INTO life_events (chart_id, year, month, day, event_type, weight, is_turning_point, domain_id) "
+        "VALUES (?,?,?,?,?,?,?,?)"
+    )
+    if USE_TURSO:
+        _turso_exec(delete_sql, [chart_id])
+        for ev in events:
+            _turso_exec(insert_sql, [
+                chart_id,
+                ev.get("year"),
+                ev.get("month") or None,
+                ev.get("day") or None,
+                ev.get("event_type", "other"),
+                ev.get("weight", 1.0),
+                1 if ev.get("is_turning_point") else 0,
+                ev.get("domainId") or ev.get("domain_id") or None,
+            ])
+    else:
+        _sqlite_write(delete_sql, [chart_id])
+        for ev in events:
+            _sqlite_write(insert_sql, [
+                chart_id,
+                ev.get("year"),
+                ev.get("month") or None,
+                ev.get("day") or None,
+                ev.get("event_type", "other"),
+                ev.get("weight", 1.0),
+                1 if ev.get("is_turning_point") else 0,
+                ev.get("domainId") or ev.get("domain_id") or None,
+            ])

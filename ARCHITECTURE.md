@@ -150,6 +150,8 @@
 | DELETE | `/api/charts/{id}` | **必须** | 删除星盘 |
 | GET    | `/api/charts/pending` | **必须** | 列出待审核访客星盘 |
 | POST   | `/api/charts/pending/{id}/approve` | **必须** | 批准访客星盘 |
+| GET    | `/api/charts/{id}/events` | **必须** | 读取星盘的生活事件列表 |
+| PUT    | `/api/charts/{id}/events` | **必须** | 替换星盘的全部生活事件（批量保存） |
 
 ### 5h. 认证 & 管理
 
@@ -225,6 +227,21 @@
 | `max_rag_score` | 最高检索相似度 |
 | `any_cited` | AI 是否引用了书籍（0/1） |
 | `created_at` | 时间戳 |
+
+### `life_events` — 校正生活事件持久化
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| `id` | INTEGER PK | 自增 |
+| `chart_id` | INTEGER | 关联 saved_charts(id)，级联删除 |
+| `year` | INTEGER | 事件年份（必填） |
+| `month` | INTEGER | 事件月份（可选） |
+| `day` | INTEGER | 事件日（可选，需有月份） |
+| `event_type` | TEXT | 事件类型（career_up / marriage 等） |
+| `weight` | REAL | 权重（1=一般，2=重要，3=非常重要） |
+| `is_turning_point` | INTEGER | 是否为人生转折点（0/1） |
+| `domain_id` | TEXT | 所属领域 ID（career/romance/family 等） |
+| `created_at` | TEXT | UTC 时间戳 |
 
 ---
 

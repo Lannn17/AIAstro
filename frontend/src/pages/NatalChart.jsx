@@ -155,6 +155,27 @@ export default function NatalChart() {
     }
   }, [isAuthenticated])
 
+  // Auto-load saved life events when rectification panel opens
+  useEffect(() => {
+    if (!rectifyOpen || !savedId || !isAuthenticated) return
+    fetch(`${API_BASE}/api/charts/${savedId}/events`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.events?.length > 0) {
+          setRectifyEvents(data.events.map(ev => ({
+            year: String(ev.year),
+            month: ev.month ? String(ev.month) : '',
+            day: ev.day ? String(ev.day) : '',
+            event_type: ev.event_type,
+            weight: ev.weight,
+            is_turning_point: !!ev.is_turning_point,
+            domainId: ev.domain_id || ev.domainId || '',
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [rectifyOpen, savedId, isAuthenticated])  // eslint-disable-line react-hooks/exhaustive-deps
+
   async function fetchSavedCharts() {
     try {
       const res = await fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
@@ -516,8 +537,19 @@ export default function NatalChart() {
         event_type: e.event_type,
         weight: Number(e.weight),
         is_turning_point: e.is_turning_point || false,
+        domainId: e.domainId || null,
       }))
     if (events.length === 0) { setRectifyError('请至少填写一个事件（年份必填）'); return }
+    // Save events to DB if chart is saved
+    if (savedId && isAuthenticated) {
+      try {
+        await fetch(`${API_BASE}/api/charts/${savedId}/events`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(events),
+        })
+      } catch (_) {}
+    }
     setRectifyLoading(true)
     setRectifyError(null)
     setRectifyResult(null)
@@ -1199,6 +1231,10 @@ export default function NatalChart() {
                           <span style={{ color: '#9a8acc', fontSize: '0.8rem', flex: 1 }}>
                             {ev.year}{ev.month ? `/${String(ev.month).padStart(2,'0')}${ev.day ? `/${String(ev.day).padStart(2,'0')}` : ''}` : ' (仅年份)'} · {typeLabel}
                           </span>
+                          <button onClick={() => { setCurrentDomainEvent({ ...ev }); setRectifyEvents(prev => prev.filter((_, i) => i !== gi)) }}
+                            style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.8rem', padding: '0 2px' }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#8888cc'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✎</button>
                           <button onClick={() => removeEvent(gi)} style={{ background: 'none', border: 'none', color: '#4a3a5a', cursor: 'pointer', fontSize: '0.8rem', padding: '0 2px' }}
                             onMouseEnter={e => e.currentTarget.style.color = '#cc6666'}
                             onMouseLeave={e => e.currentTarget.style.color = '#4a3a5a'}>✕</button>
