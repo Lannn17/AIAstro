@@ -61,7 +61,7 @@ STRATEGY_DESCRIPTIONS: dict[str, str] = {
     ),
 }
 
-DEFAULT_VERSION = "v1.0"
+DEFAULT_VERSION = "v1.3"
 
 
 ACTIVE_POINTS = [

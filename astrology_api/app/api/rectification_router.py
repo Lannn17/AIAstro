@@ -197,15 +197,15 @@ class CompareRequest(BaseModel):
     approx_hour: Optional[int] = None
     approx_minute: Optional[int] = None
     time_range_hours: Optional[float] = None
-    known_hour: int          # 已知真实出生小时
-    known_minute: int        # 已知真实出生分钟
+    known_hour: Optional[int] = None    # 可选：已知真实出生小时（用于计算误差）
+    known_minute: Optional[int] = None  # 可选：已知真实出生分钟
 
 
 @router.post("/rectify/compare")
 async def compare_versions(body: CompareRequest):
     """
-    对所有已注册版本跑同一组事件，返回各版本 Top1 候选与已知出生时间的误差（分钟数）。
-    用于验证集测试，按 error_minutes 升序排列结果。
+    对所有已注册版本跑同一组事件，返回各版本 Top1 候选。
+    若提供 known_hour/known_minute，额外返回与真实时间的误差分钟数。
     """
     try:
         from ..core.rectification import (
@@ -213,7 +213,8 @@ async def compare_versions(body: CompareRequest):
         )
 
         events = [e.model_dump() for e in body.events]
-        known_total = body.known_hour * 60 + body.known_minute
+        has_known = body.known_hour is not None and body.known_minute is not None
+        known_total = (body.known_hour * 60 + body.known_minute) if has_known else None
         results = []
 
         for version in SCORING_STRATEGIES:
@@ -233,24 +234,26 @@ async def compare_versions(body: CompareRequest):
             if not top3:
                 continue
             t = top3[0]
-            candidate_total = t['hour'] * 60 + t['minute']
-            error_minutes = abs(candidate_total - known_total)
-            # 处理跨午夜情况
-            error_minutes = min(error_minutes, 1440 - error_minutes)
-            results.append({
+            entry = {
                 'version': version,
                 'description': STRATEGY_DESCRIPTIONS.get(version, ''),
                 'top1_hour': t['hour'],
                 'top1_minute': t['minute'],
                 'asc_sign': t.get('asc_sign', ''),
                 'score': t['score'],
-                'error_minutes': error_minutes,
                 'gap_label': indicators['gap_label'],
                 'evidence_label': indicators['evidence_label'],
-            })
+            }
+            if has_known:
+                candidate_total = t['hour'] * 60 + t['minute']
+                error_minutes = abs(candidate_total - known_total)
+                error_minutes = min(error_minutes, 1440 - error_minutes)
+                entry['error_minutes'] = error_minutes
+            results.append(entry)
 
-        results.sort(key=lambda x: x['error_minutes'])
-        known_time = f"{body.known_hour:02d}:{body.known_minute:02d}"
+        if has_known:
+            results.sort(key=lambda x: x.get('error_minutes', 9999))
+        known_time = f"{body.known_hour:02d}:{body.known_minute:02d}" if has_known else None
         return {'known_time': known_time, 'results': results}
 
     except RuntimeError as e:

@@ -118,8 +118,11 @@ export default function NatalChart() {
   const [currentDomainEvent, setCurrentDomainEvent] = useState(null)
   const [approxHour, setApproxHour] = useState('')
   const [timeRangeHours, setTimeRangeHours] = useState('')
-  const [rectifyVersion, setRectifyVersion] = useState('v1.0')
   const [rectifyLoading, setRectifyLoading] = useState(false)
+  const [compareLoading, setCompareLoading] = useState(false)
+  const [compareResult, setCompareResult] = useState(null)
+  const [knownHour, setKnownHour] = useState('')
+  const [knownMinute, setKnownMinute] = useState('')
   const [rectifyResult, setRectifyResult] = useState(null)
   const [rectifyError, setRectifyError] = useState(null)
 
@@ -567,7 +570,7 @@ export default function NatalChart() {
           approx_minute: null,
           time_range_hours: timeRangeHours !== '' ? Number(timeRangeHours) : null,
           natal_chart_data: result || {},
-          version: rectifyVersion,
+          version: 'v1.3',
         }),
       })
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `错误 ${res.status}`) }
@@ -578,6 +581,46 @@ export default function NatalChart() {
       setThemeQuizData(null); setThemeAnswers({}); setConfidenceResult(null)
     } catch (e) { setRectifyError(e.message) }
     finally { setRectifyLoading(false) }
+  }
+
+  async function handleCompare() {
+    if (!lastFormData) return
+    const events = rectifyEvents
+      .filter(e => e.year)
+      .map(e => ({
+        year: Number(e.year),
+        month: e.month ? Number(e.month) : null,
+        day: (e.month && e.day) ? Number(e.day) : null,
+        event_type: e.event_type,
+        weight: Number(e.weight),
+        is_turning_point: e.is_turning_point || false,
+        domainId: e.domainId || null,
+      }))
+    if (events.length === 0) { setRectifyError('请至少填写一个事件（年份必填）'); return }
+    setCompareLoading(true)
+    setRectifyError(null)
+    setCompareResult(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/rectify/compare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          birth_year: lastFormData.year, birth_month: lastFormData.month, birth_day: lastFormData.day,
+          latitude: lastFormData.latitude, longitude: lastFormData.longitude,
+          tz_str: lastFormData.tz_str, house_system: lastFormData.house_system,
+          events,
+          approx_hour: approxHour !== '' ? Number(approxHour) : null,
+          approx_minute: null,
+          time_range_hours: timeRangeHours !== '' ? Number(timeRangeHours) : null,
+          known_hour: knownHour !== '' ? Number(knownHour) : null,
+          known_minute: knownMinute !== '' ? Number(knownMinute) : null,
+        }),
+      })
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `错误 ${res.status}`) }
+      const data = await res.json()
+      setCompareResult(data)
+    } catch (e) { setRectifyError(e.message) }
+    finally { setCompareLoading(false) }
   }
 
   async function handleLoadAscQuiz(top3) {
@@ -1370,20 +1413,25 @@ export default function NatalChart() {
 
               {rectifyWizardStep === 6 && (
                 <div style={{ marginTop: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#7a7a9a', whiteSpace: 'nowrap' }}>算法版本</span>
-                    <select value={rectifyVersion} onChange={e => setRectifyVersion(e.target.value)}
-                      style={{ flex: 1, padding: '4px 8px', background: '#1e1e3a', color: '#c0b8e8', border: '1px solid #3a3a6a', borderRadius: '6px', fontSize: '0.78rem', cursor: 'pointer' }}>
-                      <option value="v1.0">v1.0 — 基础版</option>
-                      <option value="v1.1">v1.1 — 含初级推运</option>
-                      <option value="v1.2">v1.2 — 12宫事件映射</option>
-                      <option value="v1.3">v1.3 — 动态赋权+慢星</option>
-                    </select>
-                  </div>
-                  <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year).length === 0}
-                    style={{ width: '100%', padding: '10px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
-                    {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
+                  <button onClick={handleRectify} disabled={rectifyLoading || compareLoading || rectifyEvents.filter(e => e.year).length === 0}
+                    style={{ width: '100%', padding: '10px', marginBottom: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || compareLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                    {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对 (v1.3)'}
                   </button>
+                  {/* 对比分析 */}
+                  <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#7a7a9a' }}>已知出生时间（选填）</span>
+                      <input type="number" placeholder="时" min="0" max="23" value={knownHour} onChange={e => setKnownHour(e.target.value)}
+                        style={{ width: '44px', padding: '3px 6px', background: '#1e1e3a', color: '#c0b8e8', border: '1px solid #3a3a6a', borderRadius: '5px', fontSize: '0.78rem', textAlign: 'center' }} />
+                      <span style={{ color: '#7a7a9a', fontSize: '0.8rem' }}>:</span>
+                      <input type="number" placeholder="分" min="0" max="59" value={knownMinute} onChange={e => setKnownMinute(e.target.value)}
+                        style={{ width: '44px', padding: '3px 6px', background: '#1e1e3a', color: '#c0b8e8', border: '1px solid #3a3a6a', borderRadius: '5px', fontSize: '0.78rem', textAlign: 'center' }} />
+                    </div>
+                    <button onClick={handleCompare} disabled={compareLoading || rectifyLoading || rectifyEvents.filter(e => e.year).length === 0}
+                      style={{ width: '100%', padding: '8px', background: compareLoading ? '#1e1e3a' : '#2a2a5a', color: compareLoading ? '#3a3a5a' : '#a0a0cc', border: '1px solid #4a4a8a', borderRadius: '8px', fontWeight: 600, cursor: (compareLoading || rectifyLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}>
+                      {compareLoading ? '全版本扫描中… 约 2 分钟' : '版本对比分析'}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1464,6 +1512,45 @@ export default function NatalChart() {
                       ✦ 进入第二阶段：上升星座性格验证 →
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* ── 版本对比结果 ── */}
+              {compareResult && !compareLoading && (
+                <div style={{ marginTop: '20px', borderTop: '1px solid #2a2a4a', paddingTop: '20px' }}>
+                  <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                    版本对比分析
+                    {compareResult.known_time && (
+                      <span style={{ marginLeft: '10px', color: '#c9a84c', textTransform: 'none', letterSpacing: 0 }}>
+                        已知时间：{compareResult.known_time}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {compareResult.results.map((r, i) => (
+                      <div key={r.version} style={{ background: i === 0 && compareResult.known_time ? '#1a2a1a' : '#14142a', border: `1px solid ${i === 0 && compareResult.known_time ? '#3a6a3a' : '#2a2a5a'}`, borderRadius: '8px', padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                            <span style={{ color: '#7a6aaa', fontSize: '0.78rem', fontWeight: 700 }}>{r.version}</span>
+                            <span style={{ color: '#e0e0f8', fontSize: '1.05rem', fontWeight: 700 }}>
+                              {String(r.top1_hour).padStart(2,'0')}:{String(r.top1_minute).padStart(2,'0')}
+                            </span>
+                            <span style={{ color: '#9a8acc', fontSize: '0.78rem' }}>{r.asc_sign}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#7a7a9a' }}>
+                              分辨力 <span style={{ color: r.gap_label === '高' ? '#66cc88' : r.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{r.gap_label}</span>
+                            </span>
+                            {compareResult.known_time && r.error_minutes !== undefined && (
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: r.error_minutes <= 15 ? '#66cc88' : r.error_minutes <= 60 ? '#c9a84c' : '#ff7070' }}>
+                                误差 {r.error_minutes} 分钟
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
