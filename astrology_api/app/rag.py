@@ -965,18 +965,10 @@ def analyze_rectification(
             + "\n\n".join(parts)
         )
 
-    candidate_json_items = []
-    for i, t in enumerate(top3, 1):
-        asc = t.get('asc_sign', '')
-        asc_str = f"，上升{asc}" if asc else ''
-        candidate_json_items.append(
-            f'    {{\n'
-            f'      "rank": {i},\n'
-            f'      "reason": "仅分析 {t["hour"]:02d}:{t["minute"]:02d}{asc_str} 这个候选时间本身：'
-            f'该上升星座的性格特征、哪些宫位或角点在用户事件日期被行运激活、与事件模式的吻合或不吻合之处（100-150字，不要提及其他候选时间）"\n'
-            f'    }}'
-        )
-    candidates_template = ",\n".join(candidate_json_items)
+    candidates_list = ",\n".join(
+        f'    {{"rank": {i}, "reason": "..."}}'
+        for i in range(1, len(top3) + 1)
+    )
 
     prompt = f"""出生时间校对结果：
 
@@ -989,12 +981,17 @@ def analyze_rectification(
 {chr(10).join(top3_lines)}
 
 ---
-请以 JSON 格式返回分析结果。每个 candidates 条目只分析自身对应的那个候选时间，不要在 reason 中提及或比较其他候选时间。结构如下：
+分析要求：
+- 对每个候选时间（rank 1/2/3），在 reason 字段中单独分析：该上升星座的性格特征、哪些宫位或角点在用户事件日期被行运激活、与事件模式的吻合或不吻合之处（100-150字）
+- 每个 reason 只分析自身对应的候选，不提及其他候选
+- overall 给出综合推荐与验证建议（150-200字）
+
+返回 JSON：
 {{
   "candidates": [
-{candidates_template}
+{candidates_list}
   ],
-  "overall": "综合推荐与验证建议：明确指出最推荐哪个候选及原因，并给出用户可用其他事件进一步验证的方法（150-200字）"
+  "overall": "..."
 }}{rag_section}"""
 
     response = client.models.generate_content(
