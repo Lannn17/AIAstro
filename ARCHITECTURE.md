@@ -133,8 +133,9 @@
 
 | Method | Path | 功能 |
 |---|---|---|
-| POST | `/api/rectify` | 事件评分校正算法 |
+| POST | `/api/rectify` | 事件评分校正算法（返回 top3 + gap_label + evidence_label）|
 | GET  | `/api/rectify/versions` | 列出算法版本 |
+| POST | `/api/rectify/compare` | 多版本对比验证（需提供已知出生时间，返回各版本误差分钟数）|
 | POST | `/api/rectify/asc_quiz` | 上升星座推测 |
 | GET  | `/api/rectify/theme_quiz` | 人生主题问卷 |
 | POST | `/api/rectify/confidence` | 时间置信度估算 |

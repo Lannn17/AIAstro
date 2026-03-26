@@ -1377,9 +1377,19 @@ export default function NatalChart() {
 
               {rectifyResult && !rectifyLoading && (
                 <div style={{ marginTop: '20px', borderTop: '1px solid #2a2a4a', paddingTop: '20px' }}>
-                  <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                  <div style={{ color: '#9a8acc', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
                     Top 3 候选时间
                   </div>
+                  {(rectifyResult.gap_label || rectifyResult.evidence_label) && (
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '0.72rem', color: '#7a7a9a' }}>
+                      {rectifyResult.gap_label && (
+                        <span>分辨力：<span style={{ color: rectifyResult.gap_label === '高' ? '#66cc88' : rectifyResult.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{rectifyResult.gap_label}</span></span>
+                      )}
+                      {rectifyResult.evidence_label && (
+                        <span>证据强度：<span style={{ color: rectifyResult.evidence_label === '强' ? '#66cc88' : rectifyResult.evidence_label === '中' ? '#c9a84c' : '#ff7070' }}>{rectifyResult.evidence_label}</span></span>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
                     {rectifyResult.top3.map((t, i) => (
                       <div key={i} style={{ background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '16px 18px' }}>
