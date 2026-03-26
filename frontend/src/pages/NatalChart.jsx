@@ -1445,7 +1445,7 @@ export default function NatalChart() {
                   {(rectifyResult.gap_label || rectifyResult.evidence_label) && (
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '0.72rem', color: '#7a7a9a' }}>
                       {rectifyResult.gap_label && (
-                        <span>分辨力：<span style={{ color: rectifyResult.gap_label === '高' ? '#66cc88' : rectifyResult.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{rectifyResult.gap_label}</span></span>
+                        <span>算法内部差异：<span style={{ color: rectifyResult.gap_label === '大' ? '#66cc88' : rectifyResult.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{rectifyResult.gap_label}</span></span>
                       )}
                       {rectifyResult.evidence_label && (
                         <span>证据强度：<span style={{ color: rectifyResult.evidence_label === '强' ? '#66cc88' : rectifyResult.evidence_label === '中' ? '#c9a84c' : '#ff7070' }}>{rectifyResult.evidence_label}</span></span>
@@ -1462,7 +1462,7 @@ export default function NatalChart() {
                         <div style={{ background: '#1a1a2e', border: '1px solid #c9a84c', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '0.8rem', color: '#c9a84c', lineHeight: 1.6 }}>
                           ⚠ 算法评分首选 <strong>{String(algPick.hour).padStart(2,'0')}:{String(algPick.minute).padStart(2,'0')}</strong>，
                           AI 理论分析推荐 <strong>{String(aiPick.hour).padStart(2,'0')}:{String(aiPick.minute).padStart(2,'0')}</strong>
-                          {rectifyResult.gap_label === '低' && '（分辨力低，建议优先参考 AI 推荐）'}
+                          {rectifyResult.gap_label === '小' && '（算法内部差异小，建议优先参考 AI 推荐）'}
                         </div>
                       )
                     }
@@ -1569,7 +1569,7 @@ export default function NatalChart() {
                           </div>
                           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.72rem', color: '#7a7a9a' }}>
-                              分辨力 <span style={{ color: r.gap_label === '高' ? '#66cc88' : r.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{r.gap_label}</span>
+                              算法内部差异 <span style={{ color: r.gap_label === '大' ? '#66cc88' : r.gap_label === '中' ? '#c9a84c' : '#ff7070' }}>{r.gap_label}</span>
                             </span>
                             {compareResult.known_time && r.error_minutes !== undefined && (
                               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: r.error_minutes <= 15 ? '#66cc88' : r.error_minutes <= 60 ? '#c9a84c' : '#ff7070' }}>

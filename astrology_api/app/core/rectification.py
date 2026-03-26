@@ -704,11 +704,11 @@ def _compute_indicators(top3: list, raw_events: list) -> dict:
     gap_ratio = 0.0 if top1 == 0 else (top1 - top2) / top1
 
     if gap_ratio >= 0.25:
-        gap_label = '高'
+        gap_label = '大'
     elif gap_ratio >= 0.10:
         gap_label = '中'
     else:
-        gap_label = '低'
+        gap_label = '小'
 
     n = len(raw_events)
     if n == 0:
