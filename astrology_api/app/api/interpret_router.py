@@ -238,6 +238,7 @@ async def interpret_synastry(body: SynastryInterpretRequest):
             try:
                 parsed = json.loads(answer_val) if isinstance(answer_val, str) else answer_val
                 if isinstance(parsed, dict) and "texture_labels" in parsed:
+                    parsed["model_used"] = "cached"
                     return parsed  # new-format cache hit
                 # Old-format text entry — fall through to regenerate
             except (json.JSONDecodeError, TypeError):

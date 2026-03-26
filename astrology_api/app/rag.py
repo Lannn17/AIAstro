@@ -7,6 +7,7 @@ app/rag.py — RAG 核心模块
 import os
 import re
 import json
+import threading
 import numpy as np
 from google import genai
 from google.genai import types
@@ -34,6 +35,12 @@ _FALLBACK_MODELS = [
     "gemini-2.5-flash-lite",
 ]
 
+_local = threading.local()  # per-thread tracking of last model used
+
+def get_last_model_used() -> str:
+    """返回本线程最近一次 generate_content 实际使用的模型名。"""
+    return getattr(_local, 'model_used', GENERATE_MODEL)
+
 class _ModelsWithFallback:
     """Wraps generate_content with automatic model fallback on 503."""
     def __init__(self, original):
@@ -44,7 +51,9 @@ class _ModelsWithFallback:
         last_err = None
         for m in chain:
             try:
-                return self._orig.generate_content(model=m, contents=contents, config=config, **kwargs)
+                resp = self._orig.generate_content(model=m, contents=contents, config=config, **kwargs)
+                _local.model_used = m  # record which model actually responded
+                return resp
             except Exception as e:
                 if '503' in str(e) or 'UNAVAILABLE' in str(e):
                     print(f"[fallback] {m} 503, trying next…", flush=True)
@@ -639,6 +648,7 @@ def chat_with_chart(query: str, chart_data: dict, k: int = 5,
         "answer":     answer,
         "sources":    sources,
         "index_used": _index_source,
+        "model_used": get_last_model_used(),
     }
 
 
@@ -1479,11 +1489,12 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             max_output_tokens=8192,
         ),
     )
+    model_used = get_last_model_used()
     try:
         parsed = _parse_json(response.text)
     except Exception as e:
         print(f"[planets] JSON parse error: {e}")
-        return {"analyses": {}, "sources": []}
+        return {"analyses": {}, "sources": [], "model_used": model_used}
 
     # Detect any planet keys Gemini silently dropped (output token pressure)
     missing_keys = [k for k in planet_keys if k not in parsed]
@@ -1533,7 +1544,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             "text":       c["text"],
             "summary_zh": summary_zh,
         })
-    return {"analyses": parsed, "sources": rag_sources}
+    return {"analyses": parsed, "sources": rag_sources, "model_used": model_used}
 
 
 # ── 合盘解读 ───────────────────────────────────────────────────────
@@ -1681,10 +1692,12 @@ def analyze_synastry(
             temperature=0.4,
         ),
     )
+    model_used = get_last_model_used()
 
     try:
         result = _parse_json(response.text)
     except (json.JSONDecodeError, AttributeError) as e:
         raise RuntimeError(f"Gemini synastry schema parse failed: {e}\nRaw: {getattr(response, 'text', '')[:200]}")
 
+    result["model_used"] = model_used
     return result

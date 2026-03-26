@@ -123,6 +123,15 @@ export default function AIPanel({
             )}
           </div>
 
+          {/* Model label */}
+          {result.model_used && (
+            <div style={{ marginTop: '6px', textAlign: 'right' }}>
+              <span style={{ fontSize: '0.65rem', color: result.model_used === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#0f0f1e', border: '1px solid #2a2a4a', borderRadius: '10px', padding: '2px 7px' }}>
+                {result.model_used === 'cached' ? '缓存' : result.model_used.replace('gemini-', '')}
+              </span>
+            </div>
+          )}
+
           {/* Separate citations section */}
           <SourcesSection sources={result.sources} />
         </>

@@ -111,6 +111,7 @@ export default function NatalChart() {
 
   // Planet interpretations
   const [planetAnalyses, setPlanetAnalyses] = useState({})
+  const [planetModelUsed, setPlanetModelUsed] = useState(null)
   const planetInterp = useInterpret('/api/interpret_planets')
 
   const [rectifyOpen, setRectifyOpen] = useState(false)
@@ -515,6 +516,7 @@ export default function NatalChart() {
       if (res.ok) {
         const resp = await res.json()
         if (resp.analyses) setPlanetAnalyses(resp.analyses)
+        if (resp.model_used) setPlanetModelUsed(resp.model_used)
       }
     } catch { /* silent */ }
   }
@@ -529,6 +531,7 @@ export default function NatalChart() {
       chart_id: id || null,
     })
     if (json?.analyses) setPlanetAnalyses(json.analyses)
+    if (json?.model_used) setPlanetModelUsed(json.model_used)
   }
 
   async function handleRectify() {
@@ -1111,7 +1114,14 @@ export default function NatalChart() {
                     </button>
                   ) : planetAnalyses.overall ? (
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
-                      <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px' }}>本命盘综合概述</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>本命盘综合概述</div>
+                        {planetModelUsed && (
+                          <span style={{ fontSize: '0.68rem', color: planetModelUsed === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#1a1a2e', border: '1px solid #3a3a5a', borderRadius: '10px', padding: '2px 8px' }}>
+                            {planetModelUsed === 'cached' ? '缓存' : planetModelUsed.replace('gemini-', '')}
+                          </span>
+                        )}
+                      </div>
                       {/* 特征标签 */}
                       {planetAnalyses.overall.tags?.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>

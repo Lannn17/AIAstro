@@ -121,7 +121,7 @@ async def interpret_planets(body: InterpretPlanetsRequest):
     if body.chart_id:
         cached = db_get_planet_cache(body.chart_id, chart_hash)
         if cached:
-            return {"analyses": _json.loads(cached), "sources": [], "from_cache": True}
+            return {"analyses": _json.loads(cached), "sources": [], "from_cache": True, "model_used": "cached"}
 
     # 只读缓存模式：未命中时返回空，不调 AI
     if body.cache_only:
@@ -144,7 +144,7 @@ async def interpret_planets(body: InterpretPlanetsRequest):
         query = f"planets {asc.get('sign_original') or asc.get('sign', '')} natal chart"
         asyncio.create_task(_log_analytics(query, {"sources": sources}))
 
-        return {"analyses": analyses, "sources": sources, "from_cache": False}
+        return {"analyses": analyses, "sources": sources, "from_cache": False, "model_used": result.get("model_used")}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

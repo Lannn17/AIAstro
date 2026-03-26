@@ -482,7 +482,14 @@ export default function Synastry() {
             <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Texture */}
               <div style={{ padding: '12px 14px', backgroundColor: '#12122a', borderRadius: '8px', border: '1px solid #2a2a5a' }}>
-                <div style={{ color: '#8888aa', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '6px' }}>关系质感</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ color: '#8888aa', fontSize: '0.7rem', textTransform: 'uppercase' }}>关系质感</div>
+                  {interp.result.model_used && (
+                    <span style={{ fontSize: '0.65rem', color: interp.result.model_used === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#0f0f1e', border: '1px solid #2a2a4a', borderRadius: '10px', padding: '2px 7px' }}>
+                      {interp.result.model_used === 'cached' ? '缓存' : interp.result.model_used.replace('gemini-', '')}
+                    </span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
                   {interp.result.texture_labels.map(label => (
                     <span key={label} style={{ padding: '3px 10px', backgroundColor: '#2a2a5a', borderRadius: '12px', color: '#c9a84c', fontSize: '0.82rem' }}>
