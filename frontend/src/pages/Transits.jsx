@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 import { useInterpret } from '../hooks/useInterpret'
@@ -68,6 +69,14 @@ export default function Transits() {
   const [forceRefresh, setForceRefresh] = useState(false)
   const transit = useInterpret('/api/interpret/transits_full')
 
+  // Chat state
+  const [chatOpen, setChatOpen]       = useState(false)
+  const [chatInput, setChatInput]     = useState('')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatSummary, setChatSummary] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatBottomRef = useRef(null)
+
   useEffect(() => {
     if (!isAuthenticated) return
     fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
@@ -105,6 +114,54 @@ export default function Transits() {
       const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
       if (r.ok) setSelectedChart(await r.json())
     } catch { setChartError('加载星盘失败') }
+  }
+
+  // Reset chat when chart or date changes
+  useEffect(() => {
+    setChatOpen(false)
+    setChatMessages([])
+    setChatSummary('')
+  }, [selectedId, queryDate])
+
+  async function handleTransitChat(e) {
+    e.preventDefault()
+    if (!chatInput.trim() || !transit.result) return
+    const question = chatInput.trim()
+    const historySnapshot = chatMessages.slice(-4)
+    setChatInput('')
+    setChatMessages(prev => [...prev, { role: 'user', text: question }])
+    setChatLoading(true)
+    try {
+      const transitContext = {
+        date: queryDate,
+        overall: transit.result.overall || '',
+        aspects: transit.result.active_transits || [],
+      }
+      const res = await fetch(`${API_BASE}/api/interpret/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: question,
+          chart_data: selectedChart?.chart_data
+            ? (typeof selectedChart.chart_data === 'string'
+                ? JSON.parse(selectedChart.chart_data)
+                : selectedChart.chart_data)
+            : {},
+          k: 5,
+          history: historySnapshot,
+          summary: chatSummary,
+          transit_context: transitContext,
+        }),
+      })
+      if (!res.ok) throw new Error(`错误 ${res.status}`)
+      const data = await res.json()
+      setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }])
+      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: 'assistant', text: `⚠ ${err.message}` }])
+    } finally {
+      setChatLoading(false)
+    }
   }
 
   async function generate(force = false) {
@@ -292,6 +349,105 @@ export default function Transits() {
                   }}>
                     {transit.result.overall}
                   </div>
+                </div>
+              )}
+
+              {/* 行运对话入口 */}
+              <div style={{ marginTop: '12px' }}>
+                <button
+                  onClick={() => setChatOpen(o => !o)}
+                  style={{
+                    padding: '8px 20px', borderRadius: '8px', cursor: 'pointer',
+                    backgroundColor: chatOpen ? '#c9a84c' : 'transparent',
+                    border: '1px solid #c9a84c',
+                    color: chatOpen ? '#0a0a1a' : '#c9a84c',
+                    fontSize: '0.85rem', fontWeight: chatOpen ? 600 : 400,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  ✦ 行运对话
+                </button>
+              </div>
+
+              {/* 行运对话面板 */}
+              {chatOpen && (
+                <div style={{
+                  marginTop: '12px', background: '#0e0e24',
+                  border: '1px solid #2a2a5a', borderRadius: '12px',
+                  display: 'flex', flexDirection: 'column', minHeight: '320px', maxHeight: '560px',
+                }}>
+                  {/* Header */}
+                  <div style={{
+                    padding: '12px 16px', borderBottom: '1px solid #2a2a5a',
+                    color: '#c9a84c', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+                  }}>
+                    ✦ 行运对话 · {queryDate}
+                  </div>
+
+                  {/* Messages */}
+                  <div style={{
+                    flex: 1, padding: '16px', overflowY: 'auto',
+                    display: 'flex', flexDirection: 'column', gap: '14px',
+                  }}>
+                    {chatMessages.length === 0 && (
+                      <div style={{ color: '#3a3a6a', fontSize: '0.88rem' }}>
+                        问我关于今日行运的任何问题…
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} style={{
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        maxWidth: '92%',
+                        backgroundColor: msg.role === 'user' ? '#1e1e50' : '#1a1a35',
+                        border: `1px solid ${msg.role === 'user' ? '#3a3a8a' : '#2a2a5a'}`,
+                        borderRadius: '10px', padding: '12px 16px',
+                        fontSize: '0.9rem', color: '#e8e8ff', lineHeight: 1.75,
+                      }}>
+                        {msg.role === 'user' ? msg.text : (
+                          <ReactMarkdown components={{
+                            p: ({children}) => <p style={{ margin: '5px 0' }}>{children}</p>,
+                            strong: ({children}) => <strong style={{ color: '#e8c96c' }}>{children}</strong>,
+                            ul: ({children}) => <ul style={{ paddingLeft: '20px', margin: '5px 0' }}>{children}</ul>,
+                            li: ({children}) => <li style={{ marginBottom: '4px' }}>{children}</li>,
+                          }}>{msg.text}</ReactMarkdown>
+                        )}
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div style={{ color: '#6666aa', fontSize: '0.88rem' }}>思考中…</div>
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+
+                  {/* Input */}
+                  <form onSubmit={handleTransitChat} style={{
+                    display: 'flex', gap: '8px', padding: '12px 16px',
+                    borderTop: '1px solid #2a2a5a',
+                  }}>
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      placeholder="问关于今日行运的问题…"
+                      disabled={chatLoading}
+                      style={{
+                        flex: 1, backgroundColor: '#0d0d22',
+                        border: '1px solid #2a2a5a', color: '#e8e8ff',
+                        borderRadius: '6px', padding: '10px 14px',
+                        fontSize: '0.9rem', outline: 'none',
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={chatLoading || !chatInput.trim()}
+                      style={{
+                        backgroundColor: '#c9a84c', color: '#0a0a1a',
+                        border: 'none', borderRadius: '6px',
+                        padding: '0 16px', fontSize: '1rem',
+                        cursor: chatLoading || !chatInput.trim() ? 'not-allowed' : 'pointer',
+                        opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
+                      }}
+                    >➤</button>
+                  </form>
                 </div>
               )}
             </>

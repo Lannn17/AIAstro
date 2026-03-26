@@ -3,7 +3,7 @@ import hashlib
 from datetime import date as date_type
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from ..interpretations.text_search import simple_text_search
 
 # 注意：计算缓存已移除（Kerykeion 本地计算足够快，每次实时计算）
@@ -37,6 +37,7 @@ class ChatRequest(BaseModel):
     k: int = 5
     history: List[HistoryMessage] = []
     summary: str = ""  # compressed summary of earlier turns
+    transit_context: Optional[Dict[str, Any]] = None  # 行运页专用：{date, overall, aspects}
 
 
 class SummarizeRequest(BaseModel):
@@ -73,7 +74,8 @@ async def interpret_chat(body: ChatRequest):
         from ..rag import chat_with_chart
         history = [{"role": m.role, "text": m.text} for m in body.history]
         result = chat_with_chart(body.query, body.chart_data, k=body.k,
-                                 history=history, summary=body.summary)
+                                 history=history, summary=body.summary,
+                                 transit_context=body.transit_context)
         asyncio.create_task(_log_analytics(body.query, result))
         return result
     except RuntimeError as e:

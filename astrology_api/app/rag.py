@@ -535,16 +535,43 @@ def rag_generate(query: str, prompt: str, *, k: int = 5, temperature: float = 0.
 
 
 def chat_with_chart(query: str, chart_data: dict, k: int = 5,
-                    history: list[dict] = None, summary: str = "") -> dict:
+                    history: list[dict] = None, summary: str = "",
+                    transit_context: dict = None) -> dict:
     """
     统一对话：AI 知识为主，RAG 书籍片段为可选佐证。
     使用 _build_rag_section 构建知识增强块，通过 _build_contents 注入对话历史。
+    当传入 transit_context 时，prompt 额外注入当日行运摘要，回答聚焦当下。
     """
     _load()
     chunks = retrieve(query, k=k)
     chart_summary = format_chart_summary(chart_data)
 
-    base_prompt = f"""用户本命盘：
+    if transit_context:
+        date = transit_context.get("date", "")
+        overall = transit_context.get("overall", "")
+        aspects = transit_context.get("aspects", [])
+        aspect_lines = "\n".join(
+            f"  · {a.get('transit_planet_zh', a.get('transit_planet', ''))} "
+            f"{a.get('aspect', '')} "
+            f"{a.get('natal_planet_zh', a.get('natal_planet', ''))}"
+            f"（{a.get('tone', '')}）"
+            + (f"：{a.get('analysis', '')[:80]}…" if a.get('analysis') else "")
+            for a in aspects[:8]
+        )
+        base_prompt = f"""用户本命盘：
+
+{chart_summary}
+
+当前行运日期：{date}
+活跃行运相位：
+{aspect_lines}
+
+整体行运综述：{overall[:400] if overall else '（无）'}
+
+---
+请结合以上本命盘与当日行运，回答用户问题：{query}"""
+    else:
+        base_prompt = f"""用户本命盘：
 
 {chart_summary}
 
