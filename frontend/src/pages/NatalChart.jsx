@@ -1285,7 +1285,7 @@ export default function NatalChart() {
 
               {/* 转折点选择 */}
               {rectifyWizardStep === 6 && (() => {
-                const validEvents = rectifyEvents.filter(e => e.year && e.month && e.day)
+                const validEvents = rectifyEvents.filter(e => e.year)
                 const tpCount = validEvents.filter(e => e.is_turning_point).length
                 return (
                   <div style={{ marginBottom: '12px' }}>
@@ -1309,7 +1309,7 @@ export default function NatalChart() {
                             style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', padding: '8px 12px', background: isTP ? '#1e1a38' : '#14142a', border: `1px solid ${isTP ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '8px', cursor: 'pointer' }}>
                             <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `2px solid ${isTP ? '#9a8acc' : '#4a4a6a'}`, background: isTP ? '#7a6aaa' : 'transparent', flexShrink: 0 }} />
                             <div style={{ flex: 1 }}>
-                              <span style={{ color: '#d0d0e0', fontSize: '0.82rem' }}>{ev.year}/{String(ev.month).padStart(2,'0')}/{String(ev.day).padStart(2,'0')} · {typeLabel}</span>
+                              <span style={{ color: '#d0d0e0', fontSize: '0.82rem' }}>{ev.year}{ev.month ? '/' + String(ev.month).padStart(2,'0') : ''}{ev.month && ev.day ? '/' + String(ev.day).padStart(2,'0') : ''} · {typeLabel}</span>
                               {domain && <span style={{ color: '#5a5a7a', fontSize: '0.72rem', marginLeft: '6px' }}>{domain.label}</span>}
                             </div>
                           </div>
@@ -1331,8 +1331,8 @@ export default function NatalChart() {
               })()}
 
               {rectifyWizardStep === 6 && (
-                <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year && e.month && e.day).length === 0}
-                  style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year && e.month && e.day).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                <button onClick={handleRectify} disabled={rectifyLoading || rectifyEvents.filter(e => e.year).length === 0}
+                  style={{ width: '100%', padding: '10px', marginTop: '8px', background: rectifyLoading ? '#1e1e3a' : '#7a6aaa', color: rectifyLoading ? '#3a3a5a' : '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: (rectifyLoading || rectifyEvents.filter(e => e.year).length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
                   {rectifyLoading ? '扫描中… 约 25-40 秒' : '开始校对'}
                 </button>
               )}
