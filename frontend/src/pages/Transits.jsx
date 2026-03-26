@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 import { useInterpret } from '../hooks/useInterpret'
@@ -155,7 +156,7 @@ export default function Transits() {
       })
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
-      setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }])
+      setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer, sources: data.sources }])
       setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     } catch (err) {
       setChatMessages(prev => [...prev, { role: 'assistant', text: `⚠ ${err.message}` }])
@@ -403,14 +404,15 @@ export default function Transits() {
                         borderRadius: '10px', padding: '12px 16px',
                         fontSize: '0.9rem', color: '#e8e8ff', lineHeight: 1.75,
                       }}>
-                        {msg.role === 'user' ? msg.text : (
+                        {msg.role === 'user' ? msg.text : (<>
                           <ReactMarkdown components={{
                             p: ({children}) => <p style={{ margin: '5px 0' }}>{children}</p>,
                             strong: ({children}) => <strong style={{ color: '#e8c96c' }}>{children}</strong>,
                             ul: ({children}) => <ul style={{ paddingLeft: '20px', margin: '5px 0' }}>{children}</ul>,
                             li: ({children}) => <li style={{ marginBottom: '4px' }}>{children}</li>,
                           }}>{msg.text}</ReactMarkdown>
-                        )}
+                          <SourcesSection sources={msg.sources} />
+                        </>)}
                       </div>
                     ))}
                     {chatLoading && (
