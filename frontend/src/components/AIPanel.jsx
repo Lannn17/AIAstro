@@ -1,15 +1,68 @@
+/** Converts camelCase filenames to readable book titles, e.g. "modernAstrology" → "Modern Astrology" */
+function cleanSourceName(raw) {
+  const base = raw.replace('[EN]', '').split('(')[0].split('/').pop().replace(/\.\w+$/, '').trim()
+  return base
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .trim()
+}
+
+export function SourcesSection({ sources }) {
+  if (!sources?.length) return null
+  const cited = sources.filter(s => s.cited)
+  return (
+    <div style={{
+      marginTop: '16px',
+      padding: '12px 14px',
+      backgroundColor: '#0a0a1e',
+      border: '1px solid #2a2a4a',
+      borderRadius: '8px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+        <span style={{ color: '#6666aa', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          RAG 检索来源
+        </span>
+        <span style={{ color: '#3a3a6a', fontSize: '0.7rem' }}>
+          ✓ 已引用 · ○ 未引用
+        </span>
+        <span style={{ marginLeft: 'auto', color: cited.length ? '#66cc88' : '#444466', fontSize: '0.72rem' }}>
+          {cited.length}/{sources.length} 条引用
+        </span>
+      </div>
+      {sources.map((s, i) => {
+        const name = cleanSourceName(s.source)
+        return (
+          <div key={i} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            gap: '8px', fontSize: '0.75rem', marginBottom: '4px',
+          }}>
+            <span style={{ color: s.cited ? '#8888cc' : '#444466' }}>
+              <span style={{ marginRight: '5px', color: s.cited ? '#66cc88' : '#333355' }}>
+                {s.cited ? '✓' : '○'}
+              </span>
+              {name}
+            </span>
+            <span style={{ color: s.score >= 0.5 ? '#c9a84c' : '#444466', flexShrink: 0 }}>
+              {s.score.toFixed(3)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * Reusable AI interpretation panel.
- * Renders a trigger button, an error message, and the result text.
  *
  * Props:
  *   onGenerate  – called when button is clicked
  *   loading     – show spinner / disable button
- *   result      – object with an `answer` string field (from useInterpret)
- *   error       – error string (from useInterpret)
+ *   result      – object from useInterpret: { answer, sources? }
+ *   error       – error string from useInterpret
  *   label       – button label (default: "生成 AI 解读")
- *   disabled    – disable button regardless of loading (e.g. inputs not ready)
- *   children    – optional: replace the default <pre> result display
+ *   disabled    – disable button regardless of loading
+ *   children    – optional: replace the default answer text display
  */
 export default function AIPanel({
   onGenerate,
@@ -46,15 +99,19 @@ export default function AIPanel({
       )}
 
       {result && (
-        children
-          ? <div style={{ marginTop: '16px' }}>{children}</div>
-          : (
-            <div style={{ marginTop: '16px', color: '#ccc', lineHeight: 1.7, fontSize: '0.88rem' }}>
+        <>
+          {/* Answer text */}
+          <div style={{ marginTop: '16px', color: '#ccc', lineHeight: 1.7, fontSize: '0.88rem' }}>
+            {children || (
               <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
                 {result.answer}
               </pre>
-            </div>
-          )
+            )}
+          </div>
+
+          {/* Separate citations section */}
+          <SourcesSection sources={result.sources} />
+        </>
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useInterpret } from '../hooks/useInterpret'
+import { SourcesSection } from '../components/AIPanel'
 import ReactMarkdown from 'react-markdown'
 import ChartForm from '../components/ChartForm'
 import PlanetTable from '../components/PlanetTable'
@@ -1105,33 +1106,7 @@ export default function NatalChart() {
                       }}>
                         {msg.text}
                       </ReactMarkdown>
-                      {msg.sources?.length > 0 && (
-                        <div style={{ marginTop: '12px', borderTop: '1px solid #2a2a5a', paddingTop: '10px' }}>
-                          <div style={{ color: '#555577', fontSize: '0.72rem', marginBottom: '6px', letterSpacing: '0.05em' }}>
-                            RAG 检索来源
-                            <span style={{ marginLeft: '8px', color: '#3a3a6a' }}>
-                              ✓ 已引用 · ○ 未引用
-                            </span>
-                          </div>
-                          {msg.sources.map((s, si) => {
-                            const name = s.source.replace('[EN]', '').split('(')[0].trim()
-                            const cited = s.cited
-                            return (
-                              <div key={si} style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
-                                <span style={{ color: cited ? '#8888cc' : '#444466' }}>
-                                  <span style={{ marginRight: '5px', color: cited ? '#66cc88' : '#333355' }}>
-                                    {cited ? '✓' : '○'}
-                                  </span>
-                                  {name}
-                                </span>
-                                <span style={{ color: s.score >= 0.5 ? '#c9a84c' : '#444466', flexShrink: 0 }}>
-                                  {s.score.toFixed(3)}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                      <SourcesSection sources={msg.sources} />
                     </>)}
                   </div>
                 ))}
