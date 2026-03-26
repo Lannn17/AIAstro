@@ -8,6 +8,7 @@
 
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
 - **每次代码改动后立即 commit 并推两端**：`git push origin main && git push hf main`。版本号更新和 CHANGELOG 只在用户明确要求时才做。
+- **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
 
 ---
 
