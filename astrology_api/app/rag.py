@@ -11,6 +11,7 @@ import numpy as np
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from .interpretations.translations import translate_planet, translate_sign, translate_aspect
 
 load_dotenv()
 
@@ -1311,7 +1312,8 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     """
     planets = natal_chart.get('planets', {})
     asc = natal_chart.get('ascendant', {})
-    asc_sign = asc.get('sign_original') or asc.get('sign', '')
+    asc_sign_raw = asc.get('sign_original') or asc.get('sign', '')
+    asc_sign = translate_sign(asc_sign_raw, 'zh') if asc_sign_raw else ''
 
     # 行星列表（含逆行标注），同时记录 key 顺序用于生成 JSON 模板
     lines = []
@@ -1319,8 +1321,10 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     for key, p in planets.items():
         if key in _SKIP_PLANETS:
             continue
-        name = p.get('name_original') or p.get('name', key)
-        sign = p.get('sign_original') or p.get('sign', '')
+        name_raw = p.get('name_original') or p.get('name', key)
+        sign_raw = p.get('sign_original') or p.get('sign', '')
+        name = translate_planet(name_raw, 'zh') if name_raw else name_raw
+        sign = translate_sign(sign_raw, 'zh') if sign_raw else sign_raw
         house = p.get('house', '')
         retro = '（逆行）' if p.get('retrograde') else ''
         lines.append(f"{name}（key: {key}）: {sign} 第{house}宫{retro}")
@@ -1347,8 +1351,9 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     house_lines = []
     for num in range(1, 13):
         h = houses.get(str(num), {})
-        hsign = h.get('sign_original') or h.get('sign', '')
-        if hsign:
+        hsign_raw = h.get('sign_original') or h.get('sign', '')
+        if hsign_raw:
+            hsign = translate_sign(hsign_raw, 'zh')
             house_lines.append(f"第{num}宫: {hsign}")
     house_summary = '\n'.join(house_lines)
 
@@ -1529,9 +1534,10 @@ def analyze_synastry(
             try:
                 p_dict = p if isinstance(p, dict) else vars(p)
                 longitude = float(p_dict.get('longitude', 0))
+                sign_raw = p_dict.get('sign', '')
                 result.append({
-                    "planet": name,
-                    "sign": p_dict.get('sign', ''),
+                    "planet": translate_planet(name, 'zh') if name else name,
+                    "sign": translate_sign(sign_raw, 'zh') if sign_raw else sign_raw,
                     "degree": round(longitude % 30, 1),
                     "house": p_dict.get('house', None),
                 })
@@ -1544,7 +1550,8 @@ def analyze_synastry(
 
     # ── 2. 构建富化相位列表（补充星座信息）────────────────────────────
     def _sign(p) -> str:
-        return p.get('sign', '') if isinstance(p, dict) else getattr(p, 'sign', '')
+        raw = p.get('sign', '') if isinstance(p, dict) else getattr(p, 'sign', '')
+        return translate_sign(raw, 'zh') if raw else raw
 
     sign_lookup1 = {name: _sign(p) for name, p in chart1_planets.items()}
     sign_lookup2 = {name: _sign(p) for name, p in chart2_planets.items()}
