@@ -64,7 +64,7 @@ chart_affinity: dict[str, float]  # event_type → multiplier, range [0.6, 2.0]
 
 ### 2.2 宫主星映射（_SIGN_RULER）
 
-使用传统 + 现代混合守护星：
+使用现代守护星（天蝎/宝瓶/双鱼使用外行星主守护）：
 
 ```python
 _SIGN_RULER = {
@@ -136,7 +136,7 @@ event_weight = user_weight
 主指标使用 **Top1-Top2 相对差距**，辅以三者变异系数作为二级信号：
 
 ```
-gap_ratio = (top1_score - top2_score) / top1_score
+gap_ratio = 0.0 if top1_score == 0 else (top1_score - top2_score) / top1_score
 ```
 
 | gap_ratio 范围 | 标签 | 含义 |
@@ -152,7 +152,8 @@ gap_ratio = (top1_score - top2_score) / top1_score
 基于**原始事件列表**（`_expand_events` 展开前的事件，避免 precision_weight 被重复计入）：
 
 ```
-evidence_score = Σ(raw_event.weight × precision_weight(raw_event)) / N_raw_events
+evidence_score = 0.0 if N_raw_events == 0
+              else Σ(raw_event.weight × precision_weight(raw_event)) / N_raw_events
 ```
 
 其中 `precision_weight` = 1.0（有日期）/ 0.7（有月无日）/ 0.4（仅年份），与 `_PRECISION_WEIGHT` 一致。
