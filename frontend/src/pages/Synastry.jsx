@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import LocationSearch from '../components/LocationSearch'
-import AIPanel from '../components/AIPanel'
 import { useInterpret } from '../hooks/useInterpret'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
@@ -339,6 +338,8 @@ export default function Synastry() {
       chart1_summary: { name: col1.formData.name },
       chart2_summary: { name: col2.formData.name },
       aspects: result.aspects,
+      chart1_planets: result.chart1_planets || {},
+      chart2_planets: result.chart2_planets || {},
     })
   }
 
@@ -451,12 +452,90 @@ export default function Synastry() {
 
       {/* AI interpretation */}
       {result && (
-        <AIPanel
-          onGenerate={handleInterpret}
-          loading={interp.loading}
-          result={interp.result}
-          error={interp.error}
-        />
+        <div style={{ marginTop: '24px' }}>
+          <button
+            onClick={handleInterpret}
+            disabled={interp.loading}
+            style={{
+              padding: '8px 20px', borderRadius: '8px',
+              cursor: interp.loading ? 'not-allowed' : 'pointer',
+              backgroundColor: '#2a2a5a', border: '1px solid #4a4a8a',
+              color: interp.loading ? '#5a5a8a' : '#c9a84c', fontSize: '0.85rem',
+            }}
+          >
+            {interp.loading ? '生成中…' : '生成 AI 解读'}
+          </button>
+
+          {interp.error && (
+            <div style={{ color: '#cc4444', fontSize: '0.82rem', marginTop: '8px' }}>
+              {interp.error}
+            </div>
+          )}
+
+          {interp.result && !interp.result.texture_labels && (
+            <pre style={{ marginTop: '16px', color: '#ccc', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
+              {interp.result.answer}
+            </pre>
+          )}
+
+          {interp.result?.texture_labels && (
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Texture */}
+              <div style={{ padding: '12px 14px', backgroundColor: '#12122a', borderRadius: '8px', border: '1px solid #2a2a5a' }}>
+                <div style={{ color: '#8888aa', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '6px' }}>关系质感</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  {interp.result.texture_labels.map(label => (
+                    <span key={label} style={{ padding: '3px 10px', backgroundColor: '#2a2a5a', borderRadius: '12px', color: '#c9a84c', fontSize: '0.82rem' }}>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ color: '#a0a0cc', fontSize: '0.82rem' }}>{interp.result.texture_reasoning}</div>
+              </div>
+
+              {/* Relationship rankings */}
+              <div style={{ padding: '12px 14px', backgroundColor: '#12122a', borderRadius: '8px', border: '1px solid #2a2a5a' }}>
+                <div style={{ color: '#8888aa', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '10px' }}>最可能形成的关系</div>
+                {interp.result.relationship_rankings.map((r, i) => (
+                  <div key={i} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: i < 2 ? '1px solid #1a1a3a' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                      <span style={{ color: '#c9a84c', fontWeight: 600 }}>{r.type}</span>
+                      <span style={{ color: '#6666aa', fontSize: '0.78rem' }}>{r.score} / 100</span>
+                    </div>
+                    <div style={{ color: '#6666aa', fontSize: '0.75rem', marginBottom: '4px' }}>
+                      {r.key_aspects.join(' · ')}
+                    </div>
+                    <div style={{ color: '#a0a0cc', fontSize: '0.82rem', lineHeight: 1.6 }}>{r.summary}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dimensions */}
+              <div style={{ padding: '12px 14px', backgroundColor: '#12122a', borderRadius: '8px', border: '1px solid #2a2a5a' }}>
+                <div style={{ color: '#8888aa', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '10px' }}>各维度分析</div>
+                {Object.entries({
+                  attraction: '吸引力', emotional: '情感连结', communication: '沟通',
+                  stability: '稳定性', growth: '成长激励', friction: '摩擦张力',
+                }).map(([key, label]) => {
+                  const d = interp.result.dimensions[key]
+                  if (!d) return null
+                  return (
+                    <div key={key} style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span style={{ color: '#8888cc', fontSize: '0.8rem' }}>{label}</span>
+                        <span style={{ color: '#c9a84c', fontSize: '0.8rem' }}>{d.score}</span>
+                      </div>
+                      <div style={{ height: '4px', backgroundColor: '#1a1a3a', borderRadius: '2px', marginBottom: '6px' }}>
+                        <div style={{ width: `${d.score}%`, height: '100%', backgroundColor: '#4a4a9a', borderRadius: '2px' }} />
+                      </div>
+                      <div style={{ color: '#a0a0cc', fontSize: '0.8rem', lineHeight: 1.6 }}>{d.analysis}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
