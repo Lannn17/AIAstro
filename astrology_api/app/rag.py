@@ -24,9 +24,48 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 if not QDRANT_URL or not QDRANT_API_KEY:
     raise RuntimeError("请在 .env 中设置 QDRANT_URL 和 QDRANT_API_KEY")
 
-client = genai.Client(api_key=GOOGLE_API_KEY)
+_raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
 GENERATE_MODEL  = "gemini-3.1-flash-lite-preview"
+_FALLBACK_MODELS = [
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+]
+
+class _ModelsWithFallback:
+    """Wraps generate_content with automatic model fallback on 503."""
+    def __init__(self, original):
+        self._orig = original
+
+    def generate_content(self, model, contents, config=None, **kwargs):
+        chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
+        last_err = None
+        for m in chain:
+            try:
+                return self._orig.generate_content(model=m, contents=contents, config=config, **kwargs)
+            except Exception as e:
+                if '503' in str(e) or 'UNAVAILABLE' in str(e):
+                    print(f"[fallback] {m} 503, trying next…", flush=True)
+                    last_err = e
+                    continue
+                raise
+        raise last_err
+
+    def __getattr__(self, name):
+        return getattr(self._orig, name)
+
+class _ClientWithFallback:
+    """Wraps genai.Client so client.models uses fallback logic."""
+    def __init__(self, original):
+        self._orig = original
+        self.models = _ModelsWithFallback(original.models)
+
+    def __getattr__(self, name):
+        return getattr(self._orig, name)
+
+client = _ClientWithFallback(_raw_client)
 COLLECTION_NAME = "astro_chunks"
 E5_MODEL        = "intfloat/multilingual-e5-small"
 E5_PREFIX       = "query: "
