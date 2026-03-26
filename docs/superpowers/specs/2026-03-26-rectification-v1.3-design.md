@@ -29,15 +29,16 @@ v1.3 同时解决这两个问题，并新增分数展示的分辨力 / 证据强
 
 ### 1.2 慢星相位检测（新增函数）
 
-新增 `_score_slow_planet_transits(natal, event_date, event_weight)`：
+新增 `_score_slow_planet_transits(natal, event_subj, event_weight)`：
 
+- **参数**：`natal` = 候选出生时间的 `AstrologicalSubject`；`event_subj` = 事件日期构建的 `AstrologicalSubject`（与 `_score_transits` 一致，由调用方传入）
 - **触发条件**：仅在 `ev.get('is_turning_point')` 为 True 时调用，且仅在 Phase 2 精扫阶段运行
-- **检测范围**：土星 / 天王星 / 冥王星 / 木星 / 海王星 过本命**所有行星**（而非仅 ASC/MC）
+- **检测范围**：`event_subj` 中土星 / 天王星 / 冥王星 / 木星 / 海王星 的位置，与 `natal` 中**所有行星**（日月水金火木土天海冥）形成相位
 - **容许度**：2°（严于普通行运的 5°）
 - **相位**：合相(0°) / 对分(180°) / 四分(90°) / 三分(120°)
 - **评分系数**：
 
-| 慢星 | 系数 | 理由 |
+| 慢星（行运方） | 系数 | 理由 |
 |---|---|---|
 | 冥王星 | 3.5 | 深层转化 |
 | 土星 | 3.0 | 人生结构重塑 |
@@ -53,13 +54,28 @@ v1.3 同时解决这两个问题，并新增分数展示的分辨力 / 证据强
 
 ### 2.1 预计算 chart_affinity
 
-在 `_score_candidate` 的事件循环开始前，调用一次 `_compute_chart_affinity(natal_chart_dict)` 返回：
+在 `_score_candidate` 的事件循环开始前，调用一次 `_compute_chart_affinity(natal)` 返回：
 
 ```python
 chart_affinity: dict[str, float]  # event_type → multiplier, range [0.6, 2.0]
 ```
 
-### 2.2 三层激活计算
+**参数**：`natal` 为已构建的 `AstrologicalSubject`（候选出生时间），与其他评分函数一致。不使用 JSON dict，因为三层计算需要直接访问行星位置属性（`natal.sun.house`、`natal.first_house.sign` 等）。`chart_affinity` 随候选时间变化（不同出生时间→不同宫位→不同动态权重），在每个候选的 Phase 2 评分中各计算一次。
+
+### 2.2 宫主星映射（_SIGN_RULER）
+
+使用传统 + 现代混合守护星：
+
+```python
+_SIGN_RULER = {
+    "Aries": "Mars",    "Taurus": "Venus",   "Gemini": "Mercury",
+    "Cancer": "Moon",   "Leo": "Sun",         "Virgo": "Mercury",
+    "Libra": "Venus",   "Scorpio": "Pluto",   "Sagittarius": "Jupiter",
+    "Capricorn": "Saturn", "Aquarius": "Uranus", "Pisces": "Neptune",
+}
+```
+
+### 2.3 三层激活计算
 
 对每个事件类型，遍历其 `EVENT_HOUSE_MAP` 的前两个关联宫位：
 
@@ -78,25 +94,30 @@ chart_affinity: dict[str, float]  # event_type → multiplier, range [0.6, 2.0]
 
 **范围：** `clamp(0.6, 2.0)`，基础值 1.0
 
-### 2.3 关键行星表（EVENT_KEY_PLANETS）
+### 2.4 关键行星表（EVENT_KEY_PLANETS）
 
 | 事件类型 | 关键行星 |
 |---|---|
 | marriage / new_relationship | Venus, Moon, Jupiter |
 | divorce / breakup | Saturn, Pluto, Mars |
-| career_up / business_start | Sun, Jupiter, Mars |
+| career_up / business_start / retirement | Sun, Jupiter, Mars |
 | career_down / business_end | Saturn, Pluto |
 | career_change | Uranus, Jupiter |
 | childbirth | Moon, Jupiter, Sun |
-| bereavement_* | Saturn, Pluto |
-| serious_illness / accident | Mars, Saturn, Pluto |
-| relocation_international | Jupiter, Uranus |
-| financial_gain / inheritance | Venus, Jupiter |
+| bereavement_parent / bereavement_spouse / bereavement_child / bereavement_other / bereavement | Saturn, Pluto |
+| serious_illness / mental_health_crisis / illness | Mars, Saturn, Pluto |
+| accident / surgery | Mars, Uranus |
+| relocation_international / study_abroad | Jupiter, Uranus |
+| relocation_domestic / relocation | Moon, Saturn |
+| financial_gain / inheritance / major_investment | Venus, Jupiter |
 | financial_loss / bankruptcy | Saturn, Pluto |
+| graduation / major_exam | Jupiter, Mercury |
+| legal_win / legal_loss | Jupiter, Saturn |
+| family_bond_change | Moon, Saturn |
 | spiritual_awakening | Neptune, Pluto, Uranus |
-| other | （空，affinity 保持 1.0）|
+| other（含所有未列出类型）| （空列表，affinity 保持基础值 1.0）|
 
-### 2.4 最终评分公式
+### 2.5 最终评分公式
 
 ```
 event_weight = user_weight
@@ -112,19 +133,29 @@ event_weight = user_weight
 
 ### 3.1 分辨力指标
 
-基于三个候选分数的**变异系数（CV = σ / μ）**：
+主指标使用 **Top1-Top2 相对差距**，辅以三者变异系数作为二级信号：
 
-| CV 范围 | 标签 | 含义 |
+```
+gap_ratio = (top1_score - top2_score) / top1_score
+```
+
+| gap_ratio 范围 | 标签 | 含义 |
 |---|---|---|
-| CV ≥ 0.3 | 高 | Top1 明显领先，推荐可信 |
-| 0.15 ≤ CV < 0.3 | 中 | 候选间有差距，需结合问卷 |
-| CV < 0.15 | 低 | 三者接近，建议补充事件 |
+| ≥ 0.25 | 高 | Top1 明显领先，推荐可信 |
+| 0.10 ≤ gap < 0.25 | 中 | 候选间有差距，需结合问卷 |
+| < 0.10 | 低 | 三者接近，建议补充事件 |
+
+注：只用 Top3 计算 CV 样本过少（N=3），不具统计代表性，改用 gap_ratio 更直接可靠。
 
 ### 3.2 证据强度指标
 
+基于**原始事件列表**（`_expand_events` 展开前的事件，避免 precision_weight 被重复计入）：
+
 ```
-evidence_score = Σ(event.weight × event.precision_weight) / N_events
+evidence_score = Σ(raw_event.weight × precision_weight(raw_event)) / N_raw_events
 ```
+
+其中 `precision_weight` = 1.0（有日期）/ 0.7（有月无日）/ 0.4（仅年份），与 `_PRECISION_WEIGHT` 一致。
 
 | 范围 | 标签 |
 |---|---|
