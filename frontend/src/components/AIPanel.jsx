@@ -32,19 +32,33 @@ export function SourcesSection({ sources }) {
       {sources.map((s, i) => {
         const name = cleanSourceName(s.source)
         return (
-          <div key={i} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            gap: '8px', fontSize: '0.75rem', marginBottom: '4px',
-          }}>
-            <span style={{ color: s.cited ? '#8888cc' : '#444466' }}>
-              <span style={{ marginRight: '5px', color: s.cited ? '#66cc88' : '#333355' }}>
-                {s.cited ? '✓' : '○'}
+          <div key={i} style={{ marginBottom: '8px' }}>
+            {/* Header row: cited status + book name + score */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              gap: '8px', fontSize: '0.75rem',
+            }}>
+              <span style={{ color: s.cited ? '#8888cc' : '#444466' }}>
+                <span style={{ marginRight: '5px', color: s.cited ? '#66cc88' : '#333355' }}>
+                  {s.cited ? '✓' : '○'}
+                </span>
+                {name}
               </span>
-              {name}
-            </span>
-            <span style={{ color: s.score >= 0.5 ? '#c9a84c' : '#444466', flexShrink: 0 }}>
-              {s.score.toFixed(3)}
-            </span>
+              <span style={{ color: s.score >= 0.5 ? '#c9a84c' : '#444466', flexShrink: 0 }}>
+                {s.score.toFixed(3)}
+              </span>
+            </div>
+            {/* Excerpt */}
+            {s.text && (
+              <div style={{
+                marginTop: '3px', marginLeft: '16px',
+                color: '#555577', fontSize: '0.72rem', lineHeight: 1.5,
+                borderLeft: `2px solid ${s.cited ? '#3a3a7a' : '#222240'}`,
+                paddingLeft: '8px',
+              }}>
+                {s.text.length > 120 ? s.text.slice(0, 120) + '…' : s.text}
+              </div>
+            )}
           </div>
         )
       })}

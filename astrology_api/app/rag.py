@@ -462,6 +462,7 @@ def _detect_citations(answer: str, chunks: list[dict]) -> list[dict]:
             "source": c["source"],
             "score":  round(c["score"], 3),
             "cited":  cited,
+            "text":   c["text"],
         })
     return result
 
