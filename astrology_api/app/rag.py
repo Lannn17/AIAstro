@@ -1004,7 +1004,7 @@ def analyze_rectification(
 用户提供的重大人生事件：
 {chr(10).join(event_lines)}
 
-算法评分 Top3 候选出生时间：
+算法评分 Top3 候选出生时间（rank 1 为算法评分最高）：
 {chr(10).join(top3_lines)}
 
 ---
@@ -1012,13 +1012,15 @@ def analyze_rectification(
 - 对每个候选时间（rank 1/2/3），在 reason 字段中单独分析：该上升星座的性格特征、哪些宫位或角点在用户事件日期被行运激活、与事件模式的吻合或不吻合之处（100-150字）
 - 每个 reason 只分析自身对应的候选，不提及其他候选
 - overall 给出综合推荐与验证建议（150-200字）
+- ai_recommended_rank：根据你的占星理论分析，哪个候选最符合用户的人生事件模式？填写该候选的 rank 编号（1、2 或 3）
 
 返回 JSON：
 {{
   "candidates": [
 {candidates_list}
   ],
-  "overall": "..."
+  "overall": "...",
+  "ai_recommended_rank": 1
 }}{rag_section}"""
 
     response = client.models.generate_content(
@@ -1038,8 +1040,19 @@ def analyze_rectification(
         print(f"[rectify] JSON parse error: {e}")
         parsed = {"candidates": [], "overall": response.text}
 
-    print(f"[rectify] candidates: {len(parsed.get('candidates', []))}, overall len: {len(parsed.get('overall', ''))}")
-    return {"candidates": parsed.get("candidates", []), "overall": parsed.get("overall", "")}
+    ai_rank = parsed.get("ai_recommended_rank")
+    try:
+        ai_rank = int(ai_rank)
+        if ai_rank not in range(1, len(top3) + 1):
+            ai_rank = None
+    except (TypeError, ValueError):
+        ai_rank = None
+    print(f"[rectify] candidates: {len(parsed.get('candidates', []))}, overall len: {len(parsed.get('overall', ''))}, ai_recommended_rank: {ai_rank}")
+    return {
+        "candidates": parsed.get("candidates", []),
+        "overall": parsed.get("overall", ""),
+        "ai_recommended_rank": ai_rank,
+    }
 
 
 # ── 上升星座性格问卷生成 ─────────────────────────────────────────

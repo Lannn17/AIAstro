@@ -1452,36 +1452,66 @@ export default function NatalChart() {
                       )}
                     </div>
                   )}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-                    {rectifyResult.top3.map((t, i) => (
-                      <div key={i} style={{ background: i === 0 ? '#1e1a38' : '#14142a', border: `1px solid ${i === 0 ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '16px 18px' }}>
-                        {/* 头部：时间 + 标签 */}
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: t.reason ? '12px' : '0' }}>
-                          <span style={{ color: '#e0e0f0', fontSize: '1.4rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                            {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
-                          </span>
-                          {t.asc_sign && (
-                            <span style={{ color: '#8888aa', fontSize: '0.82rem' }}>上升 {t.asc_sign}</span>
-                          )}
-                          <span style={{ marginLeft: 'auto', color: i === 0 ? '#c9a84c' : '#7a6aaa', fontSize: '0.72rem', fontWeight: 600 }}>
-                            {i === 0 ? '★ 推荐' : `候选 ${i + 1}`}
-                          </span>
-                          <span style={{ color: '#555577', fontSize: '0.72rem' }}>评分 {t.score}</span>
+                  {/* 算法/AI 分歧提示 */}
+                  {(() => {
+                    const aiRank = rectifyResult.ai_recommended_rank
+                    if (aiRank && aiRank !== 1 && rectifyResult.top3.length >= aiRank) {
+                      const aiPick = rectifyResult.top3[aiRank - 1]
+                      const algPick = rectifyResult.top3[0]
+                      return (
+                        <div style={{ background: '#1a1a2e', border: '1px solid #c9a84c', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '0.8rem', color: '#c9a84c', lineHeight: 1.6 }}>
+                          ⚠ 算法评分首选 <strong>{String(algPick.hour).padStart(2,'0')}:{String(algPick.minute).padStart(2,'0')}</strong>，
+                          AI 理论分析推荐 <strong>{String(aiPick.hour).padStart(2,'0')}:{String(aiPick.minute).padStart(2,'0')}</strong>
+                          {rectifyResult.gap_label === '低' && '（分辨力低，建议优先参考 AI 推荐）'}
                         </div>
-                        {/* 分析理由（Markdown） */}
-                        {t.reason && (
-                          <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '10px', color: '#b0b0cc', fontSize: '0.88rem', lineHeight: 1.85 }}>
-                            <ReactMarkdown components={{
-                              p: ({children}) => <p style={{ margin: '0 0 0.5em', color: '#b0b0cc' }}>{children}</p>,
-                              strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
-                              em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
-                              ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
-                              li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#b0b0cc' }}>{children}</li>,
-                            }}>{t.reason}</ReactMarkdown>
+                      )
+                    }
+                    return null
+                  })()}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+                    {rectifyResult.top3.map((t, i) => {
+                      const aiRank = rectifyResult.ai_recommended_rank
+                      const isAiPick = aiRank === i + 1
+                      const isAlgTop = i === 0
+                      const hasConflict = aiRank && aiRank !== 1
+                      return (
+                        <div key={i} style={{ background: isAiPick && hasConflict ? '#1a1a2a' : isAlgTop ? '#1e1a38' : '#14142a', border: `1px solid ${isAiPick && hasConflict ? '#c9a84c' : isAlgTop ? '#7a6aaa' : '#2a2a5a'}`, borderRadius: '10px', padding: '16px 18px' }}>
+                          {/* 头部：时间 + 标签 */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: t.reason ? '12px' : '0' }}>
+                            <span style={{ color: '#e0e0f0', fontSize: '1.4rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                              {String(t.hour).padStart(2, '0')}:{String(t.minute).padStart(2, '0')}
+                            </span>
+                            {t.asc_sign && (
+                              <span style={{ color: '#8888aa', fontSize: '0.82rem' }}>上升 {t.asc_sign}</span>
+                            )}
+                            <span style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              {isAiPick && (
+                                <span style={{ color: '#c9a84c', fontSize: '0.7rem', fontWeight: 700, background: '#2a1e00', border: '1px solid #c9a84c', borderRadius: '4px', padding: '1px 6px' }}>AI推荐</span>
+                              )}
+                              {isAlgTop && !isAiPick && (
+                                <span style={{ color: '#9a8acc', fontSize: '0.7rem', fontWeight: 600, background: '#1e1a38', border: '1px solid #5a4a8a', borderRadius: '4px', padding: '1px 6px' }}>算法首选</span>
+                              )}
+                              {!isAlgTop && !isAiPick && (
+                                <span style={{ color: '#7a6aaa', fontSize: '0.72rem' }}>候选 {i + 1}</span>
+                              )}
+                            </span>
+                            <span style={{ color: '#555577', fontSize: '0.72rem' }}>评分 {t.score}</span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {/* 分析理由（Markdown） */}
+                          {t.reason && (
+                            <div style={{ borderTop: '1px solid #2a2a4a', paddingTop: '10px', color: '#b0b0cc', fontSize: '0.88rem', lineHeight: 1.85 }}>
+                              <ReactMarkdown components={{
+                                p: ({children}) => <p style={{ margin: '0 0 0.5em', color: '#b0b0cc' }}>{children}</p>,
+                                strong: ({children}) => <strong style={{ color: '#e0d0ff', fontWeight: 600 }}>{children}</strong>,
+                                em: ({children}) => <em style={{ color: '#c9a84c', fontStyle: 'normal' }}>{children}</em>,
+                                ul: ({children}) => <ul style={{ paddingLeft: '1.2em', margin: '0.4em 0' }}>{children}</ul>,
+                                li: ({children}) => <li style={{ marginBottom: '0.3em', color: '#b0b0cc' }}>{children}</li>,
+                              }}>{t.reason}</ReactMarkdown>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                   {/* 综合分析（Markdown） */}
                   {rectifyResult.overall && (

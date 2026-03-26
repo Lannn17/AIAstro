@@ -130,6 +130,8 @@ async def rectify(body: RectifyRequest):
             if 0 <= idx < len(top3):
                 top3[idx]["reason"] = item.get("reason", "")
 
+        ai_recommended_rank = ai.get("ai_recommended_rank")
+
         return {
             "top3": top3,
             "overall": ai.get("overall", ""),
@@ -137,6 +139,7 @@ async def rectify(body: RectifyRequest):
             "version_description": STRATEGY_DESCRIPTIONS.get(version, ""),
             "gap_label": indicators["gap_label"],
             "evidence_label": indicators["evidence_label"],
+            "ai_recommended_rank": ai_recommended_rank,
         }
 
     except RuntimeError as e:
