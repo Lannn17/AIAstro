@@ -1098,23 +1098,36 @@ def analyze_rectification(
     except (TypeError, ValueError):
         ai_rank = None
     print(f"[rectify] candidates: {len(parsed.get('candidates', []))}, overall len: {len(parsed.get('overall', ''))}, ai_recommended_rank: {ai_rank}")
+    sources = [{"source": c["source"], "score": c["score"], "cited": False, "text": c["text"]} for c in chunks]
     return {
         "candidates": parsed.get("candidates", []),
         "overall": parsed.get("overall", ""),
         "ai_recommended_rank": ai_rank,
+        "sources": sources,
     }
 
 
 # ── 上升星座性格问卷生成 ─────────────────────────────────────────
 
-def generate_asc_quiz(asc_signs: list[str]) -> list[dict]:
+def generate_asc_quiz(asc_signs: list[str]) -> dict:
     """
     根据 Top3 的上升星座动态生成 5 道鉴别性选择题。
-    返回: [{id, text, options: [{id, text, signs: [...]}]}]
+    返回: {"questions": [...], "sources": [...]}
     """
     _load()
     signs_str = "、".join(asc_signs)
+
+    rag_chunks = retrieve(f"上升星座性格特征外貌体态 {signs_str}", k=3)
+    rag_context = ""
+    if rag_chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(rag_chunks, 1)
+        ]
+        rag_context = "\n\n【参考书籍片段（可用于增强题目描述的准确性）】\n" + "\n\n".join(parts) + "\n\n"
+
     prompt = f"""你是一位专业占星师，需要设计一套用于区分以下三种上升星座的性格/外貌选择题：{signs_str}
+{rag_context}
 
 请生成5道选择题，每道题4个选项（A/B/C/D），从以下5个维度各出1题：
 1. 外貌与体态特征
@@ -1153,11 +1166,12 @@ def generate_asc_quiz(asc_signs: list[str]) -> list[dict]:
             temperature=0.6,
         ),
     )
+    sources = [{"source": c["source"], "score": c["score"], "cited": False, "text": c["text"]} for c in rag_chunks]
     try:
         data = _parse_json(response.text)
-        return data.get("questions", [])
+        return {"questions": data.get("questions", []), "sources": sources}
     except Exception:
-        return []
+        return {"questions": [], "sources": sources}
 
 
 # ── 生命主题置信度评分 ───────────────────────────────────────────
@@ -1205,13 +1219,23 @@ def calc_confidence(
         f"Q{i+1}（{a['question']}）→ {a['answer']}" for i, a in enumerate(theme_answers)
     )
 
-    prompt = f"""候选出生时间：{h:02d}:{m:02d}，上升星座：{natal_data.get('asc_sign','')}
+    asc_sign = natal_data.get('asc_sign', '')
+    rag_chunks = retrieve(f"birth time rectification ascendant life themes {asc_sign}", k=3)
+    rag_context = ""
+    if rag_chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(rag_chunks, 1)
+        ]
+        rag_context = "\n\n【参考书籍片段（供评估时参考）】\n" + "\n\n".join(parts) + "\n\n"
+
+    prompt = f"""候选出生时间：{h:02d}:{m:02d}，上升星座：{asc_sign}
 太阳星座：{natal_data.get('sun_sign','')}，月亮星座：{natal_data.get('moon_sign','')}，天顶：{natal_data.get('mc_sign','')}
 宫位聚集：{natal_data.get('stelliums', []) or '无明显聚集'}
 
 用户生命主题问卷回答：
 {answers_text}
-
+{rag_context}
 请综合评估以上出生时间与用户生命主题的匹配程度，给出：
 1. 置信度分数（0-100整数）
 2. 置信度标签（高 ≥70 / 中 40-69 / 低 <40）
@@ -1228,10 +1252,13 @@ def calc_confidence(
             temperature=0.4,
         ),
     )
+    sources = [{"source": c["source"], "score": c["score"], "cited": False, "text": c["text"]} for c in rag_chunks]
     try:
-        return _parse_json(response.text)
+        result = _parse_json(response.text)
+        result["sources"] = sources
+        return result
     except Exception:
-        return {"score": 0, "label": "低", "analysis": response.text}
+        return {"score": 0, "label": "低", "analysis": response.text, "sources": sources}
 
 
 # ── 本命盘行星逐一解读 ────────────────────────────────────────────
@@ -1658,7 +1685,18 @@ def analyze_synastry(
             "double_whammy": bool(a.get('double_whammy', False)),
         })
 
-    # ── 3. 构建 Gemini payload ───────────────────────────────────────
+    # ── 3. RAG 检索 ───────────────────────────────────────────────────
+    rag_query = f"synastry relationship compatibility aspects {' '.join(a.get('aspect','') for a in aspects[:5])}"
+    rag_chunks = retrieve(rag_query, k=4)
+    rag_context = ""
+    if rag_chunks:
+        parts = [
+            f"[参考{i} · {_clean_source_name(c['source'])}]\n{c['text']}"
+            for i, c in enumerate(rag_chunks, 1)
+        ]
+        rag_context = "\n\n【参考书籍片段（可参考相位解读，无需在 JSON 中注明）】\n" + "\n\n".join(parts) + "\n\n"
+
+    # ── 4. 构建 Gemini payload ───────────────────────────────────────
     context = {
         "person1": {"name": chart1_name, "planets": planets1},
         "person2": {"name": chart2_name, "planets": planets2},
@@ -1666,6 +1704,7 @@ def analyze_synastry(
     }
 
     prompt = f"""你是专业占星师，请根据以下两人的完整星盘数据进行合盘分析。
+{rag_context}
 
 【数据】
 {json.dumps(context, ensure_ascii=False, indent=2)}
@@ -1682,7 +1721,7 @@ def analyze_synastry(
 - Top 3关系类型必须是三种不同的类型，不可重复
 - 请用中文回答"""
 
-    # ── 4. 调用 Gemini（强制 JSON schema）────────────────────────────
+    # ── 5. 调用 Gemini（强制 JSON schema）────────────────────────────
     response = client.models.generate_content(
         model=GENERATE_MODEL,
         contents=prompt,
@@ -1700,4 +1739,5 @@ def analyze_synastry(
         raise RuntimeError(f"Gemini synastry schema parse failed: {e}\nRaw: {getattr(response, 'text', '')[:200]}")
 
     result["model_used"] = model_used
+    result["sources"] = [{"source": c["source"], "score": c["score"], "cited": False, "text": c["text"]} for c in rag_chunks]
     return result

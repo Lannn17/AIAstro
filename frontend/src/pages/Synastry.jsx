@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import LocationSearch from '../components/LocationSearch'
 import { useInterpret } from '../hooks/useInterpret'
+import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 
@@ -542,6 +543,7 @@ export default function Synastry() {
               </div>
             </div>
           )}
+          <SourcesSection sources={interp.result?.sources} />
         </div>
       )}
     </div>

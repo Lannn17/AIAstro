@@ -1153,6 +1153,7 @@ export default function NatalChart() {
                       ) : null)}
                     </div>
                   ) : null}
+                  <SourcesSection sources={planetInterp.result?.sources} />
                 </div>
               )}
             </>
@@ -1553,6 +1554,7 @@ export default function NatalChart() {
                       </div>
                     </div>
                   )}
+                  <SourcesSection sources={rectifyResult.sources} />
                   {/* 进入第二阶段按钮 */}
                   {!ascQuizData && !ascQuizLoading && (
                     <button

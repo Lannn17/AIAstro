@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
@@ -132,9 +133,14 @@ async def rectify(body: RectifyRequest):
 
         ai_recommended_rank = ai.get("ai_recommended_rank")
 
+        from ..api.interpret_router import _log_analytics
+        query = f"rectification {' '.join(t.get('asc_sign','') for t in top3[:3])}"
+        asyncio.create_task(_log_analytics(query, {"sources": ai.get("sources", [])}))
+
         return {
             "top3": top3,
             "overall": ai.get("overall", ""),
+            "sources": ai.get("sources", []),
             "version": version,
             "version_description": STRATEGY_DESCRIPTIONS.get(version, ""),
             "gap_label": indicators["gap_label"],
@@ -178,8 +184,11 @@ async def asc_quiz(body: AscQuizRequest):
     """根据 Top3 上升星座动态生成 5 道性格鉴别题"""
     try:
         from ..rag import generate_asc_quiz
-        questions = generate_asc_quiz(body.asc_signs)
-        return {"questions": questions}
+        from ..api.interpret_router import _log_analytics
+        result = generate_asc_quiz(body.asc_signs)
+        query = f"asc quiz {' '.join(body.asc_signs)}"
+        asyncio.create_task(_log_analytics(query, {"sources": result.get("sources", [])}))
+        return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -295,6 +304,7 @@ async def confidence(body: ConfidenceRequest):
     """根据生命主题问卷答案评估候选出生时间置信度"""
     try:
         from ..rag import calc_confidence
+        from ..api.interpret_router import _log_analytics
         result = calc_confidence(
             candidate=body.candidate,
             birth_year=body.birth_year,
@@ -305,6 +315,8 @@ async def confidence(body: ConfidenceRequest):
             tz_str=body.tz_str,
             theme_answers=[a.model_dump() for a in body.theme_answers],
         )
+        query = f"confidence {body.candidate.get('asc_sign','')} life themes"
+        asyncio.create_task(_log_analytics(query, {"sources": result.get("sources", [])}))
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))

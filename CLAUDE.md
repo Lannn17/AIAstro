@@ -25,6 +25,20 @@
 
 违反以上任意一点的 AI 分析端点均视为未完成实现。
 
+### 新增 AI 功能时的强制 Checklist
+
+每次新增或修改 AI 分析端点，在完成编码前必须逐条确认：
+
+**后端**
+- [ ] `retrieve(query, k=N)` 调用存在，query 语义贴合分析内容
+- [ ] RAG 片段已注入 prompt（通过 `rag_generate()` 或手动 `_build_rag_section()`）
+- [ ] 返回值包含 `sources` 字段（格式：`[{source, score, cited, text}]`）
+- [ ] router 中有 `asyncio.create_task(_log_analytics(query, result))` 调用
+
+**前端**
+- [ ] AI 分析结果区域（非对话框）已渲染 `<SourcesSection sources={...} />`
+- [ ] `sources` 数据已从 API 响应中正确传递到组件 props
+
 ---
 
 ## Current version / 当前版本
