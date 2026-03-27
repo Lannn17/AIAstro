@@ -7,10 +7,22 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('is_admin') === 'true')
   const [showLoginModal, setShowLoginModal] = useState(
     () => !localStorage.getItem('auth_token') && localStorage.getItem('guest_mode') !== 'true'
   )
   const [sessionKey, setSessionKey] = useState(0)
+
+  function _applyToken(access_token, admin) {
+    localStorage.setItem('auth_token', access_token)
+    localStorage.setItem('is_admin', admin ? 'true' : 'false')
+    localStorage.removeItem('guest_mode')
+    setToken(access_token)
+    setIsAdmin(!!admin)
+    setIsGuest(false)
+    setShowLoginModal(false)
+    setSessionKey(k => k + 1)
+  }
 
   async function login(username, password) {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -23,19 +35,36 @@ export function AuthProvider({ children }) {
       throw new Error(err.detail || '登录失败')
     }
     const { access_token } = await res.json()
-    localStorage.setItem('auth_token', access_token)
-    localStorage.removeItem('guest_mode')
-    setToken(access_token)
-    setIsGuest(false)
-    setShowLoginModal(false)
-    setSessionKey(k => k + 1)
+    // Fetch /me to get is_admin
+    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    })
+    const me = meRes.ok ? await meRes.json() : {}
+    _applyToken(access_token, me.is_admin ?? false)
+  }
+
+  async function register(username, password) {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || '注册失败')
+    }
+    const { access_token } = await res.json()
+    // Registered users are never admin
+    _applyToken(access_token, false)
   }
 
   function continueAsGuest() {
     localStorage.setItem('guest_mode', 'true')
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('is_admin')
     setIsGuest(true)
     setToken(null)
+    setIsAdmin(false)
     setShowLoginModal(false)
     setSessionKey(k => k + 1)
   }
@@ -43,8 +72,10 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('guest_mode')
+    localStorage.removeItem('is_admin')
     setToken(null)
     setIsGuest(false)
+    setIsAdmin(false)
     setShowLoginModal(true)
     setSessionKey(k => k + 1)
   }
@@ -58,8 +89,10 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       token,
       isGuest,
+      isAdmin,
       isAuthenticated: !!token,
       login,
+      register,
       continueAsGuest,
       logout,
       authHeaders,
