@@ -81,3 +81,38 @@ def test_require_auth_admin_is_admin_true():
 def test_require_auth_no_token_returns_401():
     res = client.get("/api/auth/me")
     assert res.status_code == 401
+
+
+# ── DB user CRUD tests ────────────────────────────────────────────
+
+def test_db_create_and_get_user():
+    from app.db import db_create_user, db_get_user_by_username
+    user = db_create_user("dbtest_alice", "hashed_pw_here")
+    assert user["username"] == "dbtest_alice"
+    assert user["id"] is not None
+    fetched = db_get_user_by_username("dbtest_alice")
+    assert fetched["id"] == user["id"]
+
+
+def test_db_get_user_not_found():
+    from app.db import db_get_user_by_username
+    result = db_get_user_by_username("nonexistent_xyz")
+    assert result is None
+
+
+def test_db_list_user_charts_isolation():
+    from app.db import db_save_chart, db_list_user_charts, db_list_all_charts
+    chart_data = {
+        "label": "IsolationTest", "name": "T", "birth_year": 1990, "birth_month": 1, "birth_day": 1,
+        "birth_hour": 12, "birth_minute": 0, "location_name": "Tokyo",
+        "latitude": 35.68, "longitude": 139.69, "tz_str": "Asia/Tokyo",
+        "house_system": "Placidus", "language": "zh", "is_guest": False,
+    }
+    chart_data["user_id"] = 9001
+    db_save_chart(chart_data)
+    charts_9001 = db_list_user_charts(9001)
+    charts_9002 = db_list_user_charts(9002)
+    all_charts = db_list_all_charts()
+    assert any(c.get("label") == "IsolationTest" for c in charts_9001)
+    assert not any(c.get("label") == "IsolationTest" for c in charts_9002)
+    assert any(c.get("label") == "IsolationTest" for c in all_charts)

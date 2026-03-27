@@ -121,6 +121,17 @@ CREATE TABLE IF NOT EXISTS saved_charts (
 # Migration: add is_guest to tables that predate this column
 _MIGRATE_IS_GUEST = "ALTER TABLE saved_charts ADD COLUMN is_guest INTEGER DEFAULT 0"
 
+_CREATE_USERS = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
+_MIGRATE_USER_ID = "ALTER TABLE saved_charts ADD COLUMN user_id INTEGER"
+
 
 # ── Turso HTTP helpers ───────────────────────────────────────────
 
@@ -224,11 +235,51 @@ def create_tables():
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(_MIGRATE_IS_GUEST)
 
+    # Create users table
+    if USE_TURSO:
+        _turso_exec(_CREATE_USERS)
+    else:
+        with sqlite3.connect(_db_path) as conn:
+            conn.execute(_CREATE_USERS)
+
+    # Migrate: add user_id column only if it doesn't already exist
+    if not _has_column("saved_charts", "user_id"):
+        print("[DB] Adding user_id column to saved_charts")
+        if USE_TURSO:
+            _turso_exec(_MIGRATE_USER_ID)
+        else:
+            with sqlite3.connect(_db_path) as conn:
+                conn.execute(_MIGRATE_USER_ID)
+
 
 def db_list_charts() -> list[dict]:
     sql = (
         "SELECT id, label, name, birth_year, birth_month, birth_day, "
         "location_name, created_at FROM saved_charts WHERE is_guest = 0 ORDER BY created_at DESC"
+    )
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql))
+    return _sqlite_fetchall(sql)
+
+
+def db_list_user_charts(user_id: int) -> list[dict]:
+    """Returns non-guest charts belonging to a specific registered user."""
+    sql = (
+        "SELECT id, label, name, birth_year, birth_month, birth_day, "
+        "location_name, created_at FROM saved_charts "
+        "WHERE user_id = ? AND is_guest = 0 ORDER BY created_at DESC"
+    )
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql, [user_id]))
+    return _sqlite_fetchall(sql, [user_id])
+
+
+def db_list_all_charts() -> list[dict]:
+    """Admin use only — returns all non-guest charts regardless of user_id."""
+    sql = (
+        "SELECT id, label, name, birth_year, birth_month, birth_day, "
+        "location_name, created_at FROM saved_charts "
+        "WHERE is_guest = 0 ORDER BY created_at DESC"
     )
     if USE_TURSO:
         return _to_dicts(_turso_exec(sql))
@@ -258,8 +309,8 @@ def db_save_chart(data: dict) -> dict:
         INSERT INTO saved_charts
             (label, name, birth_year, birth_month, birth_day, birth_hour, birth_minute,
              location_name, latitude, longitude, tz_str, house_system, language,
-             chart_data, svg_data, is_guest, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             chart_data, svg_data, is_guest, user_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     from datetime import datetime, timezone
     params = [
@@ -271,6 +322,7 @@ def db_save_chart(data: dict) -> dict:
         data["tz_str"], data["house_system"], data["language"],
         data.get("chart_data"), data.get("svg_data"),
         1 if data.get("is_guest") else 0,
+        data.get("user_id"),  # None for guests and admin
         datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     ]
     if USE_TURSO:
@@ -528,3 +580,31 @@ def db_save_events(chart_id: int, events: list[dict]) -> None:
                 1 if ev.get("is_turning_point") else 0,
                 ev.get("domainId") or ev.get("domain_id") or None,
             ])
+
+
+# ── Users ─────────────────────────────────────────────────────────
+
+def db_create_user(username: str, password_hash: str) -> dict:
+    sql = "INSERT INTO users (username, password_hash) VALUES (?, ?)"
+    if USE_TURSO:
+        result = _turso_exec(sql, [username, password_hash])
+        new_id = int(result["last_insert_rowid"])
+    else:
+        new_id = _sqlite_write(sql, [username, password_hash])
+    return db_get_user_by_id(new_id)
+
+
+def db_get_user_by_id(user_id: int) -> dict | None:
+    sql = "SELECT * FROM users WHERE id = ?"
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [user_id]))
+        return rows[0] if rows else None
+    return _sqlite_fetchone(sql, [user_id])
+
+
+def db_get_user_by_username(username: str) -> dict | None:
+    sql = "SELECT * FROM users WHERE username = ?"
+    if USE_TURSO:
+        rows = _to_dicts(_turso_exec(sql, [username]))
+        return rows[0] if rows else None
+    return _sqlite_fetchone(sql, [username])
