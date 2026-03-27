@@ -205,6 +205,9 @@ export default function LoginModal() {
         <div style={{ color: '#5a5a7a', fontSize: '0.75rem', textAlign: 'center', marginTop: '10px', lineHeight: 1.5 }}>
           访客可使用所有计算功能，但无法查看已保存的星盘
         </div>
+        <div style={{ color: '#3a3a5a', fontSize: '0.7rem', textAlign: 'center', marginTop: '16px' }}>
+          v{__APP_VERSION__}
+        </div>
       </div>
     </div>
   )
