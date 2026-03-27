@@ -116,3 +116,66 @@ def test_db_list_user_charts_isolation():
     assert any(c.get("label") == "IsolationTest" for c in charts_9001)
     assert not any(c.get("label") == "IsolationTest" for c in charts_9002)
     assert any(c.get("label") == "IsolationTest" for c in all_charts)
+
+
+# ── Registration + Login HTTP tests ─────────────────────────────
+
+def test_register_new_user():
+    res = client.post("/api/auth/register", json={"username": "alice_reg", "password": "pass123"})
+    assert res.status_code == 200
+    assert "access_token" in res.json()
+
+
+def test_register_duplicate_username():
+    client.post("/api/auth/register", json={"username": "bob_dup", "password": "pass123"})
+    res = client.post("/api/auth/register", json={"username": "bob_dup", "password": "other123"})
+    assert res.status_code == 409
+
+
+def test_register_admin_username_blocked():
+    res = client.post("/api/auth/register", json={"username": "admin", "password": "pass123"})
+    assert res.status_code == 400
+
+
+def test_register_password_too_short_422():
+    res = client.post("/api/auth/register", json={"username": "carol_short", "password": "abc"})
+    assert res.status_code == 422
+
+
+def test_register_password_too_long_422():
+    res = client.post("/api/auth/register", json={"username": "dave_long", "password": "x" * 129})
+    assert res.status_code == 422
+
+
+def test_login_registered_user():
+    client.post("/api/auth/register", json={"username": "eve_login", "password": "eve_pass1"})
+    res = client.post("/api/auth/login", json={"username": "eve_login", "password": "eve_pass1"})
+    assert res.status_code == 200
+    assert "access_token" in res.json()
+
+
+def test_login_admin_still_works():
+    res = client.post("/api/auth/login", json={"username": "admin", "password": "adminpass"})
+    assert res.status_code == 200
+
+
+def test_login_wrong_password():
+    client.post("/api/auth/register", json={"username": "frank_wp", "password": "frankpass1"})
+    res = client.post("/api/auth/login", json={"username": "frank_wp", "password": "wrong"})
+    assert res.status_code == 401
+
+
+def test_me_is_admin_false_for_user():
+    r = client.post("/api/auth/register", json={"username": "grace_me", "password": "gracepass1"})
+    token = r.json()["access_token"]
+    res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.json()["is_admin"] is False
+
+
+def test_me_is_admin_true_for_admin():
+    r = client.post("/api/auth/login", json={"username": "admin", "password": "adminpass"})
+    token = r.json()["access_token"]
+    res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.json()["is_admin"] is True
