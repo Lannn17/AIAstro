@@ -7,6 +7,7 @@ import PlanetTable from '../components/PlanetTable'
 import ChartWheel from '../components/ChartWheel'
 import GuestSaveConfirmModal from '../components/GuestSaveConfirmModal'
 import GuestSessionList from '../components/GuestSessionList'
+import TagTooltip from '../components/TagTooltip'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 
@@ -108,6 +109,8 @@ export default function NatalChart() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [activeTag, setActiveTag] = useState(null) // 当前展开 tooltip 的标签
+  const chatPanelRef = useRef(null)
 
   // Planet interpretations
   const [planetAnalyses, setPlanetAnalyses] = useState({})
@@ -464,6 +467,16 @@ export default function NatalChart() {
       setChatSummary(prev => prev ? `${prev}\n${summary}` : summary)
       setMessages(keep)
     } catch { /* 静默失败 */ }
+  }
+
+  function handleAskAI(tag) {
+    setChatInput(`请解释我星盘中的「${tag}」配置，对我的性格和人生有何影响？`)
+    setRectifyOpen(false)
+    setChatOpen(true)
+    // 面板挂载后再滚动
+    setTimeout(() => {
+      chatPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
   }
 
   async function handleChat(e) {
@@ -1126,10 +1139,14 @@ export default function NatalChart() {
                       {planetAnalyses.overall.tags?.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                           {planetAnalyses.overall.tags.map((tag, i) => (
-                            <span key={i} style={{
-                              padding: '3px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600,
-                              background: '#1e1a38', border: '1px solid #7a6aaa', color: '#c9a84c',
-                            }}>{tag}</span>
+                            <TagTooltip
+                              key={i}
+                              tag={tag}
+                              isOpen={activeTag === tag}
+                              onToggle={() => setActiveTag(activeTag === tag ? null : tag)}
+                              onClose={() => setActiveTag(null)}
+                              onAskAI={() => handleAskAI(tag)}
+                            />
                           ))}
                         </div>
                       )}
@@ -1161,7 +1178,7 @@ export default function NatalChart() {
 
           {/* Chat panel */}
           {chatOpen && result && (
-            <div className="chat-panel">
+            <div className="chat-panel" ref={chatPanelRef}>
               {/* Header */}
               <div style={{
                 padding: '12px 16px', borderBottom: '1px solid #2a2a5a',

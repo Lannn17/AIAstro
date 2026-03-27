@@ -1,6 +1,9 @@
 # Database
 astrology_api/charts.db
 
+# Superpowers brainstorm sessions
+.superpowers/
+
 # Environment
 astrology_api/.env
 .env
