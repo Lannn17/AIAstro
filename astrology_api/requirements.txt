@@ -13,6 +13,7 @@ scipy>=1.11.3  # Dependência para scikit-learn
 numpy>=1.24.0  # Dependência para computação numérica
 # Auth
 PyJWT>=2.8.0
+bcrypt>=4.0.0
 
 # RAG
 google-genai>=1.0.0
