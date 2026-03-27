@@ -4,6 +4,7 @@ JWT-based authentication for AstroAPI.
 Credentials are set via env vars AUTH_USERNAME and AUTH_PASSWORD.
 JWT_SECRET should be a strong random string in production.
 """
+import hashlib
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
@@ -34,11 +35,17 @@ class UserInfo(TypedDict):
 def hash_password(plain: str) -> str:
     if len(plain) > 128:
         raise ValueError("密码过长（最多128位）")
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+    # Pre-hash with SHA-256 so passwords up to 128 chars work within bcrypt's 72-byte limit
+    digest = hashlib.sha256(plain.encode()).digest()
+    return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    digest = hashlib.sha256(plain.encode()).digest()
+    try:
+        return bcrypt.checkpw(digest, hashed.encode())
+    except ValueError:
+        return False
 
 
 # ── Token helpers ────────────────────────────────────────────────
