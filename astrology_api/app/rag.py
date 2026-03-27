@@ -9,6 +9,9 @@ import re
 import json
 import threading
 import numpy as np
+import time       # 如果已有就不用重复
+import inspect    # 新增
+from .prompt_log import PromptLogEntry, prompt_store   # 新增
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -42,24 +45,126 @@ def get_last_model_used() -> str:
     return getattr(_local, 'model_used', GENERATE_MODEL)
 
 class _ModelsWithFallback:
-    """Wraps generate_content with automatic model fallback on 503."""
+    """Wraps generate_content with automatic model fallback + prompt logging."""
+
     def __init__(self, original):
         self._orig = original
 
+    @staticmethod
+    def _extract_prompt_text(contents, config) -> tuple[str, str]:
+        """从 contents 和 config 中提取可读文本，返回 (system_instruction, prompt_text)"""
+        sys_inst = ""
+        if config:
+            si = getattr(config, 'system_instruction', None)
+            if si:
+                sys_inst = si if isinstance(si, str) else str(si)
+
+        if isinstance(contents, str):
+            return sys_inst, contents
+
+        parts = []
+        if isinstance(contents, list):
+            for item in contents:
+                role = getattr(item, 'role', 'unknown')
+                item_parts = getattr(item, 'parts', [])
+                for p in item_parts:
+                    text = getattr(p, 'text', str(p))
+                    parts.append(f"[{role}] {text}")
+        else:
+            parts.append(str(contents))
+
+        return sys_inst, "\n---\n".join(parts)
+
+    @staticmethod
+    def _guess_caller() -> str:
+        """遍历调用栈，找到 app/ 目录下的业务函数名"""
+        for frame_info in inspect.stack():
+            fn_name = frame_info.function
+            filename = frame_info.filename
+            # 匹配 app/ 下所有 .py，排除本类自身的方法
+            if 'app/' in filename and fn_name not in (
+                'generate_content', '_guess_caller',
+                '_extract_prompt_text',
+            ):
+                if not fn_name.startswith('_'):
+                    return fn_name
+        return "unknown"
+
+    @staticmethod
+    def _serialize_contents(contents) -> list:
+        """将 contents 序列化为可 JSON 化的 list"""
+        try:
+            if isinstance(contents, str):
+                return [{"role": "user", "text": contents}]
+            if isinstance(contents, list):
+                return [
+                    {
+                        "role": getattr(c, 'role', 'unknown'),
+                        "text": " ".join(
+                            getattr(p, 'text', str(p))
+                            for p in getattr(c, 'parts', [])
+                        ),
+                    }
+                    for c in contents
+                ]
+            return [{"raw": str(contents)[:2000]}]
+        except Exception:
+            return [{"raw": str(contents)[:2000]}]
+
     def generate_content(self, model, contents, config=None, **kwargs):
+        # ── 构建日志条目 ──
+        entry = PromptLogEntry(
+            model=model,
+            caller=self._guess_caller(),
+            temperature=getattr(config, 'temperature', 0) if config else 0,
+        )
+        sys_inst, prompt_text = self._extract_prompt_text(contents, config)
+        entry.system_instruction = sys_inst
+        entry.prompt_text = prompt_text
+        entry.prompt_tokens_est = len(prompt_text) // 2
+        entry.contents = self._serialize_contents(contents)
+
+        # 读取业务函数注入的 RAG 信息（可选）
+        entry.rag_chunks = getattr(_local, 'pending_rag_chunks', [])
+        _local.pending_rag_chunks = []
+
+        # ── Fallback 调用 ──
         chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
         last_err = None
+        t0 = time.time()
+
         for m in chain:
             try:
-                resp = self._orig.generate_content(model=m, contents=contents, config=config, **kwargs)
-                _local.model_used = m  # record which model actually responded
+                resp = self._orig.generate_content(
+                    model=m, contents=contents, config=config, **kwargs
+                )
+                _local.model_used = m
+
+                entry.model_used = m
+                entry.response_text = getattr(resp, 'text', '')[:5000]
+                entry.finish_reason = (
+                    resp.candidates[0].finish_reason.name
+                    if resp.candidates else "UNKNOWN"
+                )
+                entry.response_tokens_est = len(entry.response_text) // 2
+                entry.latency_ms = int((time.time() - t0) * 1000)
+                prompt_store.append(entry)
                 return resp
+
             except Exception as e:
                 if '503' in str(e) or 'UNAVAILABLE' in str(e):
                     print(f"[fallback] {m} 503, trying next…", flush=True)
                     last_err = e
                     continue
+                entry.model_used = m
+                entry.response_text = f"ERROR: {e}"
+                entry.latency_ms = int((time.time() - t0) * 1000)
+                prompt_store.append(entry)
                 raise
+
+        entry.response_text = f"ALL_FAILED: {last_err}"
+        entry.latency_ms = int((time.time() - t0) * 1000)
+        prompt_store.append(entry)
         raise last_err
 
     def __getattr__(self, name):

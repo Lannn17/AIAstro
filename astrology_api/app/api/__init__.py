@@ -10,3 +10,4 @@ from .synastry_router import router as synastry_router
 from .progression_router import router as progression_router        ## undeveloped
 from .return_router import router as return_router      ## developiong
 from .direction_router import router as direction_router    ## undeveloped
+from .debug_router import router as debug_router
