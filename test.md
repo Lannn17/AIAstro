@@ -180,8 +180,8 @@
 
 - [×] `testuser1` 登录 → 保存一张星盘 → 出现在列表
 - [×] 注册登录 `testuser2` → 侧边栏为空（看不到 testuser1 的星盘）
-- [ ] `testuser2` 保存自己的星盘 → 列表只显示自己的
-- [ ] 用 testuser2 token 调用 `GET /api/charts/{testuser1_chart_id}` → 403
+- [×] `testuser2` 保存自己的星盘 → 列表只显示自己的
+- [×] 用 testuser2 token 调用 `GET /api/charts/{testuser1_chart_id}` → 403
 
 ## 4. 管理员权限
 
