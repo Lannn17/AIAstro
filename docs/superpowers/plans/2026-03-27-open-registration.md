@@ -19,11 +19,16 @@
 | `astrology_api/app/db.py` | Modify | `users` table DDL, user CRUD, updated chart queries, migration |
 | `astrology_api/app/api/auth_router.py` | Modify | `POST /api/auth/register`, updated login + `/me` |
 | `astrology_api/app/api/charts_router.py` | Modify | Ownership checks, `is_admin` branching on all chart endpoints |
-| `astrology_api/tests/test_auth_registration.py` | Create | Auth + registration tests |
+| `astrology_api/tests/test_auth_registration.py` | Create | Auth + registration + isolation tests |
 | `frontend/src/contexts/AuthContext.jsx` | Modify | `register()` method, `isAdmin` state |
 | `frontend/src/components/LoginModal.jsx` | Modify | Register tab/toggle UI |
+| `ARCHITECTURE.md` | Modify | Document users table, new endpoint, UserInfo change |
 
 **Not touched:** `admin_router.py`, `interpret_router.py`, and other routers — they use `require_auth` as a gate only (return value discarded), no runtime impact from TypedDict change.
+
+**Test pattern:** All tests use `fastapi.testclient.TestClient` (sync), matching the existing `test_api.py` pattern. No async test infrastructure needed.
+
+**Test DB isolation:** Tests patch `app.db._db_path` to a named temp file (not `:memory:`, since each `sqlite3.connect(":memory:")` is a separate empty database). The temp file is shared across all `db_*` calls in the test session.
 
 ---
 
@@ -77,102 +82,101 @@ git push origin main && git push hf main
 Create `astrology_api/tests/test_auth_registration.py`:
 
 ```python
-"""Tests for open registration and UserInfo auth."""
+"""Tests for open registration, UserInfo auth, and chart isolation."""
 import os
+import tempfile
 import pytest
 
-os.environ.setdefault("AUTH_USERNAME", "admin")
-os.environ.setdefault("AUTH_PASSWORD", "adminpass")
+# Set env vars BEFORE any app imports
+os.environ["AUTH_USERNAME"] = "admin"
+os.environ["AUTH_PASSWORD"] = "adminpass"
+os.environ["TURSO_DATABASE_URL"] = ""
+os.environ["TURSO_AUTH_TOKEN"] = ""
 
-from app.security import (
-    hash_password, verify_password,
-    create_access_token, require_auth, get_optional_user,
-    UserInfo,
-)
-from fastapi import HTTPException
+# Patch DB to a named temp file so all sqlite3.connect() calls share the same DB
+import app.db as _db_module
+_TEST_DB = tempfile.mktemp(suffix=".db")
+_db_module._db_path = _TEST_DB
+_db_module.USE_TURSO = False
+
+from app.db import create_tables
+create_tables()
+
+from fastapi.testclient import TestClient
+from main import app
+
+client = TestClient(app)
 
 
-# ── Password helpers ─────────────────────────────────────────────
+# ── Password helper tests (sync, no HTTP) ───────────────────────
 
 def test_hash_password_returns_string():
+    from app.security import hash_password
     h = hash_password("secret123")
     assert isinstance(h, str)
     assert h != "secret123"
 
 
 def test_verify_password_correct():
+    from app.security import hash_password, verify_password
     h = hash_password("secret123")
     assert verify_password("secret123", h) is True
 
 
 def test_verify_password_wrong():
+    from app.security import hash_password, verify_password
     h = hash_password("secret123")
     assert verify_password("wrongpass", h) is False
 
 
 def test_password_max_length_enforced():
-    """Passwords > 128 chars should be rejected (raise ValueError)."""
+    from app.security import hash_password
     with pytest.raises(ValueError):
         hash_password("x" * 129)
 
 
-# ── require_auth / get_optional_user ────────────────────────────
+# ── require_auth / get_optional_user via TestClient ─────────────
 
-def _make_token(username: str, user_id):
-    return create_access_token({"sub": username, "uid": user_id})
-
-
-@pytest.mark.anyio
-async def test_require_auth_returns_userinfo():
-    token = _make_token("alice", 5)
-    result = await require_auth(token)
-    assert result["username"] == "alice"
-    assert result["user_id"] == 5
-    assert result["is_admin"] is False
+def _get_token(username, password):
+    r = client.post("/api/auth/login", json={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
 
 
-@pytest.mark.anyio
-async def test_require_auth_admin():
-    token = _make_token("admin", None)
-    result = await require_auth(token)
-    assert result["username"] == "admin"
-    assert result["user_id"] is None
-    assert result["is_admin"] is True
+def test_require_auth_returns_userinfo_for_registered_user():
+    client.post("/api/auth/register", json={"username": "tester_sec", "password": "pass1234"})
+    token = _get_token("tester_sec", "pass1234")
+    res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["username"] == "tester_sec"
+    assert data["is_admin"] is False
 
 
-@pytest.mark.anyio
-async def test_require_auth_no_token_raises_401():
-    with pytest.raises(HTTPException) as exc_info:
-        await require_auth(None)
-    assert exc_info.value.status_code == 401
+def test_require_auth_admin_is_admin_true():
+    token = _get_token("admin", "adminpass")
+    res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.json()["is_admin"] is True
 
 
-@pytest.mark.anyio
-async def test_get_optional_user_no_token_returns_none():
-    result = await get_optional_user(None)
-    assert result is None
-
-
-@pytest.mark.anyio
-async def test_get_optional_user_valid_token():
-    token = _make_token("bob", 7)
-    result = await get_optional_user(token)
-    assert result["username"] == "bob"
-    assert result["user_id"] == 7
+def test_require_auth_no_token_returns_401():
+    res = client.get("/api/auth/me")
+    assert res.status_code == 401
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
 cd astrology_api
-python -m pytest tests/test_auth_registration.py -v 2>&1 | head -40
+python -m pytest tests/test_auth_registration.py -v 2>&1 | head -50
 ```
 
 Expected: ImportError or AttributeError — `hash_password`, `UserInfo` don't exist yet.
 
 - [ ] **Step 3: Update security.py**
 
-Replace the entire content of `astrology_api/app/security.py` with:
+Replace the entire content of `astrology_api/app/security.py`:
 
 ```python
 """
@@ -267,10 +271,10 @@ async def require_auth(token: str = Depends(oauth2_scheme)) -> UserInfo:
 
 ```bash
 cd astrology_api
-python -m pytest tests/test_auth_registration.py -v
+python -m pytest tests/test_auth_registration.py -v 2>&1 | head -50
 ```
 
-Expected: all tests PASS.
+Expected: password helper unit tests PASS; HTTP tests still fail (register endpoint not yet added). Confirm `test_hash_*` and `test_verify_*` pass.
 
 - [ ] **Step 5: Commit**
 
@@ -286,10 +290,60 @@ git push origin main && git push hf main
 
 **Files:**
 - Modify: `astrology_api/app/db.py`
+- Modify: `astrology_api/tests/test_auth_registration.py`
 
-- [ ] **Step 1: Add `_CREATE_USERS` DDL constant**
+- [ ] **Step 1: Write failing DB tests**
 
-At the top of `astrology_api/app/db.py`, after the existing `_CREATE_TABLE` block, add:
+Add to `astrology_api/tests/test_auth_registration.py`:
+
+```python
+# ── DB user CRUD tests ────────────────────────────────────────────
+
+def test_db_create_and_get_user():
+    from app.db import db_create_user, db_get_user_by_username
+    user = db_create_user("dbtest_alice", "hashed_pw_here")
+    assert user["username"] == "dbtest_alice"
+    assert user["id"] is not None
+    fetched = db_get_user_by_username("dbtest_alice")
+    assert fetched["id"] == user["id"]
+
+
+def test_db_get_user_not_found():
+    from app.db import db_get_user_by_username
+    result = db_get_user_by_username("nonexistent_xyz")
+    assert result is None
+
+
+def test_db_list_charts_isolation():
+    from app.db import db_save_chart, db_list_charts, db_list_all_charts
+    chart_data = {
+        "label": "Test", "name": "T", "birth_year": 1990, "birth_month": 1, "birth_day": 1,
+        "birth_hour": 12, "birth_minute": 0, "location_name": "Tokyo",
+        "latitude": 35.68, "longitude": 139.69, "tz_str": "Asia/Tokyo",
+        "house_system": "Placidus", "language": "zh", "is_guest": False,
+    }
+    chart_data["user_id"] = 9001
+    db_save_chart(chart_data)
+    charts_9001 = db_list_charts(9001)
+    charts_9002 = db_list_charts(9002)
+    all_charts = db_list_all_charts()
+    assert any(c.get("label") == "Test" for c in charts_9001)
+    assert not any(c.get("label") == "Test" for c in charts_9002)
+    assert any(c.get("label") == "Test" for c in all_charts)
+```
+
+- [ ] **Step 2: Run to confirm failure**
+
+```bash
+cd astrology_api
+python -m pytest tests/test_auth_registration.py -k "db_" -v 2>&1 | head -20
+```
+
+Expected: ImportError — `db_create_user`, `db_list_all_charts` don't exist yet.
+
+- [ ] **Step 3: Add `_CREATE_USERS` DDL and migration constant**
+
+In `astrology_api/app/db.py`, after the existing `_MIGRATE_IS_GUEST` line, add:
 
 ```python
 _CREATE_USERS = """
@@ -304,9 +358,9 @@ CREATE TABLE IF NOT EXISTS users (
 _MIGRATE_USER_ID = "ALTER TABLE saved_charts ADD COLUMN user_id INTEGER"
 ```
 
-- [ ] **Step 2: Update `create_tables()`**
+- [ ] **Step 4: Update `create_tables()`**
 
-In `create_tables()`, add users table creation and `user_id` migration, right after the existing `is_guest` migration block:
+In `create_tables()`, after the existing `is_guest` migration block, add:
 
 ```python
     # Create users table
@@ -326,7 +380,7 @@ In `create_tables()`, add users table creation and `user_id` migration, right af
                 conn.execute(_MIGRATE_USER_ID)
 ```
 
-- [ ] **Step 3: Add user CRUD functions**
+- [ ] **Step 5: Add user CRUD functions**
 
 At the end of `astrology_api/app/db.py`, add:
 
@@ -334,10 +388,7 @@ At the end of `astrology_api/app/db.py`, add:
 # ── Users ─────────────────────────────────────────────────────────
 
 def db_create_user(username: str, password_hash: str) -> dict:
-    sql = """
-        INSERT INTO users (username, password_hash)
-        VALUES (?, ?)
-    """
+    sql = "INSERT INTO users (username, password_hash) VALUES (?, ?)"
     if USE_TURSO:
         result = _turso_exec(sql, [username, password_hash])
         new_id = int(result["last_insert_rowid"])
@@ -362,9 +413,9 @@ def db_get_user_by_username(username: str) -> dict | None:
     return _sqlite_fetchone(sql, [username])
 ```
 
-- [ ] **Step 4: Add `db_list_all_charts()` and update `db_list_charts()`**
+- [ ] **Step 6: Add `db_list_all_charts()` and update `db_list_charts()`**
 
-Replace the existing `db_list_charts()` function:
+Replace the existing `db_list_charts()` function with:
 
 ```python
 def db_list_charts(user_id: int) -> list[dict]:
@@ -390,9 +441,9 @@ def db_list_all_charts() -> list[dict]:
     return _sqlite_fetchall(sql)
 ```
 
-- [ ] **Step 5: Update `db_save_chart()` to include `user_id`**
+- [ ] **Step 7: Update `db_save_chart()` to include `user_id`**
 
-In `db_save_chart()`, update the INSERT SQL and params to include `user_id`:
+Replace the existing `db_save_chart()` function:
 
 ```python
 def db_save_chart(data: dict) -> dict:
@@ -424,20 +475,20 @@ def db_save_chart(data: dict) -> dict:
     return db_get_chart(new_id)
 ```
 
-- [ ] **Step 6: Verify app starts and migration runs**
+- [ ] **Step 8: Run DB tests**
 
 ```bash
 cd astrology_api
-python -c "from app.db import create_tables; create_tables(); print('OK')"
+python -m pytest tests/test_auth_registration.py -k "db_" -v
 ```
 
-Expected: `[DB] Adding user_id column to saved_charts` (first run), then `OK`.
+Expected: all `db_` tests PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add astrology_api/app/db.py
-git commit -m "feat(db): add users table, user_id migration, user CRUD functions"
+git add astrology_api/app/db.py astrology_api/tests/test_auth_registration.py
+git commit -m "feat(db): add users table, user_id migration, user CRUD, db_list_all_charts"
 git push origin main && git push hf main
 ```
 
@@ -449,44 +500,22 @@ git push origin main && git push hf main
 - Modify: `astrology_api/app/api/auth_router.py`
 - Modify: `astrology_api/tests/test_auth_registration.py`
 
-- [ ] **Step 1: Write failing tests for registration + login**
+- [ ] **Step 1: Write failing HTTP tests for registration and login**
 
 Add to `astrology_api/tests/test_auth_registration.py`:
 
 ```python
-# ── Integration tests (registration + login) ────────────────────
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-# Use in-memory SQLite for tests
-os.environ["TURSO_DATABASE_URL"] = ""
-os.environ["TURSO_AUTH_TOKEN"] = ""
-os.environ["AUTH_USERNAME"] = "admin"
-os.environ["AUTH_PASSWORD"] = "adminpass"
-
-from fastapi.testclient import TestClient
-
-# Patch DB path to in-memory for test isolation
-import app.db as _db_module
-_db_module._db_path = ":memory:"
-
-from main import app
-from app.db import create_tables
-create_tables()
-
-client = TestClient(app)
-
+# ── Registration + Login HTTP tests ─────────────────────────────
 
 def test_register_new_user():
-    res = client.post("/api/auth/register", json={"username": "alice", "password": "pass123"})
+    res = client.post("/api/auth/register", json={"username": "alice_reg", "password": "pass123"})
     assert res.status_code == 200
     assert "access_token" in res.json()
 
 
 def test_register_duplicate_username():
-    client.post("/api/auth/register", json={"username": "bob", "password": "pass123"})
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "other"})
+    client.post("/api/auth/register", json={"username": "bob_dup", "password": "pass123"})
+    res = client.post("/api/auth/register", json={"username": "bob_dup", "password": "other123"})
     assert res.status_code == 409
 
 
@@ -495,19 +524,19 @@ def test_register_admin_username_blocked():
     assert res.status_code == 400
 
 
-def test_register_password_too_short():
-    res = client.post("/api/auth/register", json={"username": "carol", "password": "abc"})
+def test_register_password_too_short_422():
+    res = client.post("/api/auth/register", json={"username": "carol_short", "password": "abc"})
     assert res.status_code == 422
 
 
-def test_register_password_too_long():
-    res = client.post("/api/auth/register", json={"username": "dave", "password": "x" * 129})
+def test_register_password_too_long_422():
+    res = client.post("/api/auth/register", json={"username": "dave_long", "password": "x" * 129})
     assert res.status_code == 422
 
 
 def test_login_registered_user():
-    client.post("/api/auth/register", json={"username": "eve", "password": "eve_pass"})
-    res = client.post("/api/auth/login", json={"username": "eve", "password": "eve_pass"})
+    client.post("/api/auth/register", json={"username": "eve_login", "password": "eve_pass1"})
+    res = client.post("/api/auth/login", json={"username": "eve_login", "password": "eve_pass1"})
     assert res.status_code == 200
     assert "access_token" in res.json()
 
@@ -518,20 +547,20 @@ def test_login_admin_still_works():
 
 
 def test_login_wrong_password():
-    client.post("/api/auth/register", json={"username": "frank", "password": "frankpass"})
-    res = client.post("/api/auth/login", json={"username": "frank", "password": "wrong"})
+    client.post("/api/auth/register", json={"username": "frank_wp", "password": "frankpass1"})
+    res = client.post("/api/auth/login", json={"username": "frank_wp", "password": "wrong"})
     assert res.status_code == 401
 
 
-def test_me_returns_is_admin_false():
-    r = client.post("/api/auth/register", json={"username": "grace", "password": "gracepass"})
+def test_me_is_admin_false_for_user():
+    r = client.post("/api/auth/register", json={"username": "grace_me", "password": "gracepass1"})
     token = r.json()["access_token"]
     res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.json()["is_admin"] is False
 
 
-def test_me_returns_is_admin_true():
+def test_me_is_admin_true_for_admin():
     r = client.post("/api/auth/login", json={"username": "admin", "password": "adminpass"})
     token = r.json()["access_token"]
     res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
@@ -539,18 +568,18 @@ def test_me_returns_is_admin_true():
     assert res.json()["is_admin"] is True
 ```
 
-- [ ] **Step 2: Run tests to confirm they fail**
+- [ ] **Step 2: Run tests to confirm failure**
 
 ```bash
 cd astrology_api
-python -m pytest tests/test_auth_registration.py -k "register or login or me" -v 2>&1 | head -40
+python -m pytest tests/test_auth_registration.py -k "register or login or me" -v 2>&1 | head -30
 ```
 
-Expected: 404 or ImportError for register endpoint.
+Expected: 404 or 500 — register endpoint does not exist yet.
 
 - [ ] **Step 3: Rewrite auth_router.py**
 
-Replace entire `astrology_api/app/api/auth_router.py`:
+Replace the entire content of `astrology_api/app/api/auth_router.py`:
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException
@@ -618,20 +647,20 @@ def get_me(user: UserInfo = Depends(require_auth)):
     return {"username": user["username"], "is_admin": user["is_admin"]}
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Run all auth tests**
 
 ```bash
 cd astrology_api
-python -m pytest tests/test_auth_registration.py -v
+python -m pytest tests/test_auth_registration.py -k "not chart and not db_" -v
 ```
 
-Expected: all tests PASS.
+Expected: all PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add astrology_api/app/api/auth_router.py astrology_api/tests/test_auth_registration.py
-git commit -m "feat(auth): add POST /api/auth/register, update login + /me"
+git commit -m "feat(auth): add POST /api/auth/register, update login and /me"
 git push origin main && git push hf main
 ```
 
@@ -641,8 +670,9 @@ git push origin main && git push hf main
 
 **Files:**
 - Modify: `astrology_api/app/api/charts_router.py`
+- Modify: `astrology_api/tests/test_auth_registration.py`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: Write failing chart isolation tests**
 
 Add to `astrology_api/tests/test_auth_registration.py`:
 
@@ -662,10 +692,9 @@ CHART_BODY = {
 }
 
 
-def _reg_token(username, password="pass123"):
-    """Register and return token."""
-    client.post("/api/auth/register", json={"username": username, "password": password})
-    r = client.post("/api/auth/login", json={"username": username, "password": password})
+def _reg_and_token(username):
+    client.post("/api/auth/register", json={"username": username, "password": "Pass1234!"})
+    r = client.post("/api/auth/login", json={"username": username, "password": "Pass1234!"})
     return r.json()["access_token"]
 
 
@@ -675,25 +704,34 @@ def _admin_token():
 
 
 def test_user_can_save_and_list_own_chart():
-    token = _reg_token("hiro")
+    token = _reg_and_token("chart_user1")
     res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     charts = client.get("/api/charts", headers={"Authorization": f"Bearer {token}"}).json()
     assert len(charts) >= 1
 
 
-def test_user_cannot_see_other_users_charts():
-    token_a = _reg_token("userA")
-    token_b = _reg_token("userB")
+def test_user_cannot_see_other_users_chart():
+    token_a = _reg_and_token("chart_userA")
+    token_b = _reg_and_token("chart_userB")
     res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_a}"})
     chart_id = res.json()["id"]
-    # userB tries to access userA's chart
     res2 = client.get(f"/api/charts/{chart_id}", headers={"Authorization": f"Bearer {token_b}"})
     assert res2.status_code == 403
 
 
-def test_admin_can_see_all_charts():
-    token_u = _reg_token("userC")
+def test_user_cannot_access_guest_chart():
+    """Non-admin user cannot access a chart saved by a guest (user_id=NULL)."""
+    # Save as guest (no token)
+    res = client.post("/api/charts", json=CHART_BODY)
+    chart_id = res.json()["id"]
+    token = _reg_and_token("chart_userC")
+    res2 = client.get(f"/api/charts/{chart_id}", headers={"Authorization": f"Bearer {token}"})
+    assert res2.status_code == 403
+
+
+def test_admin_can_access_any_chart():
+    token_u = _reg_and_token("chart_userD")
     res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_u}"})
     chart_id = res.json()["id"]
     admin = _admin_token()
@@ -702,27 +740,27 @@ def test_admin_can_see_all_charts():
 
 
 def test_admin_list_includes_all_users():
-    token_u = _reg_token("userD")
+    token_u = _reg_and_token("chart_userE")
     client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_u}"})
     admin = _admin_token()
     charts = client.get("/api/charts", headers={"Authorization": f"Bearer {admin}"}).json()
     assert len(charts) >= 1
 
 
-def test_pending_requires_admin():
-    token_u = _reg_token("userE")
+def test_pending_list_requires_admin():
+    token_u = _reg_and_token("chart_userF")
     res = client.get("/api/charts/pending", headers={"Authorization": f"Bearer {token_u}"})
     assert res.status_code == 403
 ```
 
-- [ ] **Step 2: Run tests to confirm they fail**
+- [ ] **Step 2: Run tests to confirm failure**
 
 ```bash
 cd astrology_api
-python -m pytest tests/test_auth_registration.py -k "chart" -v 2>&1 | head -30
+python -m pytest tests/test_auth_registration.py -k "chart_" -v 2>&1 | head -30
 ```
 
-Expected: failures (403s not enforced yet, list returns all charts).
+Expected: failures — isolation and admin checks not yet enforced.
 
 - [ ] **Step 3: Rewrite charts_router.py**
 
@@ -927,7 +965,7 @@ def save_events(chart_id: int, body: List[EventItem], user: UserInfo = Depends(r
     return {"saved": len(body)}
 ```
 
-- [ ] **Step 4: Run all auth+chart tests**
+- [ ] **Step 4: Run all tests**
 
 ```bash
 cd astrology_api
@@ -939,8 +977,8 @@ Expected: all tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add astrology_api/app/api/charts_router.py
-git commit -m "feat(charts): enforce per-user isolation and admin override"
+git add astrology_api/app/api/charts_router.py astrology_api/tests/test_auth_registration.py
+git commit -m "feat(charts): enforce per-user isolation and admin override on all chart endpoints"
 git push origin main && git push hf main
 ```
 
@@ -951,7 +989,16 @@ git push origin main && git push hf main
 **Files:**
 - Modify: `frontend/src/contexts/AuthContext.jsx`
 
-- [ ] **Step 1: Update AuthContext.jsx**
+- [ ] **Step 1: Verify current build passes (baseline)**
+
+```bash
+cd frontend
+npm run build 2>&1 | tail -5
+```
+
+Expected: build succeeds with zero errors.
+
+- [ ] **Step 2: Rewrite AuthContext.jsx**
 
 Replace the entire content of `frontend/src/contexts/AuthContext.jsx`:
 
@@ -965,10 +1012,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
-  const [isAdmin, setIsAdmin] = useState(() => {
-    const stored = localStorage.getItem('is_admin')
-    return stored === 'true'
-  })
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('is_admin') === 'true')
   const [showLoginModal, setShowLoginModal] = useState(
     () => !localStorage.getItem('auth_token') && localStorage.getItem('guest_mode') !== 'true'
   )
@@ -1072,16 +1116,16 @@ export function useAuth() {
 }
 ```
 
-- [ ] **Step 2: Verify frontend compiles**
+- [ ] **Step 3: Verify build still passes**
 
 ```bash
 cd frontend
-npm run build 2>&1 | tail -10
+npm run build 2>&1 | tail -5
 ```
 
-Expected: build succeeds, no errors.
+Expected: build succeeds, zero errors.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add frontend/src/contexts/AuthContext.jsx
@@ -1096,7 +1140,7 @@ git push origin main && git push hf main
 **Files:**
 - Modify: `frontend/src/components/LoginModal.jsx`
 
-- [ ] **Step 1: Rewrite LoginModal.jsx with register tab**
+- [ ] **Step 1: Rewrite LoginModal.jsx**
 
 Replace the entire content of `frontend/src/components/LoginModal.jsx`:
 
@@ -1318,10 +1362,10 @@ export default function LoginModal() {
 
 ```bash
 cd frontend
-npm run build 2>&1 | tail -10
+npm run build 2>&1 | tail -5
 ```
 
-Expected: build succeeds.
+Expected: build succeeds, zero errors.
 
 - [ ] **Step 3: Commit**
 
@@ -1333,27 +1377,54 @@ git push origin main && git push hf main
 
 ---
 
-## Task 8: Manual testing checklist
+## Task 8: Update ARCHITECTURE.md
 
-Run the backend and frontend, then verify:
+**Files:**
+- Modify: `ARCHITECTURE.md`
+
+- [ ] **Step 1: Update ARCHITECTURE.md**
+
+Find the relevant sections in `ARCHITECTURE.md` and update:
+
+1. In the **Data Model / Tables** section: add the `users` table description
+2. In the **API endpoints** section: add `POST /api/auth/register`
+3. In the **Architecture notes** section: note that `require_auth` now returns `UserInfo` (TypedDict) instead of `str`, and that chart endpoints enforce per-user isolation
+
+- [ ] **Step 2: Commit**
 
 ```bash
-# Backend
-cd astrology_api && uvicorn main:app --host 127.0.0.1 --port 8001 --reload
+git add ARCHITECTURE.md
+git commit -m "docs(arch): document users table, register endpoint, UserInfo auth change"
+git push origin main && git push hf main
+```
+
+---
+
+## Task 9: Manual testing checklist
+
+Start the backend and frontend, then verify end-to-end:
+
+```bash
+# Backend (delete charts.db first to test fresh migration)
+cd astrology_api
+rm -f charts.db
+uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 # Frontend (separate terminal)
 cd frontend && npm run dev
 ```
 
-- [ ] 登录 modal 默认显示「登录」tab，点击「注册」切换到注册表单
-- [ ] 注册新用户（用户名 + 密码）→ 成功登录，modal 关闭
+- [ ] 登录 modal 默认显示「登录」tab，点击「注册」切换到注册表单，切回「登录」正常
+- [ ] 注册新用户（用户名 + 密码 >= 6位）→ 成功登录，modal 关闭，进入已登录状态
 - [ ] 注册同名用户 → 显示「用户名已存在」
-- [ ] 注册密码少于6位 → 显示错误
-- [ ] 用注册账号保存一张星盘 → 成功
-- [ ] 登出，用另一个账号注册/登录 → 看不到上一个用户的星盘
-- [ ] 用 `AUTH_USERNAME`/`AUTH_PASSWORD` 登录 → 能看到所有星盘
-- [ ] 以访客身份使用 → 正常工作，无变化
-- [ ] 用户确认测试全部通过后执行：
+- [ ] 注册密码少于6位 → 显示错误（client-side）
+- [ ] 注册密码不一致 → 显示「两次输入的密码不一致」
+- [ ] 用注册账号保存一张星盘 → 成功显示在侧边栏
+- [ ] 登出，换另一个用户名注册/登录 → 侧边栏为空（看不到上一个用户的星盘）
+- [ ] 用 `AUTH_USERNAME`/`AUTH_PASSWORD` 登录（管理员）→ 能看到所有用户保存的星盘
+- [ ] 以访客身份使用 → 所有计算功能正常，无回归
+
+用户确认全部通过后：
 
 ```bash
 git add -A
