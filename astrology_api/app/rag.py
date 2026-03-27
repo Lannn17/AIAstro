@@ -1285,38 +1285,42 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
     planets = natal_chart.get('planets', {})
     aspects = natal_chart.get('aspects', [])
 
-    sign_count: dict[str, int] = {}
-    house_count: dict[int, int] = {}
+    sign_planets: dict[str, list] = {}   # 各星座包含的行星名（中文）
+    house_planets: dict[int, list] = {}  # 各宫位包含的行星名（中文）
     elem_count = {'火': 0, '土': 0, '风': 0, '水': 0}
     mode_count = {'本始': 0, '固定': 0, '变动': 0}
     retro_names = []
 
     for key, p in planets.items():
-        sign = p.get('sign_original') or p.get('sign', '')
+        sign_raw = p.get('sign_original') or p.get('sign', '')             # 英文，用于 SIGN_ELEMENT/SIGN_MODE 查表
+        sign_zh = translate_sign(sign_raw, 'zh') if sign_raw else sign_raw  # 中文带"座"，如"天蝎座"
         house = p.get('house') or 0
-        name = p.get('name_original') or p.get('name', key)
+        name_raw = p.get('name_original') or p.get('name', key)
+        name_zh = translate_planet(name_raw, 'zh') if name_raw else name_raw
         if key in _CORE_PLANETS:
-            sign_count[sign] = sign_count.get(sign, 0) + 1
+            sign_planets.setdefault(sign_zh, []).append(name_zh)
             if house:
-                house_count[house] = house_count.get(house, 0) + 1
-            if sign in _SIGN_ELEMENT:
-                elem_count[_SIGN_ELEMENT[sign]] += 1
-            if sign in _SIGN_MODE:
-                mode_count[_SIGN_MODE[sign]] += 1
+                house_planets.setdefault(house, []).append(name_zh)
+            if sign_raw in _SIGN_ELEMENT:
+                elem_count[_SIGN_ELEMENT[sign_raw]] += 1
+            if sign_raw in _SIGN_MODE:
+                mode_count[_SIGN_MODE[sign_raw]] += 1
         if p.get('retrograde') and key in _CORE_PLANETS:
-            retro_names.append(name)
+            retro_names.append(name_zh)
 
     facts = []
 
-    # 星座群星
-    for s, c in sign_count.items():
-        if c >= 3:
-            facts.append(f"群星{s}座（{c}颗核心行星）")
+    # 星座群星（含具体行星名；sign_zh 已含"座"，直接嵌入括号内）
+    for s, planets_list in sign_planets.items():
+        if len(planets_list) >= 3:
+            planet_str = '·'.join(planets_list)
+            facts.append(f"群星{s}（{planet_str}）")
 
-    # 宫位强势
-    for h, c in house_count.items():
-        if c >= 3:
-            facts.append(f"第{h}宫强势（{c}颗核心行星）")
+    # 宫位强势（含具体行星名）
+    for h, planets_list in house_planets.items():
+        if len(planets_list) >= 3:
+            planet_str = '·'.join(planets_list)
+            facts.append(f"第{h}宫强势（{planet_str}）")
 
     # 元素主导
     dom_elem = max(elem_count, key=elem_count.get)

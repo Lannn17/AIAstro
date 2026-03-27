@@ -11,9 +11,9 @@ import { getTagExplanation } from '../utils/tagExplanations'
  *   onClose    - 关闭气泡时调用
  *   onAskAI    - 点击"问 AI"按钮时调用
  */
-export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI }) {
+export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, chartData = null }) {
   const wrapperRef = useRef(null)
-  const info = getTagExplanation(tag)
+  const info = getTagExplanation(tag, chartData)
 
   // 点击外部关闭
   useEffect(() => {

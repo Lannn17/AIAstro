@@ -45,20 +45,108 @@ const MODE_MEANINGS = {
   变动: '灵活适应，善于整合与过渡，能在变化中找到出路',
 }
 
+// 行星核心领域
+const PLANET_DOMAINS = {
+  太阳: '自我认同与核心意志',
+  月亮: '情感与本能反应',
+  水星: '思维与沟通方式',
+  金星: '审美、价值观与人际关系',
+  火星: '行动力与欲望驱动',
+  木星: '信念、扩张与成长运势',
+  土星: '责任、限制与长期积累',
+  天王星: '变革与突破冲动',
+  海王星: '梦想、直觉与灵性追求',
+  冥王星: '深层转化与潜在力量',
+  凯龙: '核心伤痛与疗愈智慧',
+  北交点: '今生成长方向',
+  南交点: '前世积累的习性',
+}
+
+// 核心行星 key（与后端 _CORE_PLANETS 一致）
+const CORE_PLANET_KEYS = new Set(['sun', 'moon', 'mercury', 'venus', 'mars',
+  'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
+
+/**
+ * 将 "太阳·水星·金星" 格式转为带领域注释的短句。
+ * 例如 → "太阳（自我认同）、水星（思维沟通）与金星（审美关系）"
+ */
+function _describePlanets(planetStr) {
+  const list = planetStr.split(/[·、,，]/).map(s => s.trim()).filter(Boolean)
+  const described = list.map(p => {
+    const domain = PLANET_DOMAINS[p]
+    return domain ? `${p}（${domain}）` : p
+  })
+  if (described.length === 0) return planetStr
+  if (described.length === 1) return described[0]
+  if (described.length === 2) return described.join('与')
+  return described.slice(0, -1).join('、') + '与' + described[described.length - 1]
+}
+
+/**
+ * 从 chartData 中找出在指定星座（不含"座"后缀）的核心行星名。
+ * @returns {string[]|null} 行星名列表，不足3颗返回 null
+ */
+function _getPlanetsInSign(chartData, signZh) {
+  if (!chartData?.planets) return null
+  const result = []
+  for (const [key, p] of Object.entries(chartData.planets)) {
+    if (!CORE_PLANET_KEYS.has(key)) continue
+    // p.sign 为中文含座（如"天蝎座"），去尾与 signZh 比较
+    const pSign = (p.sign || '').replace(/座$/, '')
+    if (pSign === signZh) result.push(p.name || key)
+  }
+  return result.length >= 3 ? result : null
+}
+
+/**
+ * 从 chartData 中找出在指定宫位的核心行星名。
+ * @returns {string[]|null}
+ */
+function _getPlanetsInHouse(chartData, houseNum) {
+  if (!chartData?.planets) return null
+  const result = []
+  for (const [key, p] of Object.entries(chartData.planets)) {
+    if (!CORE_PLANET_KEYS.has(key)) continue
+    if (Number(p.house) === houseNum) result.push(p.name || key)
+  }
+  return result.length >= 3 ? result : null
+}
+
 /**
  * 根据标签文本返回解释。
  * @param {string} tagText
+ * @param {object|null} chartData  - 可选，传入当前星盘数据以获取具体行星名
  * @returns {{ title: string, explanation: string } | null}
  */
-export function getTagExplanation(tagText) {
-  // 群星 + 星座（规则生成格式）
-  let m = tagText.match(/^群星(.+)座（(\d+)颗核心行星）$/)
+export function getTagExplanation(tagText, chartData = null) {
+  // 群星 + 星座（新格式：含具体行星名，如"群星天蝎座（太阳·水星·金星）"）
+  let m = tagText.match(/^群星(.+)座（([^颗\d][^）]*?)）$/)
+  if (m) {
+    const sign = m[1], planetStr = m[2]
+    const meaning = SIGN_MEANINGS[sign] || '独特特质'
+    const described = _describePlanets(planetStr)
+    return {
+      title: tagText,
+      explanation: `${described}同聚${sign}座，${sign}座的特质（${meaning}）渗透这些生命领域的表达方式，使你在相关事务上带有鲜明的${sign}座气息与内驱力。`,
+    }
+  }
+
+  // 群星 + 星座（旧格式：含数量，如"群星天蝎座（3颗核心行星）"，向后兼容）
+  m = tagText.match(/^群星(.+)座（(\d+)颗核心行星）$/)
   if (m) {
     const sign = m[1], count = m[2]
     const meaning = SIGN_MEANINGS[sign] || '多元特质'
+    const fromChart = _getPlanetsInSign(chartData, sign)
+    if (fromChart) {
+      const described = _describePlanets(fromChart.join('·'))
+      return {
+        title: tagText,
+        explanation: `${described}同聚${sign}座，${sign}座的特质（${meaning}）渗透这些生命领域的表达方式，使你在相关事务上带有鲜明的${sign}座气息与内驱力。`,
+      }
+    }
     return {
       title: tagText,
-      explanation: `${count} 颗核心行星集中在${sign}座，能量高度聚焦。${sign}座特质（${meaning}）在你的命盘中格外突出，相关人生议题将反复出现。`,
+      explanation: `${count} 颗核心行星集中在${sign}座，能量高度聚焦。${sign}座特质（${meaning}）在你的命盘中格外突出，使你在这一星座所代表的方向上有持续的驱动力。`,
     }
   }
 
@@ -67,9 +155,17 @@ export function getTagExplanation(tagText) {
   if (m) {
     const house = parseInt(m[1])
     const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    const fromChart = _getPlanetsInHouse(chartData, house)
+    if (fromChart) {
+      const described = _describePlanets(fromChart.join('·'))
+      return {
+        title: tagText,
+        explanation: `${described}共聚第 ${house} 宫（${meaning}），这些行星的特质在${meaning}层面相互交织，使该领域成为你命盘的能量焦点。`,
+      }
+    }
     return {
       title: tagText,
-      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），使这一生命领域成为你命盘的能量核心，相关议题会在人生中反复凸显。`,
+      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），使这一生命领域成为你命盘的能量核心，你会在${meaning}方面投入格外多的精力与关注。`,
     }
   }
 
@@ -78,20 +174,48 @@ export function getTagExplanation(tagText) {
   if (m) {
     const sign = m[1]
     const meaning = SIGN_MEANINGS[sign] || '多元特质'
+    const fromChart = _getPlanetsInSign(chartData, sign)
+    if (fromChart) {
+      const described = _describePlanets(fromChart.join('·'))
+      return {
+        title: tagText,
+        explanation: `${described}同聚${sign}座，${sign}座的特质（${meaning}）渗透这些生命领域的表达方式，使你在相关事务上带有鲜明的${sign}座气息与内驱力。`,
+      }
+    }
     return {
       title: tagText,
-      explanation: `多颗核心行星集中在${sign}座，${sign}座特质（${meaning}）在你的命盘中格外突出，相关人生议题将反复出现。`,
+      explanation: `多颗核心行星集中在${sign}座，${sign}座特质（${meaning}）在你的命盘中格外突出，使你在这一星座所代表的方向上有持续的驱动力。`,
     }
   }
 
-  // 宫位强势（规则生成格式）
+  // 宫位强势（新格式：含具体行星名，如"第3宫强势（太阳·水星·金星）"）
+  m = tagText.match(/^第(\d+)宫强势（([^颗\d][^）]*?)）$/)
+  if (m) {
+    const house = parseInt(m[1]), planetStr = m[2]
+    const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    const described = _describePlanets(planetStr)
+    return {
+      title: tagText,
+      explanation: `${described}共聚第 ${house} 宫（${meaning}），这些行星的特质在${meaning}层面相互交织，使该领域成为你人生中持续投入与成长的核心舞台。`,
+    }
+  }
+
+  // 宫位强势（旧格式：含数量，如"第3宫强势（3颗核心行星）"，向后兼容）
   m = tagText.match(/^第(\d+)宫强势（(\d+)颗核心行星）$/)
   if (m) {
     const house = parseInt(m[1]), count = m[2]
     const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    const fromChart = _getPlanetsInHouse(chartData, house)
+    if (fromChart) {
+      const described = _describePlanets(fromChart.join('·'))
+      return {
+        title: tagText,
+        explanation: `${described}共聚第 ${house} 宫（${meaning}），这些行星的特质在${meaning}层面相互交织，使该领域成为你人生中持续投入与成长的核心舞台。`,
+      }
+    }
     return {
       title: tagText,
-      explanation: `${count} 颗核心行星聚集于第 ${house} 宫（${meaning}），使这一生命领域成为你性格与经历的核心舞台，相关议题贯穿人生。`,
+      explanation: `${count} 颗核心行星聚集于第 ${house} 宫（${meaning}），使这一生命领域成为你性格与经历的核心舞台，你会在${meaning}方面持续积累深厚的人生经验。`,
     }
   }
 
@@ -100,9 +224,17 @@ export function getTagExplanation(tagText) {
   if (m) {
     const house = parseInt(m[1])
     const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    const fromChart = _getPlanetsInHouse(chartData, house)
+    if (fromChart) {
+      const described = _describePlanets(fromChart.join('·'))
+      return {
+        title: tagText,
+        explanation: `${described}共聚第 ${house} 宫（${meaning}），这些行星的特质在${meaning}层面相互交织，使该领域成为你人生中持续投入与成长的核心舞台。`,
+      }
+    }
     return {
       title: tagText,
-      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），这一生命领域在你的命盘中占据重要地位，相关议题贯穿人生。`,
+      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），这一生命领域在你的命盘中占据重要地位，你会在${meaning}方面投入格外多的精力与关注。`,
     }
   }
 
@@ -128,13 +260,25 @@ export function getTagExplanation(tagText) {
     }
   }
 
-  // 逆行行星
+  // 逆行行星（规则格式，多颗，如"逆行行星：火星、土星"）
   m = tagText.match(/^逆行行星：(.+)$/)
   if (m) {
     const planets = m[1]
     return {
       title: tagText,
       explanation: `${planets} 在你出生时处于逆行状态。逆行行星的能量趋于内化，相关议题需要更多自我探索与反思，成熟后往往发展出独到的深度。`,
+    }
+  }
+
+  // 单颗行星逆行（AI 简写格式，如"火星逆行"）
+  m = tagText.match(/^(.+)逆行$/)
+  if (m) {
+    const planet = m[1]
+    const domain = PLANET_DOMAINS[planet]
+    const domainNote = domain ? `（${domain}）` : ''
+    return {
+      title: tagText,
+      explanation: `${planet}${domainNote}在你出生时处于逆行状态，其能量趋于内化与深化。你在${planet}所代表的领域往往有更多自我审视的倾向，成熟后能发展出超越常规的洞察力与独到深度。`,
     }
   }
 

@@ -1165,6 +1165,7 @@ export default function NatalChart() {
                               onToggle={() => setActiveTag(activeTag === tag ? null : tag)}
                               onClose={() => setActiveTag(null)}
                               onAskAI={() => handleAskAI(tag)}
+                              chartData={result}
                             />
                           ))}
                         </div>
