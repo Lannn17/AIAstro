@@ -542,7 +542,8 @@ export default function NatalChart() {
     const json = await planetInterp.run({
       natal_chart: data,
       language: data.input_data?.language || 'zh',
-      chart_id: forceRefresh ? null : (id || null), // force_refresh 时传 null，绕过后端缓存
+      chart_id: id || null,
+      force_refresh: forceRefresh,  // 后端据此跳过读缓存，但仍会写入新结果
     })
     if (json?.analyses) setPlanetAnalyses(json.analyses)
     if (json?.model_used) setPlanetModelUsed(json.model_used)
