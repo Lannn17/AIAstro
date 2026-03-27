@@ -159,6 +159,7 @@
 | Method | Path | Auth | 功能 |
 |---|---|---|---|
 | POST | `/api/auth/login` | 无 | 登录，返回 JWT |
+| POST | `/api/auth/register` | 无 | 用户注册，返回 JWT |
 | GET  | `/api/auth/me` | **必须** | 获取当前用户 |
 | GET  | `/api/admin/analytics` | **必须** | RAG 统计数据（聚合 + 最近200条） |
 | POST | `/api/admin/analytics/report` | **必须** | Gemini 生成 RAG 质量报告 |
@@ -167,11 +168,21 @@
 
 ## 6. 数据库结构
 
+### `users` — 用户账户
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| `id` | INTEGER PK | 自增 |
+| `username` | TEXT UNIQUE NOT NULL | 用户名 |
+| `password_hash` | TEXT | bcrypt 加密的 SHA-256 摘要 |
+| `created_at` | TEXT | UTC ISO 时间戳 |
+
 ### `saved_charts` — 主表
 
 | 列 | 类型 | 说明 |
 |---|---|---|
 | `id` | INTEGER PK | 自增 |
+| `user_id` | INTEGER | 关联 users(id)，NULL 表示访客或管理员 |
 | `label` | TEXT | 显示名（"姓名 · YYYY/M/D"） |
 | `name` | TEXT | 出生姓名 |
 | `birth_year/month/day` | INTEGER | 出生日期 |
@@ -335,22 +346,56 @@ JSON 模式下无法使用 `===引用概括===`，改用 `source_refs` 字段注
 
 ---
 
+## 8a. 数据库层函数（`app/db.py`）
+
+| 函数 | 功能 |
+|---|---|
+| `db_create_user(username, password_hash)` | 创建新用户，返回 user_id |
+| `db_get_user_by_username(username)` | 按用户名查询，返回 (user_id, password_hash) 或 None |
+| `db_list_user_charts(user_id)` | 列出指定用户的所有星盘 |
+| `db_list_all_charts()` | 列出所有星盘（管理员权限） |
+
+**DB 层设计**：自定义双模式（SQLite 本地 / Turso HTTP 生产），`USE_TURSO` 标志按环境变量自动切换，无 ORM。
+
+---
+
 ## 9. 认证系统
 
-### JWT 流程
+### JWT 流程与 UserInfo
 
 ```
-POST /api/auth/login {username, password}
-    ↓ 验证 env 变量 AUTH_USERNAME / AUTH_PASSWORD
+注册流程：
+POST /api/auth/register {username, password}
+    ↓ 查重：username 必须唯一
+    ↓ 加密：SHA-256(password) → bcrypt hash → saved_charts.user_id
     ↓ PyJWT 签发 HS256 token（有效期 30 天）
+    ↓ 返回 {access_token, token_type: "bearer"}
+
+登录流程：
+POST /api/auth/login {username, password}
+    ↓ 从 users 表查询 username
+    ↓ 验证 bcrypt(SHA-256(password)) == password_hash
+    ↓ 或支持 env 变量 AUTH_USERNAME / AUTH_PASSWORD（管理员）
+    ↓ PyJWT 签发 token
     ↓ 返回 {access_token, token_type: "bearer"}
 
 前端存入 localStorage["auth_token"]
 每次请求加 Authorization: Bearer {token}
 
+后端鉴权函数返回 UserInfo TypedDict：
+  {
+    "username": str,
+    "user_id": int | None,  # NULL 表示访客或管理员
+    "is_admin": bool        # 由 username == AUTH_USERNAME 推导，不存储在 DB/JWT
+  }
+
 后端依赖：
-  require_auth       → 未登录返回 401（charts CRUD 使用）
+  require_auth       → 未登录返回 401，返回 UserInfo（charts CRUD 使用）
   get_optional_user  → 无 token 返回 None（对话/保存允许访客）
+
+星盘所有权检查：
+  - 普通用户只能访问 own.user_id == current_user.user_id 的星盘
+  - 管理员（is_admin=True）可访问所有星盘
 ```
 
 ### 访客模式
