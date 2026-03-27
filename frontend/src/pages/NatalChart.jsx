@@ -544,12 +544,14 @@ export default function NatalChart() {
     interpGenRef.current += 1
     const myGen = interpGenRef.current
     if (forceRefresh) setPlanetAnalyses({})
+    console.log('[interpret_planets] sending:', { chart_id: id || null, force_refresh: forceRefresh, gen: myGen })
     const json = await planetInterp.run({
       natal_chart: data,
       language: data.input_data?.language || 'zh',
       chart_id: id || null,
       force_refresh: forceRefresh,
     })
+    console.log('[interpret_planets] received:', { from_cache: json?.from_cache, model_used: json?.model_used, gen: myGen, currentGen: interpGenRef.current })
     if (interpGenRef.current !== myGen) return  // stale: another call started while this was in flight
     if (json?.analyses) setPlanetAnalyses(json.analyses)
     if (json?.model_used) setPlanetModelUsed(json.model_used)

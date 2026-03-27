@@ -41,6 +41,34 @@
 | RAG 质量后台 | ✅ | `/api/admin/analytics` | `/admin` 隐藏路由 | 分类统计 + 引用率 + 报告 |
 | 推运 | 🚧 Stub | `/api/progressions` | Progressions Tab | 仅计算，无 AI 解读 |
 | 太阳回归 | 🚧 Stub | `/api/solar-return` | SolarReturn Tab | 仅计算 |
+
+#
+
+  │               │                       │          │   Gemini    │           │ Anal │    
+  │     功能      │      规则/打分层      │   RAG    │  输出格式   │  DB 缓存  │ ytic │
+  │               │                       │          │             │           │  s   │
+  ├───────────────┼───────────────────────┼──────────┼─────────────┼───────────┼──────┤    
+  │ 行运分析 (ana │                       │ retrieve │ 结构化 JSON │ ✅ transi │      │    
+  │ lyze_active_t │ 无，原始相位数据直接  │ (query,  │ （逐相位 +  │ t_cache + │ ✅   │    
+  │ ransits_full) │ 喂入                  │ k=4)     │ overall）   │  overall_ │      │    
+  │               │                       │          │             │ cache     │      │    
+  ├───────────────┼───────────────────────┼──────────┼─────────────┼───────────┼──────┤    
+  │ 本命盘行星解  │ ✅ _compute_chart_fac │          │ 结构化 JSON │ ✅ planet │      │    
+  │ 读 (analyze_p │ ts() 提取事实标签（群 │ rag_gene │ （每颗行星  │ _analysis │ ✅   │    
+  │ lanets)       │ 星/宫位强势/元素/逆行 │ rate()   │ + overall   │ _cache    │      │    
+  │               │ /相位格局）           │          │ summary）   │           │      │    
+  ├───────────────┼───────────────────────┼──────────┼─────────────┼───────────┼──────┤    
+  │ 合盘解读      │ 无，原始相位列表直接  │ retrieve │ 结构化 JSON │ ✅ synast │      │    
+  │ (analyze_syna │ 喂入                  │ (rag_que │ （关系类型/ │ ry_cache  │ ✅   │    
+  │ stry)         │                       │ ry, k=4) │ 六维评分）  │           │      │    
+  ├───────────────┼───────────────────────┼──────────┼─────────────┼───────────┼──────┤    
+  │ 占星对话 (cha │ 复用 _compute_chart_f │ retrieve │ 自由文本    │ ❌        │ ✅   │    
+  │ t_with_chart) │ acts() 作为上下文     │ ()       │             │           │      │    
+  ├───────────────┼───────────────────────┼──────────┼─────────────┼───────────┼──────┤    
+  │ 出生时间校正  │ ✅ calc_confidence()  │ rag_gene │             │           │      │    
+  │ (analyze_rect │ 对每个上升候选打分（  │ rate()   │ 结构化 JSON │ ❌        │ ✅   │ 
+
+
 | 方向法 | 🚧 Stub | `/api/solar-arc` | Directions Tab | 仅计算 |
 
 ---

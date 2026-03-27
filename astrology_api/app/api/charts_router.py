@@ -87,7 +87,12 @@ def save_chart(body: SaveChartRequest, user: Optional[UserInfo] = Depends(get_op
     data = body.model_dump()
     if data.get("chart_data"):
         data["chart_data"] = json.dumps(data["chart_data"])
-    data["is_guest"] = not (user and user.get("is_admin", False))
+    if user is None:
+        data["is_guest"] = True
+    elif user["is_admin"]:
+        data["is_guest"] = False
+    else:
+        data["is_guest"] = True
     data["user_id"] = user["user_id"] if user else None
     row = db_save_chart(data)
     return _parse(row)
