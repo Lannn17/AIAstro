@@ -179,3 +179,79 @@ def test_me_is_admin_true_for_admin():
     res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.json()["is_admin"] is True
+
+
+# ── Chart isolation tests ─────────────────────────────────────────
+
+CHART_BODY = {
+    "label": "Test Chart",
+    "name": "Test",
+    "birth_year": 1990, "birth_month": 1, "birth_day": 1,
+    "birth_hour": 12, "birth_minute": 0,
+    "location_name": "Tokyo",
+    "latitude": 35.68, "longitude": 139.69,
+    "tz_str": "Asia/Tokyo",
+    "house_system": "Placidus",
+    "language": "zh",
+}
+
+
+def _reg_and_token(username):
+    client.post("/api/auth/register", json={"username": username, "password": "Pass1234!"})
+    r = client.post("/api/auth/login", json={"username": username, "password": "Pass1234!"})
+    return r.json()["access_token"]
+
+
+def _admin_token():
+    r = client.post("/api/auth/login", json={"username": "admin", "password": "adminpass"})
+    return r.json()["access_token"]
+
+
+def test_user_can_save_and_list_own_chart():
+    token = _reg_and_token("chart_user1")
+    res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    charts = client.get("/api/charts", headers={"Authorization": f"Bearer {token}"}).json()
+    assert len(charts) >= 1
+
+
+def test_user_cannot_see_other_users_chart():
+    token_a = _reg_and_token("chart_userA")
+    token_b = _reg_and_token("chart_userB")
+    res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_a}"})
+    chart_id = res.json()["id"]
+    res2 = client.get(f"/api/charts/{chart_id}", headers={"Authorization": f"Bearer {token_b}"})
+    assert res2.status_code == 403
+
+
+def test_user_cannot_access_guest_chart():
+    """Non-admin user cannot access a chart saved by a guest (user_id=NULL)."""
+    # Save as guest (no token)
+    res = client.post("/api/charts", json=CHART_BODY)
+    chart_id = res.json()["id"]
+    token = _reg_and_token("chart_userC")
+    res2 = client.get(f"/api/charts/{chart_id}", headers={"Authorization": f"Bearer {token}"})
+    assert res2.status_code == 403
+
+
+def test_admin_can_access_any_chart():
+    token_u = _reg_and_token("chart_userD")
+    res = client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_u}"})
+    chart_id = res.json()["id"]
+    admin = _admin_token()
+    res2 = client.get(f"/api/charts/{chart_id}", headers={"Authorization": f"Bearer {admin}"})
+    assert res2.status_code == 200
+
+
+def test_admin_list_includes_all_users():
+    token_u = _reg_and_token("chart_userE")
+    client.post("/api/charts", json=CHART_BODY, headers={"Authorization": f"Bearer {token_u}"})
+    admin = _admin_token()
+    charts = client.get("/api/charts", headers={"Authorization": f"Bearer {admin}"}).json()
+    assert len(charts) >= 1
+
+
+def test_pending_list_requires_admin():
+    token_u = _reg_and_token("chart_userF")
+    res = client.get("/api/charts/pending", headers={"Authorization": f"Bearer {token_u}"})
+    assert res.status_code == 403
