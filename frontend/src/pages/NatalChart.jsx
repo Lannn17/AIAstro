@@ -111,6 +111,7 @@ export default function NatalChart() {
   const [chatOpen, setChatOpen] = useState(false)
   const [activeTag, setActiveTag] = useState(null) // 当前展开 tooltip 的标签
   const chatPanelRef = useRef(null)
+  const interpGenRef = useRef(0)  // incremented on every new interpret call to cancel stale cache responses
 
   // Planet interpretations
   const [planetAnalyses, setPlanetAnalyses] = useState({})
@@ -515,6 +516,7 @@ export default function NatalChart() {
 
   async function fetchPlanetCache(chartData, chartId) {
     if (!chartData || !chartId) return
+    const myGen = interpGenRef.current
     try {
       const res = await fetch(`${API_BASE}/api/interpret_planets`, {
         method: 'POST',
@@ -528,6 +530,7 @@ export default function NatalChart() {
       })
       if (res.ok) {
         const resp = await res.json()
+        if (interpGenRef.current !== myGen) return  // stale: a new interpret call started, discard
         if (resp.analyses) setPlanetAnalyses(resp.analyses)
         if (resp.model_used) setPlanetModelUsed(resp.model_used)
       }
@@ -538,13 +541,16 @@ export default function NatalChart() {
     const data = (chartData && chartData.planets) ? chartData : result
     const id = chartId !== undefined ? chartId : savedId
     if (!data) return
+    interpGenRef.current += 1
+    const myGen = interpGenRef.current
     if (forceRefresh) setPlanetAnalyses({})
     const json = await planetInterp.run({
       natal_chart: data,
       language: data.input_data?.language || 'zh',
       chart_id: id || null,
-      force_refresh: forceRefresh,  // 后端据此跳过读缓存，但仍会写入新结果
+      force_refresh: forceRefresh,
     })
+    if (interpGenRef.current !== myGen) return  // stale: another call started while this was in flight
     if (json?.analyses) setPlanetAnalyses(json.analyses)
     if (json?.model_used) setPlanetModelUsed(json.model_used)
   }
