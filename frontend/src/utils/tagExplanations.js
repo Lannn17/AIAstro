@@ -51,7 +51,7 @@ const MODE_MEANINGS = {
  * @returns {{ title: string, explanation: string } | null}
  */
 export function getTagExplanation(tagText) {
-  // 群星 + 星座
+  // 群星 + 星座（规则生成格式）
   let m = tagText.match(/^群星(.+)座（(\d+)颗核心行星）$/)
   if (m) {
     const sign = m[1], count = m[2]
@@ -62,7 +62,29 @@ export function getTagExplanation(tagText) {
     }
   }
 
-  // 宫位强势
+  // 群星 + 宫位（AI 简写格式，如"群星3宫"）
+  m = tagText.match(/^群星(\d+)宫$/)
+  if (m) {
+    const house = parseInt(m[1])
+    const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    return {
+      title: tagText,
+      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），使这一生命领域成为你命盘的能量核心，相关议题会在人生中反复凸显。`,
+    }
+  }
+
+  // 群星 + 星座简写（AI 格式，如"群星天蝎座"无括号）
+  m = tagText.match(/^群星(.+)座$/)
+  if (m) {
+    const sign = m[1]
+    const meaning = SIGN_MEANINGS[sign] || '多元特质'
+    return {
+      title: tagText,
+      explanation: `多颗核心行星集中在${sign}座，${sign}座特质（${meaning}）在你的命盘中格外突出，相关人生议题将反复出现。`,
+    }
+  }
+
+  // 宫位强势（规则生成格式）
   m = tagText.match(/^第(\d+)宫强势（(\d+)颗核心行星）$/)
   if (m) {
     const house = parseInt(m[1]), count = m[2]
@@ -73,10 +95,21 @@ export function getTagExplanation(tagText) {
     }
   }
 
-  // 多元素行星
-  m = tagText.match(/^多([火土风水])象行星（(\d+)颗）$/)
+  // 宫位强势（AI 简写，如"第3宫强势"）
+  m = tagText.match(/^第(\d+)宫强势$/)
   if (m) {
-    const elem = m[1], count = m[2]
+    const house = parseInt(m[1])
+    const meaning = HOUSE_MEANINGS[house] || '该宫位相关领域'
+    return {
+      title: tagText,
+      explanation: `多颗核心行星聚集于第 ${house} 宫（${meaning}），这一生命领域在你的命盘中占据重要地位，相关议题贯穿人生。`,
+    }
+  }
+
+  // 多元素行星（规则生成格式及 AI 简写）
+  m = tagText.match(/^多([火土风水])象行星[（(]?(\d+)?颗?[）)]?$/)
+  if (m) {
+    const elem = m[1], count = m[2] || '多'
     const meaning = ELEMENT_MEANINGS[elem] || ''
     return {
       title: tagText,
@@ -84,10 +117,10 @@ export function getTagExplanation(tagText) {
     }
   }
 
-  // 多模式行星
-  m = tagText.match(/^多(本始|固定|变动)星（(\d+)颗）$/)
+  // 多模式行星（规则生成格式及 AI 简写）
+  m = tagText.match(/^多(本始|固定|变动)星[（(]?(\d+)?颗?[）)]?$/)
   if (m) {
-    const mode = m[1], count = m[2]
+    const mode = m[1], count = m[2] || '多'
     const meaning = MODE_MEANINGS[mode] || ''
     return {
       title: tagText,

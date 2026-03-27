@@ -542,8 +542,7 @@ export default function NatalChart() {
     const json = await planetInterp.run({
       natal_chart: data,
       language: data.input_data?.language || 'zh',
-      chart_id: id || null,
-      force_refresh: forceRefresh,
+      chart_id: forceRefresh ? null : (id || null), // force_refresh 时传 null，绕过后端缓存
     })
     if (json?.analyses) setPlanetAnalyses(json.analyses)
     if (json?.model_used) setPlanetModelUsed(json.model_used)
@@ -1047,6 +1046,24 @@ export default function NatalChart() {
               >
                 ✏ 编辑此星盘
               </button>
+              {Object.keys(planetAnalyses).length > 0 && (
+                <button
+                  onClick={() => handleInterpretPlanets(undefined, undefined, true)}
+                  disabled={planetInterp.loading}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #2a2a5a',
+                    color: planetInterp.loading ? '#5a5a8a' : '#7878aa',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    padding: '4px 12px',
+                    cursor: planetInterp.loading ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  {planetInterp.loading ? '↺ 生成中…' : '↺ 重新生成解读'}
+                </button>
+              )}
             </div>
           )}
 
@@ -1131,26 +1148,11 @@ export default function NatalChart() {
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>本命盘综合概述</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {planetModelUsed && (
-                            <span style={{ fontSize: '0.68rem', color: planetModelUsed === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#1a1a2e', border: '1px solid #3a3a5a', borderRadius: '10px', padding: '2px 8px' }}>
-                              {planetModelUsed === 'cached' ? '缓存' : planetModelUsed.replace('gemini-', '')}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleInterpretPlanets(undefined, undefined, true)}
-                            disabled={planetInterp.loading}
-                            title="重新生成解读"
-                            style={{
-                              background: 'none', border: '1px solid #3a3a5a', borderRadius: '10px',
-                              color: '#5a5a8a', fontSize: '0.68rem', padding: '2px 8px',
-                              cursor: planetInterp.loading ? 'not-allowed' : 'pointer',
-                              opacity: planetInterp.loading ? 0.4 : 1,
-                            }}
-                          >
-                            {planetInterp.loading ? '生成中…' : '↺ 重新生成'}
-                          </button>
-                        </div>
+                        {planetModelUsed && (
+                          <span style={{ fontSize: '0.68rem', color: planetModelUsed === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#1a1a2e', border: '1px solid #3a3a5a', borderRadius: '10px', padding: '2px 8px' }}>
+                            {planetModelUsed === 'cached' ? '缓存' : planetModelUsed.replace('gemini-', '')}
+                          </span>
+                        )}
                       </div>
                       {/* 特征标签 */}
                       {planetAnalyses.overall.tags?.length > 0 && (
