@@ -9,6 +9,7 @@
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
 - **每次代码改动后立即 commit**，不主动 push。Push 两端（`git push origin main && git push hf main`）、版本号更新、CHANGELOG 更新，三者同步，只在用户明确要求时一起完成。
 - **每次代码改动后自动检查 `TODO.md`**：对照本次改动判断 TODO 中哪些条目需要新增、修改状态或删除，列出建议变更内容并等待用户确认后再修改 TODO.md。
+- **后端需要重启时自动执行**：凡后端代码有改动、或用户提到后端无响应/需要重启，自动运行 kill+restart 命令并通知用户"后端已重启"。Kill 命令：`for /f "tokens=5" %a in ('netstat -ano ^| findstr :8001') do taskkill /F /PID %a`，然后在 `astrology_api/` 目录启动 uvicorn。
 - **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
 
 ---
@@ -63,6 +64,10 @@ npm install
 npm run dev     # http://localhost:5173  (proxies /api → 127.0.0.1:8001)
 npm run lint
 npm run build
+
+# ── Kill + restart backend (port 8001) ───────────────────────
+for /f "tokens=5" %a in ('netstat -ano ^| findstr :8001') do taskkill /F /PID %a
+cd astrology_api && uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 **Required env vars** — copy `astrology_api/.env.example` to `astrology_api/.env`:
