@@ -185,18 +185,18 @@
 
 ## 4. 管理员权限
 
-- [ ] 管理员（`AUTH_USERNAME` / `AUTH_PASSWORD`）登录 → 成功
-- [ ] `GET /api/charts` → 返回所有用户（含 testuser1、testuser2）的星盘
-- [ ] 管理员访问 testuser1 的星盘 → 200 OK
-- [ ] 管理员 `GET /api/charts/pending` → 200
-- [ ] `testuser1` 调用 `GET /api/charts/pending` → 403
+- [×] 管理员（`AUTH_USERNAME` / `AUTH_PASSWORD`）登录 → 成功
+- [×] `GET /api/charts` → 返回所有用户（含 testuser1、testuser2）的星盘
+- [×] 管理员访问 testuser1 的星盘 → 200 OK
+- [×] 管理员 `GET /api/charts/pending` → 200
+- [×] `testuser1` 调用 `GET /api/charts/pending` → 403
 
 ## 5. 访客模式回归
 
-- [ ] 未登录 → 计算星盘 → 可正常保存（进入待审核队列）
-- [ ] 管理员查看待审核队列 → 访客星盘出现
+- [×] 未登录 → 计算星盘 → 可正常保存（进入待审核队列）
+- [×] 管理员查看待审核队列 → 访客星盘出现
 
 ## 6. 注销与状态恢复
 
-- [ ] 登出 → 右上角未登录状态，列表清空
-- [ ] 刷新后重新登录 → token 恢复，列表重新加载
+- [×] 登出 → 右上角未登录状态，列表清空
+- [×] 刷新后重新登录 → token 恢复，列表重新加载
