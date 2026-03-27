@@ -353,6 +353,9 @@ export default function Transits() {
                 </div>
               )}
 
+              {/* RAG 引用文献 */}
+              <SourcesSection sources={transit.result.sources} />
+
               {/* 行运对话入口 */}
               <div style={{ marginTop: '12px' }}>
                 <button

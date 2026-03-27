@@ -7,8 +7,23 @@
 ## Hard rules / 硬性规则
 
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
-- **每次代码改动后立即 commit 并推两端**：`git push origin main && git push hf main`。版本号更新和 CHANGELOG 只在用户明确要求时才做。
+- **每次代码改动后立即 commit**，不主动 push。Push 两端（`git push origin main && git push hf main`）、版本号更新、CHANGELOG 更新，三者同步，只在用户明确要求时一起完成。
+- **每次代码改动后自动检查 `TODO.md`**：对照本次改动判断 TODO 中哪些条目需要新增、修改状态或删除，列出建议变更内容并等待用户确认后再修改 TODO.md。
 - **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
+
+---
+
+## AI 分析设计方针 / AI Analysis Design Principle
+
+**所有涉及 AI 分析的功能，必须同时满足以下三点：**
+
+1. **RAG 知识增强**：调用 Qdrant 检索相关书籍片段，拼入 prompt 作为参考依据，不允许裸调 Gemini。
+2. **后端 Analytics 记录**：每次 AI 分析调用后，通过 `_log_analytics` 写入 `query_analytics` 表，记录 query hash、分类标签、最高相似度分、是否被引用，用于持续效果验证。
+3. **前端显示引用文献区块**：使用 `<SourcesSection>` 组件展示 RAG 检索到的来源。
+   - **当前**：所有用户可见（临时状态）。
+   - **目标**：仅管理员可见。此权限控制待注册用户功能开发完成后实现（另一 terminal 正在开发）。
+
+违反以上任意一点的 AI 分析端点均视为未完成实现。
 
 ---
 
@@ -204,22 +219,23 @@ Schema 通过 `create_tables()` 启动时自动创建。无迁移工具——sch
    预期：显示"请先登录"，页面不崩溃
 ```
 
-### Commit + Push
-每次代码改动后立即 commit 并同时推两端：
+### Commit
+每次代码改动后立即 commit，不 push：
 ```bash
 git add <files>
 git commit -m "type(scope): description"
-git push origin main && git push hf main
 ```
 Conventional Commits 格式，英文，72 字符以内。
 
-### 版本发布（仅当用户明确要求时）
+Commit 后提示用户重启前端（`npm run dev`）或后端（`uvicorn ...`）视改动类型而定，在本地测试。
+
+### Push + 版本发布（仅当用户明确要求时，三步同步完成）
 1. Bump version in `frontend/package.json`
 2. Update "Current version" line in this file
 3. Add `CHANGELOG.md` entry
 4. `git add -A && git commit -m "chore(release): vX.Y.Z"`
 5. `git tag vX.Y.Z`
-6. Push 两端（同上）
+6. `git push origin main && git push hf main`
 
 ### /clear guard
 `/clear` 前检查 `git status`，有未提交改动则询问是否先 commit。
