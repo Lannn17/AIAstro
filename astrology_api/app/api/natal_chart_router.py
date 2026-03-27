@@ -101,6 +101,7 @@ class InterpretPlanetsRequest(BaseModel):
     language: str = 'zh'
     chart_id: Optional[int] = None   # 已保存星盘的 ID，用于缓存
     cache_only: bool = False          # True = 只读缓存，未命中时返回空而非调 AI
+    force_refresh: bool = False       # True = 跳过缓存读取，强制重新生成
 
 
 @router.post("/interpret_planets")
@@ -117,8 +118,8 @@ async def interpret_planets(body: InterpretPlanetsRequest):
     }, sort_keys=True)
     chart_hash = hashlib.md5(hash_src.encode()).hexdigest()
 
-    # 有 chart_id → 检查缓存
-    if body.chart_id:
+    # 有 chart_id → 检查缓存（force_refresh 时跳过）
+    if body.chart_id and not body.force_refresh:
         cached = db_get_planet_cache(body.chart_id, chart_hash)
         if cached:
             return {"analyses": _json.loads(cached), "sources": [], "from_cache": True, "model_used": "cached"}
