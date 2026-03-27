@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
+  const [username, setUsername] = useState(() => localStorage.getItem('auth_username') || '')
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('is_admin') === 'true')
   const [showLoginModal, setShowLoginModal] = useState(
@@ -13,12 +14,14 @@ export function AuthProvider({ children }) {
   )
   const [sessionKey, setSessionKey] = useState(0)
 
-  function _applyToken(access_token, admin) {
+  function _applyToken(access_token, admin, name) {
     localStorage.setItem('auth_token', access_token)
     localStorage.setItem('is_admin', admin ? 'true' : 'false')
+    localStorage.setItem('auth_username', name || '')
     localStorage.removeItem('guest_mode')
     setToken(access_token)
     setIsAdmin(!!admin)
+    setUsername(name || '')
     setIsGuest(false)
     setShowLoginModal(false)
     setSessionKey(k => k + 1)
@@ -40,14 +43,14 @@ export function AuthProvider({ children }) {
       headers: { Authorization: `Bearer ${access_token}` },
     })
     const me = meRes.ok ? await meRes.json() : {}
-    _applyToken(access_token, me.is_admin ?? false)
+    _applyToken(access_token, me.is_admin ?? false, me.username ?? username)
   }
 
-  async function register(username, password) {
+  async function register(regUsername, password) {
     const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username: regUsername, password }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -55,7 +58,7 @@ export function AuthProvider({ children }) {
     }
     const { access_token } = await res.json()
     // Registered users are never admin
-    _applyToken(access_token, false)
+    _applyToken(access_token, false, regUsername)
   }
 
   function continueAsGuest() {
@@ -73,7 +76,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('guest_mode')
     localStorage.removeItem('is_admin')
+    localStorage.removeItem('auth_username')
     setToken(null)
+    setUsername('')
     setIsGuest(false)
     setIsAdmin(false)
     setShowLoginModal(true)
@@ -88,6 +93,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       token,
+      username,
       isGuest,
       isAdmin,
       isAuthenticated: !!token,

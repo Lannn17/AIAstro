@@ -37,27 +37,33 @@ const navLinkStyle = ({ isActive }) => ({
 })
 
 function UserBadge() {
-  const { isAuthenticated, isGuest, logout, setShowLoginModal } = useAuth()
+  const { isAuthenticated, isGuest, username, logout, setShowLoginModal } = useAuth()
 
   if (isAuthenticated) {
     return (
-      <button
-        onClick={logout}
-        title="退出登录"
-        style={{
-          flexShrink: 0,
-          padding: '5px 12px',
-          backgroundColor: 'transparent',
-          border: '1px solid #3a3a6a',
-          borderRadius: '6px',
-          color: '#8888aa',
-          fontSize: '0.78rem',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        退出
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {username && (
+          <span style={{ color: '#c9a84c', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+            {username}
+          </span>
+        )}
+        <button
+          onClick={logout}
+          title="退出登录"
+          style={{
+            padding: '5px 12px',
+            backgroundColor: 'transparent',
+            border: '1px solid #3a3a6a',
+            borderRadius: '6px',
+            color: '#8888aa',
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          退出
+        </button>
+      </div>
     )
   }
 
