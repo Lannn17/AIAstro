@@ -1,7 +1,7 @@
 # Open Registration + User Isolation + Admin Design
 
 **Date:** 2026-03-27
-**Status:** Approved (v2 — post spec review)
+**Status:** Approved (v3 — post second spec review)
 
 ---
 
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE saved_charts ADD COLUMN user_id INTEGER REFERENCES users(id)
 ```
 
-Applied in `create_tables()` using the existing `_has_column` / `PRAGMA table_info` pattern (same as the `is_guest` migration). Will not fail if column already exists.
+Applied in `create_tables()` using the existing `_has_column` / `PRAGMA table_info` pattern (same as the `is_guest` migration).
 
 **Column semantics after migration:**
 
@@ -49,9 +49,12 @@ Applied in `create_tables()` using the existing `_has_column` / `PRAGMA table_in
 | Guest (unauthenticated) | NULL | 1 | Admin only (pending review) |
 | Pre-migration existing chart | NULL | 0 | Admin only (orphan) |
 | Registered user chart | `<user_id>` | 0 | Owner + admin |
-| Approved guest chart (legacy) | NULL | 0 | Admin only |
+| Approved guest chart (legacy) | NULL | 0 | Admin only (orphan) |
+| Admin-saved chart | NULL | 0 | Admin only (orphan) |
 
-> **Note on guest approval:** `POST /api/charts/pending/{id}/approve` sets `is_guest = 0` only. `user_id` remains NULL; the chart becomes an admin-visible "orphan". This is acceptable behaviour; adopting orphan charts is out of scope.
+> **Note on guest approval:** `POST /api/charts/pending/{id}/approve` sets `is_guest = 0` only. `user_id` stays NULL; the chart becomes an admin-visible orphan. Adopting orphan charts is out of scope.
+>
+> **Note on admin saving charts:** The admin (`user_id = NULL`) can save charts; they are stored with `user_id = NULL, is_guest = 0` — visible to admin only. This is correct and intentional.
 
 ---
 
@@ -81,8 +84,8 @@ class UserInfo(TypedDict):
 ```json
 { "sub": "<username>", "uid": <user_id_or_null>, "exp": <timestamp> }
 ```
-- `create_access_token(data: dict)` is unchanged in signature; callers must pass `{"sub": username, "uid": user_id}`.
-- `is_admin` is NOT stored in the token — it is derived at decode time: `username == AUTH_USERNAME`.
+- `create_access_token(data: dict)` unchanged in signature; callers pass `{"sub": username, "uid": user_id}`.
+- `is_admin` is **not** stored in the token — derived at decode time: `username == AUTH_USERNAME`.
 
 ### `auth_router.py`
 
@@ -95,8 +98,8 @@ Request:
 
 Validation (server-side):
 - `username` not empty, max 50 chars
-- `password` length 6–128 chars
-- `username != AUTH_USERNAME` (block collision with env-var admin)
+- `password` length 6–128 chars (enforced; bcrypt truncates at 72 bytes)
+- `username != AUTH_USERNAME` → 400 "该用户名不可用"
 - `username` not already in `users` table → 409 "用户名已存在"
 
 On success:
@@ -115,22 +118,25 @@ On success:
 
 **Updated: `GET /api/auth/me`**
 
-Return `{"username": user["username"]}` (extract from `UserInfo` dict instead of plain string).
+Returns `{"username": user["username"], "is_admin": user["is_admin"]}`.
+
+- User state is derived from the JWT payload client-side on page load (no rehydration call needed). `/me` is kept as a token-validity check; it now also exposes `is_admin` for the frontend to conditionally show admin UI.
+- **Code change:** `user: UserInfo = Depends(require_auth)` — update from current `user: str = Depends(require_auth)` and change return to `{"username": user["username"], "is_admin": user["is_admin"]}`.
 
 ### `db.py`
 
 **New functions:**
 - `db_create_user(username: str, password_hash: str) -> dict`
 - `db_get_user_by_username(username: str) -> dict | None`
-- `db_list_all_charts() -> list[dict]` — no `user_id` filter; admin use only
+- `db_list_all_charts() -> list[dict]` — `WHERE is_guest = 0` (excludes pending guest charts; includes orphans and all user charts); admin use only
 
 **Updated functions:**
-- `db_list_charts(user_id: int) -> list[dict]` — `WHERE user_id = ?`
+- `db_list_charts(user_id: int) -> list[dict]` — `WHERE user_id = ? AND is_guest = 0`
 - `db_save_chart(data: dict)` — `data` now includes optional `user_id` key
 
 **`create_tables()` additions:**
 ```python
-# users table
+# users table (before saved_charts migration)
 _turso_exec / conn.execute(_CREATE_USERS)
 
 # migration: user_id column
@@ -140,19 +146,19 @@ if not _has_column("saved_charts", "user_id"):
 
 ### `charts_router.py`
 
-All endpoints that use `require_auth` now receive `UserInfo` instead of `str`. The following callers are affected:
+All `require_auth` callers in this router now receive `UserInfo`. Callers that previously used `_user` (discarded) must be updated to named `user: UserInfo` where an `is_admin` check is needed. Full breakdown:
 
-| Endpoint | Old usage | New usage |
+| Endpoint | Parameter change | Logic change |
 |---|---|---|
-| `GET /api/charts` | `_user` (ignored) | `user: UserInfo` — branch on `is_admin` |
-| `POST /api/charts` | `user` (for `is_guest`) | `user: UserInfo` — write `user_id` |
-| `GET /api/charts/pending` | `_user` (ignored) | check `is_admin`, else 403 |
-| `POST /api/charts/pending/{id}/approve` | `_user` (ignored) | check `is_admin`, else 403 |
-| `GET /api/charts/{id}` | `_user` (ignored) | ownership check |
-| `PATCH /api/charts/{id}` | `_user` (ignored) | ownership check |
-| `DELETE /api/charts/{id}` | `_user` (ignored) | ownership check |
-| `GET /api/charts/{id}/events` | `_user` (ignored) | ownership check |
-| `PUT /api/charts/{id}/events` | `_user` (ignored) | ownership check |
+| `GET /api/charts` | `_user` → `user: UserInfo` | branch on `is_admin` |
+| `POST /api/charts` | `user: Optional[str]` → `user: Optional[UserInfo]` | write `user_id` |
+| `GET /api/charts/pending` | `_user` → `user: UserInfo` | check `is_admin`, else 403 |
+| `POST /api/charts/pending/{id}/approve` | `_user` → `user: UserInfo` | check `is_admin`, else 403 |
+| `GET /api/charts/{id}` | `_user` → `user: UserInfo` | ownership check |
+| `PATCH /api/charts/{id}` | `_user` → `user: UserInfo` | ownership check |
+| `DELETE /api/charts/{id}` | `_user` → `user: UserInfo` | ownership check |
+| `GET /api/charts/{id}/events` | `_user` → `user: UserInfo` | ownership check |
+| `PUT /api/charts/{id}/events` | `_user` → `user: UserInfo` | ownership check |
 
 **Ownership check pattern** (applied to all `/{id}` endpoints):
 
@@ -161,7 +167,7 @@ if not user["is_admin"] and row.get("user_id") != user["user_id"]:
     raise HTTPException(status_code=403, detail="无权访问此星盘")
 ```
 
-> Note: `is_admin` check comes first to short-circuit before comparing `user_id`. When both `row.user_id` and `user["user_id"]` are `None` (e.g., admin accessing an orphan chart), the `is_admin` branch handles it correctly.
+> `is_admin` is checked first. If both `row["user_id"]` and `user["user_id"]` are `None` (orphan chart accessed by admin), the `is_admin` branch handles it correctly without a false positive.
 
 **`GET /api/charts` branching:**
 ```python
@@ -170,15 +176,15 @@ if user["is_admin"]:
 return db_list_charts(user["user_id"])
 ```
 
-**`POST /api/charts` — `save_chart`:**
+**`POST /api/charts`:**
 ```python
 data["user_id"] = user["user_id"] if user else None
 data["is_guest"] = user is None
 ```
 
-### Other routers (`admin_router.py`, etc.)
+### Other routers (`admin_router.py`, `interpret_router.py`, etc.)
 
-These use `_user: str = Depends(require_auth)` as an auth guard (value unused). Python does not enforce type annotations at runtime, so changing `require_auth`'s return type to `UserInfo` will not break these callers — the `_user` value is discarded. No code changes needed in `admin_router.py`, `interpret_router.py`, or other routers that only use `require_auth` as a gate.
+These use `_user = Depends(require_auth)` as an auth gate — value is discarded. Python does not enforce type annotations at runtime, so changing `require_auth`'s return type to `UserInfo` will not break these callers. **No code changes needed.**
 
 ---
 
@@ -196,8 +202,9 @@ These use `_user: str = Depends(require_auth)` as an auth guard (value unused). 
 ### `AuthContext`
 
 - Add `register(username: string, password: string)` method calling `POST /api/auth/register`
-- On success: store token and set user state (reuse existing login path)
-- No other changes — token storage and user state are identical to login
+- On success: store token and set user state (same as login path)
+- User state is derived from JWT payload (client-side decode) on page load; no additional `/me` rehydration call needed
+- `is_admin` can be stored in user state for conditional admin UI (read from `/me` response on login or decoded from JWT)
 
 ---
 
@@ -208,8 +215,10 @@ These use `_user: str = Depends(require_auth)` as an auth guard (value unused). 
 - Admin credentials remain outside the database (env vars only)
 - Registration blocked for usernames matching `AUTH_USERNAME`
 - Ownership checks on all chart detail endpoints prevent cross-user access
+- `is_admin` derived from env var comparison, never stored in DB or JWT
 - JWT expiry unchanged (30 days, no refresh/revocation — pre-existing limitation)
-- Username enumeration on register is accepted as a known trade-off for UX clarity
+- Username enumeration on register accepted as a known trade-off for UX clarity
+- Rate limiting on auth endpoints is out of scope (acknowledged risk)
 
 ---
 
@@ -219,4 +228,4 @@ These use `_user: str = Depends(require_auth)` as an auth guard (value unused). 
 - Rate limiting on auth endpoints
 - Admin promoting regular users to admin
 - Public/shared charts
-- Adopting orphan (pre-migration / approved guest) charts to a user
+- Adopting orphan charts to a registered user account
