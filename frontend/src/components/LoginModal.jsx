@@ -64,8 +64,8 @@ export default function LoginModal() {
       setError('密码至少6位')
       return
     }
-    if (regPassword.length > 128) {
-      setError('密码最多128位')
+    if (regPassword.length > 16) {
+      setError('密码最多16位')
       return
     }
     setLoading(true)
@@ -159,7 +159,7 @@ export default function LoginModal() {
             </div>
             <div style={{ marginBottom: '14px' }}>
               <input
-                type="password" placeholder="密码（6-128位）" value={regPassword}
+                type="password" placeholder="密码（6-16位）" value={regPassword}
                 onChange={e => setRegPassword(e.target.value)}
                 autoComplete="new-password" style={inputStyle}
               />

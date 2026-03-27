@@ -213,7 +213,7 @@ export default function Transits() {
               style={{ ...inputStyle, marginBottom: '4px' }}
             >
               <option value="">-- 请选择 --</option>
-              {sessionCharts.map(c => (
+              {!isAuthenticated && sessionCharts.map(c => (
                 <option key={c.id} value={`session:${c.id}`}>
                   {c.name || c.formData?.name || '当前星盘'}（未保存）
                 </option>
@@ -225,7 +225,7 @@ export default function Transits() {
                 return <option key={c.id} value={c.id}>{label}</option>
               })}
             </select>
-            {savedCharts.length === 0 && sessionCharts.length === 0 && (
+            {savedCharts.length === 0 && (isAuthenticated || sessionCharts.length === 0) && (
               <p style={{ color: '#555577', fontSize: '0.78rem', marginTop: '6px' }}>
                 请先在「星盘」页面计算本命盘
               </p>
