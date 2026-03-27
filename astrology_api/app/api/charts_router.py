@@ -14,9 +14,8 @@ from app.security import require_auth, get_optional_user, UserInfo
 router = APIRouter(prefix="/api/charts", tags=["charts"])
 
 
-class SaveChartRequest(BaseModel):
-    label: str
-    name: Optional[str] = None
+class ChartBaseRequest(BaseModel):
+    """Shared fields for chart create/update."""
     birth_year: int
     birth_month: int
     birth_day: int
@@ -30,6 +29,16 @@ class SaveChartRequest(BaseModel):
     language: str
     chart_data: Optional[dict] = None
     svg_data: Optional[str] = None
+
+
+class SaveChartRequest(ChartBaseRequest):
+    label: str
+    name: Optional[str] = None
+
+
+class UpdateChartRequest(ChartBaseRequest):
+    label: Optional[str] = None
+    name: Optional[str] = None
 
 
 class ChartSummary(BaseModel):
@@ -97,7 +106,7 @@ def save_chart(body: SaveChartRequest, user: Optional[UserInfo] = Depends(get_op
     row = db_save_chart(data)
     return _parse(row)
 
-
+# ⚠️ Fixed paths must be defined BEFORE /{chart_id} to avoid route conflict
 @router.get("/pending", response_model=list[ChartSummary])
 def list_pending(user: UserInfo = Depends(require_auth)):
     if not user["is_admin"]:
@@ -123,24 +132,6 @@ def get_chart(chart_id: int, user: UserInfo = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="Chart not found")
     _check_ownership(row, user)
     return _parse(row)
-
-
-class UpdateChartRequest(BaseModel):
-    label: Optional[str] = None
-    name: Optional[str] = None
-    birth_year: int
-    birth_month: int
-    birth_day: int
-    birth_hour: int
-    birth_minute: int
-    location_name: Optional[str] = None
-    latitude: float
-    longitude: float
-    tz_str: str
-    house_system: str
-    language: str
-    chart_data: Optional[dict] = None
-    svg_data: Optional[str] = None
 
 
 @router.patch("/{chart_id}", response_model=ChartDetail)

@@ -47,6 +47,7 @@ def generate_analytics_report(_user: str = Depends(require_auth)):
         resp = client.models.generate_content(
             model=GENERATE_MODEL,
             contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.7)
         )
         return {"report": resp.text}
     except Exception as e:
