@@ -28,7 +28,9 @@
 
 **Test pattern:** All tests use `fastapi.testclient.TestClient` (sync), matching the existing `test_api.py` pattern. No async test infrastructure needed.
 
-**Test DB isolation:** Tests patch `app.db._db_path` to a named temp file (not `:memory:`, since each `sqlite3.connect(":memory:")` is a separate empty database). The temp file is shared across all `db_*` calls in the test session.
+**Test DB isolation:** Tests patch `app.db._db_path` to a named temp file (not `:memory:`, since each `sqlite3.connect(":memory:")` is a separate empty database). The temp file is shared across all `db_*` calls in the test session. Uses `tempfile.NamedTemporaryFile(delete=False, suffix=".db").name` (not the deprecated `mktemp`).
+
+**Non-breaking DB strategy:** Task 3 adds **new** functions (`db_list_user_charts`, `db_list_all_charts`) without touching the existing `db_list_charts()`. The old function is retired in Task 5 when `charts_router.py` is rewritten — this keeps every intermediate commit deployable.
 
 ---
 
@@ -93,9 +95,11 @@ os.environ["AUTH_PASSWORD"] = "adminpass"
 os.environ["TURSO_DATABASE_URL"] = ""
 os.environ["TURSO_AUTH_TOKEN"] = ""
 
-# Patch DB to a named temp file so all sqlite3.connect() calls share the same DB
+# Patch DB to a named temp file so all sqlite3.connect() calls share the same DB.
+# NamedTemporaryFile with delete=False gives a real file path; we pass suffix=".db"
+# so SQLite accepts it. The file persists for the test session (acceptable for CI).
 import app.db as _db_module
-_TEST_DB = tempfile.mktemp(suffix=".db")
+_TEST_DB = tempfile.NamedTemporaryFile(delete=False, suffix=".db").name
 _db_module._db_path = _TEST_DB
 _db_module.USE_TURSO = False
 
@@ -314,22 +318,22 @@ def test_db_get_user_not_found():
     assert result is None
 
 
-def test_db_list_charts_isolation():
-    from app.db import db_save_chart, db_list_charts, db_list_all_charts
+def test_db_list_user_charts_isolation():
+    from app.db import db_save_chart, db_list_user_charts, db_list_all_charts
     chart_data = {
-        "label": "Test", "name": "T", "birth_year": 1990, "birth_month": 1, "birth_day": 1,
+        "label": "IsolationTest", "name": "T", "birth_year": 1990, "birth_month": 1, "birth_day": 1,
         "birth_hour": 12, "birth_minute": 0, "location_name": "Tokyo",
         "latitude": 35.68, "longitude": 139.69, "tz_str": "Asia/Tokyo",
         "house_system": "Placidus", "language": "zh", "is_guest": False,
     }
     chart_data["user_id"] = 9001
     db_save_chart(chart_data)
-    charts_9001 = db_list_charts(9001)
-    charts_9002 = db_list_charts(9002)
+    charts_9001 = db_list_user_charts(9001)
+    charts_9002 = db_list_user_charts(9002)
     all_charts = db_list_all_charts()
-    assert any(c.get("label") == "Test" for c in charts_9001)
-    assert not any(c.get("label") == "Test" for c in charts_9002)
-    assert any(c.get("label") == "Test" for c in all_charts)
+    assert any(c.get("label") == "IsolationTest" for c in charts_9001)
+    assert not any(c.get("label") == "IsolationTest" for c in charts_9002)
+    assert any(c.get("label") == "IsolationTest" for c in all_charts)
 ```
 
 - [ ] **Step 2: Run to confirm failure**
@@ -339,7 +343,7 @@ cd astrology_api
 python -m pytest tests/test_auth_registration.py -k "db_" -v 2>&1 | head -20
 ```
 
-Expected: ImportError — `db_create_user`, `db_list_all_charts` don't exist yet.
+Expected: ImportError — `db_create_user`, `db_list_user_charts`, `db_list_all_charts` don't exist yet.
 
 - [ ] **Step 3: Add `_CREATE_USERS` DDL and migration constant**
 
@@ -413,12 +417,13 @@ def db_get_user_by_username(username: str) -> dict | None:
     return _sqlite_fetchone(sql, [username])
 ```
 
-- [ ] **Step 6: Add `db_list_all_charts()` and update `db_list_charts()`**
+- [ ] **Step 6: Add `db_list_user_charts()` and `db_list_all_charts()` as new functions**
 
-Replace the existing `db_list_charts()` function with:
+Do NOT modify or remove the existing `db_list_charts()` function — it is still used by the current `charts_router.py`. Add these two **new** functions right after `db_list_charts()`:
 
 ```python
-def db_list_charts(user_id: int) -> list[dict]:
+def db_list_user_charts(user_id: int) -> list[dict]:
+    """Returns non-guest charts belonging to a specific registered user."""
     sql = (
         "SELECT id, label, name, birth_year, birth_month, birth_day, "
         "location_name, created_at FROM saved_charts "
@@ -774,7 +779,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from app.db import (
-    db_list_charts, db_list_all_charts, db_save_chart, db_get_chart,
+    db_list_user_charts, db_list_all_charts, db_save_chart, db_get_chart,
     db_delete_chart, db_list_pending_charts, db_approve_chart, db_update_chart,
     db_get_events, db_save_events,
 )
@@ -848,7 +853,7 @@ def _check_ownership(row: dict, user: UserInfo):
 def list_charts(user: UserInfo = Depends(require_auth)):
     if user["is_admin"]:
         return db_list_all_charts()
-    return db_list_charts(user["user_id"])
+    return db_list_user_charts(user["user_id"])
 
 
 @router.post("", response_model=ChartDetail)
