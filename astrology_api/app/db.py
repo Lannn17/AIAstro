@@ -95,6 +95,18 @@ CREATE TABLE IF NOT EXISTS life_events (
 )
 """
 
+_CREATE_SR_CACHE = """
+CREATE TABLE IF NOT EXISTS solar_return_cache (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    chart_id      INTEGER NOT NULL,
+    return_year   INTEGER NOT NULL,
+    location_hash TEXT    NOT NULL,
+    result_json   TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(chart_id, return_year, location_hash)
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,7 +232,7 @@ def _has_column(table: str, column: str) -> bool:
 def create_tables():
     for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL,
                 _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS,
-                _CREATE_LIFE_EVENTS]:
+                _CREATE_LIFE_EVENTS, _CREATE_SR_CACHE]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -533,6 +545,33 @@ def db_save_synastry_cache(aspects_hash: str, answer: str, sources: list):
             _sqlite_write(sql, params)
     except Exception as e:
         print(f"[DB] synastry cache save failed: {e}", flush=True)
+
+
+# ── Solar Return cache ─────────────────────────────────────────────
+
+def db_get_sr_cache(chart_id: int, return_year: int, location_hash: str) -> dict | None:
+    """Return cached solar return result (json.loads'd), or None on miss."""
+    sql = "SELECT result_json FROM solar_return_cache WHERE chart_id=? AND return_year=? AND location_hash=?"
+    try:
+        rows = _to_dicts(_turso_exec(sql, [chart_id, return_year, location_hash]))
+        if not rows:
+            return None
+        return json.loads(rows[0]["result_json"])
+    except Exception as e:
+        print(f"[DB] sr cache get failed: {e}", flush=True)
+    return None
+
+
+def db_save_sr_cache(chart_id: int, return_year: int, location_hash: str, result_json: str) -> None:
+    """INSERT OR REPLACE solar return cache row."""
+    sql = """
+    INSERT OR REPLACE INTO solar_return_cache (chart_id, return_year, location_hash, result_json)
+    VALUES (?, ?, ?, ?)
+    """
+    try:
+        _turso_exec(sql, [chart_id, return_year, location_hash, result_json])
+    except Exception as e:
+        print(f"[DB] sr cache save failed (non-fatal): {e}", flush=True)
 
 
 # ── Life events ────────────────────────────────────────────────────
