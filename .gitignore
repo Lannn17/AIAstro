@@ -8,6 +8,7 @@ astrology_api/charts.db
 astrology_api/.env
 .env
 .env.local
+frontend/.env
 
 # Python cache
 **/__pycache__/
