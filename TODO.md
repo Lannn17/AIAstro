@@ -10,7 +10,7 @@
 
 - 🔨 合盘 Synastry（`/synastry`）— 已开发,待优化
 - 🚧 推运 Progressions（`/progressions`）
-- 🚧 太阳回归 Solar Return（`/solar-return`）- 3.27排期开发
+- 🔨 太阳回归 Solar Return（`/solar-return`）— 实现完成，待测试
 - 🚧 方向法 Directions（`/directions`）
 
 ---
@@ -91,7 +91,7 @@
 - interpret_chat错误处理打印完整trackback,其他路由只返回错误信息: 统一使用logging
 - 合盘用了 MD5 做缓存键,和_log_analytics 里用的是 SHA256不一致: 分析并确定最终方案
 - rag.py文件拆分 -- flag
-    建议拆分为：
+    拆分为：
     text
     app/
     ├── rag/
