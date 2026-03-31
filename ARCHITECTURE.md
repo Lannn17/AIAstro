@@ -192,6 +192,23 @@
 | GET  | `/api/admin/analytics` | **必须** | RAG 统计数据（聚合 + 最近200条） |
 | POST | `/api/admin/analytics/report` | **必须** | Gemini 生成 RAG 质量报告 |
 
+### 5i. Prompt 可观测性（debug）
+
+> 需在 `.env` 中设置 `DEBUG_TOKEN`，所有接口通过 `X-Debug-Token` Header 鉴权；未配置时全部返回 503。
+
+| Method | Path | 功能 |
+|---|---|---|
+| GET    | `/api/debug/prompts` | 列出最近 N 条 Gemini/DeepSeek 调用摘要（`?limit=&caller=`） |
+| GET    | `/api/debug/prompts/stats` | 各 caller 的调用次数 / 平均延迟 / 平均 token |
+| DELETE | `/api/debug/prompts` | 清空内存缓冲区 |
+| GET    | `/api/debug/prompts/{id}` | 完整详情（prompt + RAG chunks + response） |
+| POST   | `/api/debug/prompts/{id}/replay` | 重放，支持覆盖 model / temperature / prompt_text |
+| POST   | `/api/debug/prompts/compare` | 并排对比多条记录（Body: `{"ids": [...]}` ） |
+
+**实现文件**：`app/api/debug_router.py`、`app/prompt_log.py`
+**存储**：进程内存环形缓冲（maxlen=200），重启后清空。
+**数据来源**：`app/rag.py` 的 `_ModelsWithFallback.generate_content()` 在每次 AI 调用后自动写入；`retrieve()` 调用后自动写入 `rag_query` 和 `rag_chunks`。
+
 ---
 
 ## 6. 数据库结构
@@ -531,7 +548,8 @@ npm run dev
 | `TURSO_AUTH_TOKEN` | 仅生产 | Turso 认证 |
 | `AUTH_USERNAME` | 始终 | 管理员用户名 |
 | `AUTH_PASSWORD` | 始终 | 管理员密码 |
+| `DEBUG_TOKEN` | 可选 | Prompt 可观测性接口鉴权，留空则禁用 |
 
 ---
 
-*最后更新：v0.7.0 — 2026-03-26*
+*最后更新：v0.7.1 — 2026-03-31*

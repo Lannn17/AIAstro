@@ -236,7 +236,7 @@
 
 # 国内/海外双模式切换（2026-03-31）
 
-> 前置条件：`VITE_AMAP_KEY` 和 `DEEPSEEK_API_KEY` 已配置
+> 前置条件：`VITE_AMAP_KEY` 和 `DEEPSEEK_API_KEY` 已配置 -- 待配置,4.1排期
 
 ## 1. Region 自动检测
 

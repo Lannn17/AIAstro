@@ -108,7 +108,7 @@ class _ModelsWithFallback:
             fn_name = frame_info.function
             filename = frame_info.filename
             # 匹配 app/ 下所有 .py，排除本类自身的方法
-            if 'app/' in filename and fn_name not in (
+            if ('app/' in filename or 'app\\' in filename) and fn_name not in (
                 'generate_content', '_guess_caller',
                 '_extract_prompt_text',
             ):
@@ -172,7 +172,9 @@ class _ModelsWithFallback:
         entry.prompt_tokens_est = len(prompt_text) // 2
         entry.contents = self._serialize_contents(contents)
 
-        # 读取业务函数注入的 RAG 信息（可选）
+        # 读取 retrieve() 暂存的 RAG 信息
+        entry.rag_query = getattr(_local, 'pending_rag_query', '')
+        _local.pending_rag_query = ''
         entry.rag_chunks = getattr(_local, 'pending_rag_chunks', [])
         _local.pending_rag_chunks = []
 
@@ -346,6 +348,10 @@ def retrieve(query: str, k: int = 5) -> list[dict]:
             "start":  p.get("start", 0),
             "score":  round(float(hit.score), 4),
         })
+
+    # 暂存供 _ModelsWithFallback 日志读取
+    _local.pending_rag_query = query
+    _local.pending_rag_chunks = results
 
     return results
 

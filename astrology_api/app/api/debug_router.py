@@ -62,7 +62,44 @@ def list_prompts(
     return {"count": len(summaries), "logs": summaries}
 
 
-# ── 2. 详情（完整 prompt + response） ─────────────────────────────
+# ── 2. 统计（必须在 /{log_id} 之前注册，否则被参数路由遮蔽） ───────
+
+@router.get("/prompts/stats")
+def prompt_stats(x_debug_token: str = Header("")):
+    _check_token(x_debug_token)
+
+    from collections import defaultdict
+    all_logs = prompt_store.get_all(limit=200)
+    stats = defaultdict(lambda: {"count": 0, "total_latency": 0, "total_tokens": 0})
+
+    for log in all_logs:
+        c = log["caller"]
+        stats[c]["count"] += 1
+        stats[c]["total_latency"] += log["latency_ms"]
+        stats[c]["total_tokens"] += log["prompt_tokens_est"]
+
+    result = {}
+    for caller, s in stats.items():
+        n = s["count"]
+        result[caller] = {
+            "count":            n,
+            "avg_latency_ms":   round(s["total_latency"] / n),
+            "avg_prompt_tokens": round(s["total_tokens"] / n),
+        }
+    return result
+
+
+# ── 3. 清空缓冲区 ──────────────────────────────────────────────────
+
+@router.delete("/prompts")
+def clear_prompts(x_debug_token: str = Header("")):
+    """DELETE /api/debug/prompts — 清空内存缓冲，便于隔离调试特定功能"""
+    _check_token(x_debug_token)
+    prompt_store.clear()
+    return {"cleared": True}
+
+
+# ── 4. 详情（完整 prompt + response） ─────────────────────────────
 
 @router.get("/prompts/{log_id}")
 def get_prompt_detail(log_id: str, x_debug_token: str = Header("")):
@@ -158,30 +195,3 @@ def compare_prompts(
             "latencies_ms":    [l["latency_ms"] for l in logs],
         },
     }
-
-
-# ── 5. 统计 ───────────────────────────────────────────────────────
-
-@router.get("/prompts/stats")
-def prompt_stats(x_debug_token: str = Header("")):
-    _check_token(x_debug_token)
-
-    from collections import defaultdict
-    all_logs = prompt_store.get_all(limit=200)
-    stats = defaultdict(lambda: {"count": 0, "total_latency": 0, "total_tokens": 0})
-
-    for log in all_logs:
-        c = log["caller"]
-        stats[c]["count"] += 1
-        stats[c]["total_latency"] += log["latency_ms"]
-        stats[c]["total_tokens"] += log["prompt_tokens_est"]
-
-    result = {}
-    for caller, s in stats.items():
-        n = s["count"]
-        result[caller] = {
-            "count":            n,
-            "avg_latency_ms":   round(s["total_latency"] / n),
-            "avg_prompt_tokens": round(s["total_tokens"] / n),
-        }
-    return result
