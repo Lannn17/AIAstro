@@ -109,7 +109,7 @@ RAG 知识增强：调用 Qdrant 检索相关书籍片段，拼入 prompt 作为
  sources 数据已从 API 响应中正确传递到组件 props
 
 ## Current version / 当前版本
-v0.7.1 — JWT 登录 + 访客模式 + 行运分析 + 占星对话（RAG）+ 校正系统 + RAG 质量分析后台 + 合盘（Synastry）功能 + Gemini 模型自动 fallback + 模型标签显示。
+v0.8.0 — 太阳回归完整功能 + 用户注册 + CN 地区 DeepSeek 切换 + 本命盘 tag tooltip + 行星解读重新生成 + Prompt 可观测性 debug 接口。
 See CHANGELOG.md for full history.
 
 ## Commands / 命令

@@ -12,6 +12,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] - 2026-03-31
+
+### Added
+- **太阳回归完整功能** — `/api/interpret/solar-return` 端点，RAG + Gemini 解读 + DB 缓存（`solar_return_cache`）；前端 SolarReturn Tab 完整实现
+- **用户注册** — `POST /api/auth/register`，bcrypt 密码加密，注册用户星盘隔离（跨用户 403）
+- **CN 地区 / DeepSeek 切换** — `X-Region: CN` Header 触发 DeepSeek 路径；前端 RegionToggle + RegionContext + apiFetch 统一注入
+- **本命盘 tag tooltip** — 行星解读标签可点击，显示详情说明 + 一键提问 AI
+- **行星解读重新生成按钮** — 绕过缓存强制重新生成，chart_id=null 路径修复
+- **Prompt 可观测性 debug 接口** — `GET/DELETE /api/debug/prompts`、详情、重放、对比、统计；`retrieve()` 自动记录 `rag_query` + `rag_chunks`
+
+### Fixed
+- SourcesSection 仅管理员可见（原全用户可见）
+- 注册用户星盘进入待审核队列
+- LocationSearch 标签可配置，太阳回归页显示正确标签
+- debug router 路由遮蔽（`/stats` 被 `/{log_id}` 吞没）、Windows caller 检测、rag_query 字段始终为空
+
+---
+
 ## [0.7.1] - 2026-03-26
 
 ### Added
