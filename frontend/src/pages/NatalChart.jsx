@@ -119,6 +119,7 @@ export default function NatalChart() {
   // Planet interpretations
   const [planetAnalyses, setPlanetAnalyses] = useState({})
   const [planetModelUsed, setPlanetModelUsed] = useState(null)
+  const [planetFromCache, setPlanetFromCache] = useState(false)
   const planetInterp = useInterpret('/api/interpret_planets')
 
   const [rectifyOpen, setRectifyOpen] = useState(false)
@@ -536,6 +537,7 @@ export default function NatalChart() {
         if (interpGenRef.current !== myGen) return  // stale: a new interpret call started, discard
         if (resp.analyses) setPlanetAnalyses(resp.analyses)
         if (resp.model_used) setPlanetModelUsed(resp.model_used)
+          setPlanetFromCache(!!resp.from_cache)
       }
     } catch { /* silent */ }
   }
@@ -558,6 +560,7 @@ export default function NatalChart() {
     if (interpGenRef.current !== myGen) return  // stale: another call started while this was in flight
     if (json?.analyses) setPlanetAnalyses(json.analyses)
     if (json?.model_used) setPlanetModelUsed(json.model_used)
+      setPlanetFromCache(!!json?.from_cache)
   }
 
   async function handleRectify() {
@@ -1179,11 +1182,18 @@ export default function NatalChart() {
                     <div style={{ background: '#0f0f28', border: '1px solid #3a3a6a', borderRadius: '10px', padding: '16px 18px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <div style={{ color: '#9a8acc', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>本命盘综合概述</div>
-                        {planetModelUsed && (
-                          <span style={{ fontSize: '0.68rem', color: planetModelUsed === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#1a1a2e', border: '1px solid #3a3a5a', borderRadius: '10px', padding: '2px 8px' }}>
-                            {planetModelUsed === 'cached' ? '缓存' : planetModelUsed.replace('gemini-', '')}
-                          </span>
-                        )}
+                        <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+                          {planetFromCache && (
+                            <span style={{ fontSize: '0.65rem', color: '#6a8a6a', background: '#0f0f1e', border: '1px solid #2a4a2a', borderRadius: '10px', padding: '2px 7px' }}>
+                              ⚡ 缓存
+                            </span>
+                          )}
+                          {planetModelUsed && planetModelUsed !== 'cached' && (
+                            <span style={{ fontSize: '0.65rem', color: '#7a6aaa', background: '#0f0f1e', border: '1px solid #2a2a4a', borderRadius: '10px', padding: '2px 7px' }}>
+                              {planetModelUsed.replace('gemini-', '')}
+                            </span>
+                          )}
+                        </span>
                       </div>
                       {/* 特征标签 */}
                       {planetAnalyses.overall.tags?.length > 0 && (
