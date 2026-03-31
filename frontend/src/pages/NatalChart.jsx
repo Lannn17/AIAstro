@@ -8,6 +8,7 @@ import ChartWheel from '../components/ChartWheel'
 import GuestSaveConfirmModal from '../components/GuestSaveConfirmModal'
 import GuestSessionList from '../components/GuestSessionList'
 import TagTooltip from '../components/TagTooltip'
+import PromptLogModal from '../components/PromptLogModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 import { apiFetch } from '../utils/apiFetch'
@@ -87,7 +88,8 @@ const RECTIFY_DOMAINS = [
 ]
 
 export default function NatalChart() {
-  const { isGuest, isAuthenticated, authHeaders, logout } = useAuth()
+  const { isGuest, isAuthenticated, authHeaders, logout, isAdmin } = useAuth()
+  const [showPromptLog, setShowPromptLog] = useState(false)
   const { currentSessionChart, addSessionChart } = useChartSession()
   const [result, setResult] = useState(null)
   const [svgContent, setSvgContent] = useState(null)
@@ -798,6 +800,7 @@ export default function NatalChart() {
           onCancel={() => setShowGuestConfirm(false)}
         />
       )}
+      {showPromptLog && <PromptLogModal onClose={() => setShowPromptLog(false)} />}
 
       {/* Sidebar */}
       <div className="page-sidebar">
@@ -1072,6 +1075,24 @@ export default function NatalChart() {
                   }}
                 >
                   {planetInterp.loading ? '↺ 生成中…' : '↺ 重新生成解读'}
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowPromptLog(true)}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #2a3a2a',
+                    color: '#6a8a6a',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    padding: '4px 12px',
+                    cursor: 'pointer',
+                    width: '100%',
+                    marginTop: '4px',
+                  }}
+                >
+                  ⬡ Prompt 日志
                 </button>
               )}
             </div>
