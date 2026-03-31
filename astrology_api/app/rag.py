@@ -8,6 +8,7 @@ import os
 import re
 import json
 import threading
+from contextvars import ContextVar
 import numpy as np
 import time       # 如果已有就不用重复
 import inspect    # 新增
@@ -38,11 +39,36 @@ _FALLBACK_MODELS = [
     "gemini-2.5-flash-lite",
 ]
 
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL   = "deepseek-chat"
+
 _local = threading.local()  # per-thread tracking of last model used
+
+# Per-request region (CN / GLOBAL) — ContextVar is async-safe unlike threading.local
+_region_var: ContextVar[str] = ContextVar('region', default='GLOBAL')
+
+def set_thread_region(region: str) -> None:
+    _region_var.set(region)
+
+def get_thread_region() -> str:
+    return _region_var.get()
 
 def get_last_model_used() -> str:
     """返回本线程最近一次 generate_content 实际使用的模型名。"""
     return getattr(_local, 'model_used', GENERATE_MODEL)
+
+class _DSFinishReason:
+    name = "STOP"
+
+class _DSCandidate:
+    finish_reason = _DSFinishReason()
+
+class _DeepSeekResponse:
+    """Minimal adapter so DeepSeek responses look like Gemini GenerateContentResponse."""
+    def __init__(self, text: str):
+        self.text = text
+        self.candidates = [_DSCandidate()]
+
 
 class _ModelsWithFallback:
     """Wraps generate_content with automatic model fallback + prompt logging."""
@@ -91,6 +117,28 @@ class _ModelsWithFallback:
         return "unknown"
 
     @staticmethod
+    def _to_openai_messages(contents, config=None) -> list[dict]:
+        """Convert Gemini contents + config to OpenAI chat messages format."""
+        messages = []
+        if config:
+            si = getattr(config, 'system_instruction', None)
+            if si:
+                messages.append({"role": "system", "content": si if isinstance(si, str) else str(si)})
+        if isinstance(contents, str):
+            messages.append({"role": "user", "content": contents})
+        elif isinstance(contents, list):
+            for item in contents:
+                role = getattr(item, 'role', 'user')
+                if role == 'model':
+                    role = 'assistant'
+                text = "".join(
+                    getattr(p, 'text', str(p))
+                    for p in getattr(item, 'parts', [])
+                )
+                messages.append({"role": role, "content": text})
+        return messages
+
+    @staticmethod
     def _serialize_contents(contents) -> list:
         """将 contents 序列化为可 JSON 化的 list"""
         try:
@@ -132,6 +180,31 @@ class _ModelsWithFallback:
         chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
         last_err = None
         t0 = time.time()
+
+        # ── DeepSeek path (CN region) ──────────────────────────────────────
+        if get_thread_region() == "CN" and DEEPSEEK_API_KEY:
+            try:
+                from openai import OpenAI as _OpenAI
+                ds = _OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+                msgs = self._to_openai_messages(contents, config)
+                temp = getattr(config, 'temperature', 0.5) if config else 0.5
+                completion = ds.chat.completions.create(
+                    model=DEEPSEEK_MODEL,
+                    messages=msgs,
+                    temperature=temp,
+                )
+                text = completion.choices[0].message.content or ""
+                _local.model_used = DEEPSEEK_MODEL
+                entry.model_used = DEEPSEEK_MODEL
+                entry.response_text = text[:5000]
+                entry.finish_reason = "STOP"
+                entry.response_tokens_est = len(text) // 2
+                entry.latency_ms = int((time.time() - t0) * 1000)
+                prompt_store.append(entry)
+                return _DeepSeekResponse(text)
+            except Exception as e:
+                print(f"[DeepSeek] failed, falling back to Gemini: {e}", flush=True)
+                # fall through to Gemini loop below
 
         for m in chain:
             try:

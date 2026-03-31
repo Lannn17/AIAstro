@@ -11,6 +11,7 @@
 - **每次代码改动后自动检查 `TODO.md`**：对照本次改动判断 TODO 中哪些条目需要新增、修改状态或删除，列出建议变更内容并等待用户确认后再修改 TODO.md。
 - **后端需要重启时自动执行**：凡后端代码有改动、或用户提到后端无响应/需要重启，自动运行 kill+restart 命令并通知用户"后端已重启"。Kill 命令：`for /f "tokens=5" %a in ('netstat -ano ^| findstr :8001') do taskkill /F /PID %a`，然后在 `astrology_api/` 目录启动 uvicorn。
 - **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
+- 不要自行修改代码中的格式问题
 
 ---
 

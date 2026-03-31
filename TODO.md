@@ -70,6 +70,9 @@
 - 12. 标签解读无缓存,重新加载后内容丢失,需要同样缓存该内容(?)
 - 13. 注册用户保存第二张以上星盘侧边栏未显示
 - 14. 检查当前是否有限制AI输出字数的字段
+- 15. solar return有些用户自动生成的报告里分数异常,只有3or2 - flag
+- 16. 重新写一次readme.md
+- 17. 太阳回归当前生效盘+可选年份 - flag
 
 
 ## 非重要待优化项
@@ -544,3 +547,8 @@ def parse_args():
 10	无命令行参数	🟡 轻微	可用性
 
 - main.py使用状况(硬编码version?)
+- migrate_to_qdrant.py使用状况
+- astrology_api中的readme.md使用状况
+- requirements.lock作用?和.txt区别
+- runtime.txt
+- 

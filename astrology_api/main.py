@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Must be first — app.db reads env vars at import time
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import os
@@ -27,7 +27,9 @@ from app.api.charts_router import router as charts_router
 from app.api.auth_router import router as auth_router
 from app.api.admin_router import router as admin_router
 from app.api.debug_router import router as debug_router
+from app.api.region_router import router as region_router
 from app.db import create_tables
+from app import rag
 
 
 @asynccontextmanager
@@ -56,6 +58,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def region_middleware(request: Request, call_next):
+    region = request.headers.get("X-Region", "GLOBAL")
+    rag.set_thread_region(region)
+    response = await call_next(request)
+    return response
+
+
 # Importar e incluir routers
 app.include_router(natal_chart_router)
 app.include_router(transit_router)
@@ -70,6 +81,7 @@ app.include_router(charts_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(debug_router)
+app.include_router(region_router)
 
 # ── Serve frontend static files in production ──────────────────────────────
 DIST_DIR = Path(__file__).parent / "dist"
