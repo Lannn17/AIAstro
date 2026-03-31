@@ -4,6 +4,7 @@ import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
 import { useInterpret } from '../hooks/useInterpret'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -80,7 +81,7 @@ export default function Transits() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
+    apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(setSavedCharts)
       .catch(() => {})
@@ -112,7 +113,7 @@ export default function Transits() {
 
     // DB 星盘
     try {
-      const r = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
+      const r = await apiFetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
       if (r.ok) setSelectedChart(await r.json())
     } catch { setChartError('加载星盘失败') }
   }
@@ -138,7 +139,7 @@ export default function Transits() {
         overall: transit.result.overall || '',
         aspects: transit.result.active_transits || [],
       }
-      const res = await fetch(`${API_BASE}/api/interpret/chat`, {
+      const res = await apiFetch(`${API_BASE}/api/interpret/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

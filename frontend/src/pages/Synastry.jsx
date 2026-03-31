@@ -4,6 +4,7 @@ import { useInterpret } from '../hooks/useInterpret'
 import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -124,7 +125,7 @@ function ChartInputCol({ label, col, setCol, isAuthenticated, authHeaders, sessi
 
   useEffect(() => {
     if (!isAuthenticated) return
-    fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
+    apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       .then(r => r.json())
       .then(data => setSavedCharts(Array.isArray(data) ? data : []))
       .catch(() => setSavedCharts([]))
@@ -141,7 +142,7 @@ function ChartInputCol({ label, col, setCol, isAuthenticated, authHeaders, sessi
     let fd = { ...EMPTY_FORM }
     if (isAuthenticated) {
       try {
-        const res = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
+        const res = await apiFetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
         if (res.ok) {
           const chart = await res.json()
           fd = {
@@ -305,7 +306,7 @@ export default function Synastry() {
     setSvgContent(null)
     interp.reset()
     try {
-      const syRes = await fetch(`${API_BASE}/api/synastry`, {
+      const syRes = await apiFetch(`${API_BASE}/api/synastry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chart1: makeChart(col1), chart2: makeChart(col2), language: 'zh' }),
@@ -314,7 +315,7 @@ export default function Synastry() {
       const syData = await syRes.json()
       setResult(syData)
 
-      const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
+      const svgRes = await apiFetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -26,7 +27,7 @@ export default function Interpretations() {
     setError(null)
     setResult(null)
     try {
-      const res = await fetch(`${API_BASE}/api/interpret?query=${encodeURIComponent(query)}`)
+      const res = await apiFetch(`${API_BASE}/api/interpret?query=${encodeURIComponent(query)}`)
       if (!res.ok) throw new Error(`错误 ${res.status}`)
       const data = await res.json()
       setResult(data)

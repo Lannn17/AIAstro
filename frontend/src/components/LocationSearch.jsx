@@ -1,4 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
+import { useRegion } from '../contexts/RegionContext'
+
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || ''
+
+async function searchAmap(query) {
+  const res = await fetch(
+    `https://restapi.amap.com/v3/geocode/geo?address=${encodeURIComponent(query)}&key=${AMAP_KEY}&output=json`
+  )
+  const data = await res.json()
+  if (!data.geocodes || data.geocodes.length === 0) return []
+  return data.geocodes.map((g, i) => ({
+    place_id: `amap_${i}`,
+    display_name: g.formatted_address,
+    lat: g.location.split(',')[1],
+    lon: g.location.split(',')[0],
+  }))
+}
 
 const inputStyle = {
   backgroundColor: '#0d0d22',
@@ -32,6 +49,7 @@ const labelStyle = {
  *                   called with { latitude: '', longitude: '', locationName: value } when input is cleared/changed
  */
 export default function LocationSearch({ initialValue = '', latitude, longitude, onSelect, label = '出生地' }) {
+  const { region } = useRegion()
   const [query, setQuery] = useState(initialValue)
   const [suggestions, setSuggestions] = useState([])
   const [searching, setSearching] = useState(false)
@@ -57,11 +75,16 @@ export default function LocationSearch({ initialValue = '', latitude, longitude,
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=6&addressdetails=1`,
-          { headers: { 'Accept-Language': 'zh-CN,zh,en' } }
-        )
-        const data = await res.json()
+        let data
+        if (region === 'CN') {
+          data = await searchAmap(value)
+        } else {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=6&addressdetails=1`,
+            { headers: { 'Accept-Language': 'zh-CN,zh,en' } }
+          )
+          data = await res.json()
+        }
         setSuggestions(data)
         if (data.length === 0) setSearchFailed(true)
       } catch {

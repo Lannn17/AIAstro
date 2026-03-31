@@ -231,3 +231,35 @@
 ## 4. 访客/未登录
 
 - [x] 未登录进入太阳回归 tab → 显示"请先登录"提示，无表单
+
+---
+
+# 国内/海外双模式切换（2026-03-31）
+
+> 前置条件：`VITE_AMAP_KEY` 和 `DEEPSEEK_API_KEY` 已配置
+
+## 1. Region 自动检测
+
+- [ ] 清除 localStorage → 刷新页面 → Network 面板看到 `GET /api/region` → 返回 `{"region":"GLOBAL"}` → 导航栏显示「自动」角标
+
+## 2. 手动切换
+
+- [ ] 点击「🇨🇳 国内」→ 按钮高亮，「自动」消失，localStorage['region'] = "CN"
+- [ ] 刷新页面 → 仍显示国内模式（无自动角标）
+- [ ] 再次点击「🇨🇳 国内」（当前激活项）→ 清除 localStorage，恢复自动，「自动」角标重现
+
+## 3. 地理编码（需 VITE_AMAP_KEY）
+
+- [ ] 国内模式 → 出生地搜索「北京」→ 出现高德返回结果（非 Nominatim）→ 选择后坐标显示 ✓
+- [ ] 海外模式 → 出生地搜索「Paris」→ 出现 Nominatim 结果 → 选择后坐标正确
+
+## 4. AI 分析（需 DEEPSEEK_API_KEY）
+
+- [ ] 国内模式 → 计算本命盘 → 触发行星解读 → DevTools: 请求头含 `X-Region: CN`
+- [ ] 后端日志：显示 `[model_used: deepseek-chat]`（或模型标签显示 deepseek）
+- [ ] 海外模式 → 同一操作 → 使用 Gemini 模型
+
+## 5. 边界情况
+
+- [ ] `VITE_AMAP_KEY` 为空 → 国内模式搜索 → 搜索失败，显示「未找到地点」（不崩溃）
+- [ ] 网络断开 → `/api/region` 超时 → 默认 GLOBAL 模式，无报错

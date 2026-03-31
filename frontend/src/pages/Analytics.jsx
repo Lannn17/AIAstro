@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -15,7 +16,7 @@ export default function Analytics() {
   useEffect(() => {
     if (!isAuthenticated) { setLoadingData(false); return }
     const headers = authHeaders()
-    fetch(`${API_BASE}/api/admin/analytics`, { headers })
+    apiFetch(`${API_BASE}/api/admin/analytics`, { headers })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => { setSummary(d.summary); setRecords(d.records) })
       .catch(e => setError(`加载失败: ${e}`))
@@ -26,7 +27,7 @@ export default function Analytics() {
     setLoadingReport(true)
     setReport('')
     try {
-      const res = await fetch(`${API_BASE}/api/admin/analytics/report`, {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/report`, {
         method: 'POST',
         headers: authHeaders(),
       })

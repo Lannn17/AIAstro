@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from 'react'
+import { apiFetch } from '../utils/apiFetch'
 
 const AuthContext = createContext(null)
 
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
   }
 
   async function login(username, password) {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    const res = await apiFetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -39,7 +40,7 @@ export function AuthProvider({ children }) {
     }
     const { access_token } = await res.json()
     // Fetch /me to get is_admin
-    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+    const meRes = await apiFetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${access_token}` },
     })
     const me = meRes.ok ? await meRes.json() : {}
@@ -47,7 +48,7 @@ export function AuthProvider({ children }) {
   }
 
   async function register(regUsername, password) {
-    const res = await fetch(`${API_BASE}/api/auth/register`, {
+    const res = await apiFetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: regUsername, password }),

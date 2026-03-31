@@ -3,6 +3,7 @@ import LocationSearch from '../components/LocationSearch'
 import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
 import ReactMarkdown from 'react-markdown'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -42,7 +43,7 @@ export default function SolarReturn() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
+    apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       .then(r => r.json())
       .then(data => setSavedCharts(Array.isArray(data) ? data : []))
       .catch(() => setSavedCharts([]))
@@ -57,7 +58,7 @@ export default function SolarReturn() {
     setReport(null)
     if (!id) return
     try {
-      const res = await fetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
+      const res = await apiFetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
       if (res.ok) setSelectedChart(await res.json())
     } catch { /* ignore */ }
   }
@@ -72,7 +73,7 @@ export default function SolarReturn() {
     setSvgContent('')
     setReport(null)
     try {
-      const srRes = await fetch(`${API_BASE}/api/solar-return`, {
+      const srRes = await apiFetch(`${API_BASE}/api/solar-return`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export default function SolarReturn() {
       const sr = await srRes.json()
       setSrData(sr)
 
-      const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
+      const svgRes = await apiFetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function SolarReturn() {
       const srHouses  = srData.return_houses  || {}
       const srAscDegree = parseFloat(srHouses['1']?.longitude || 0)
 
-      const natalRes = await fetch(`${API_BASE}/api/natal_chart`, {
+      const natalRes = await apiFetch(`${API_BASE}/api/natal_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
@@ -159,7 +160,7 @@ export default function SolarReturn() {
       })
       const natalData = natalRes.ok ? await natalRes.json() : {}
 
-      const res = await fetch(`${API_BASE}/api/interpret/solar-return`, {
+      const res = await apiFetch(`${API_BASE}/api/interpret/solar-return`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({

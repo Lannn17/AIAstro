@@ -10,6 +10,7 @@ import GuestSessionList from '../components/GuestSessionList'
 import TagTooltip from '../components/TagTooltip'
 import { useAuth } from '../contexts/AuthContext'
 import { useChartSession } from '../contexts/ChartSessionContext'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -168,7 +169,7 @@ export default function NatalChart() {
   // Auto-load saved life events when rectification panel opens
   useEffect(() => {
     if (!rectifyOpen || !savedId || !isAuthenticated) return
-    fetch(`${API_BASE}/api/charts/${savedId}/events`, { headers: authHeaders() })
+    apiFetch(`${API_BASE}/api/charts/${savedId}/events`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.events?.length > 0) {
@@ -188,7 +189,7 @@ export default function NatalChart() {
 
   async function fetchSavedCharts() {
     try {
-      const res = await fetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
+      const res = await apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       if (res.ok) {
         setSavedCharts(await res.json())
       } else if (res.status === 401) {
@@ -204,7 +205,7 @@ export default function NatalChart() {
 
   async function fetchPendingCharts() {
     try {
-      const res = await fetch(`${API_BASE}/api/charts/pending`, { headers: authHeaders() })
+      const res = await apiFetch(`${API_BASE}/api/charts/pending`, { headers: authHeaders() })
       if (res.ok) setPendingCharts(await res.json())
       // 401 handled by fetchSavedCharts; other errors silently ignored for pending list
     } catch { /* ignore */ }
@@ -212,7 +213,7 @@ export default function NatalChart() {
 
   async function handleApprove(id, e) {
     e.stopPropagation()
-    await fetch(`${API_BASE}/api/charts/pending/${id}/approve`, {
+    await apiFetch(`${API_BASE}/api/charts/pending/${id}/approve`, {
       method: 'POST', headers: authHeaders(),
     })
     await Promise.all([fetchSavedCharts(), fetchPendingCharts()])
@@ -221,7 +222,7 @@ export default function NatalChart() {
   async function handleRejectPending(id, e) {
     e.stopPropagation()
     if (!window.confirm('删除此待审核记录？')) return
-    await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
+    await apiFetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
     await fetchPendingCharts()
   }
 
@@ -251,7 +252,7 @@ export default function NatalChart() {
     setChatSummary('')
 
     try {
-      const res = await fetch(`${API_BASE}/api/natal_chart`, {
+      const res = await apiFetch(`${API_BASE}/api/natal_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -260,7 +261,7 @@ export default function NatalChart() {
       const data = await res.json()
       setResult(data)
 
-      const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
+      const svgRes = await apiFetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -304,7 +305,7 @@ export default function NatalChart() {
     let chartData = null
     let svgData = null
     try {
-      const res = await fetch(`${API_BASE}/api/natal_chart`, {
+      const res = await apiFetch(`${API_BASE}/api/natal_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -313,7 +314,7 @@ export default function NatalChart() {
       chartData = await res.json()
       setResult(chartData)
 
-      const svgRes = await fetch(`${API_BASE}/api/svg_chart`, {
+      const svgRes = await apiFetch(`${API_BASE}/api/svg_chart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -339,7 +340,7 @@ export default function NatalChart() {
       const label = formData.name
         ? `${formData.name} · ${formData.year}/${formData.month}/${formData.day}`
         : `星盘 ${formData.year}/${formData.month}/${formData.day}`
-      await fetch(`${API_BASE}/api/charts`, {
+      await apiFetch(`${API_BASE}/api/charts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -371,7 +372,7 @@ export default function NatalChart() {
         ? `${lastFormData.name} · ${lastFormData.year}/${lastFormData.month}/${lastFormData.day}`
         : `星盘 ${lastFormData.year}/${lastFormData.month}/${lastFormData.day}`
 
-      const res = await fetch(`${API_BASE}/api/charts`, {
+      const res = await apiFetch(`${API_BASE}/api/charts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
@@ -416,7 +417,7 @@ export default function NatalChart() {
     setMessages([])
     setChatSummary('')
     try {
-      const res = await fetch(`${API_BASE}/api/charts/${summary.id}`, { headers: authHeaders() })
+      const res = await apiFetch(`${API_BASE}/api/charts/${summary.id}`, { headers: authHeaders() })
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
         throw new Error(`HTTP ${res.status}: ${errText}`)
@@ -455,7 +456,7 @@ export default function NatalChart() {
     const toSummarize = allMessages.slice(0, -4)  // 除最近4条外全部压缩
     const keep        = allMessages.slice(-4)
     try {
-      const res = await fetch(`${API_BASE}/api/interpret/summarize`, {
+      const res = await apiFetch(`${API_BASE}/api/interpret/summarize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -489,7 +490,7 @@ export default function NatalChart() {
     setMessages(prev => [...prev, { role: 'user', text: question }])
     setChatLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/interpret/chat`, {
+      const res = await apiFetch(`${API_BASE}/api/interpret/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -518,7 +519,7 @@ export default function NatalChart() {
     if (!chartData || !chartId) return
     const myGen = interpGenRef.current
     try {
-      const res = await fetch(`${API_BASE}/api/interpret_planets`, {
+      const res = await apiFetch(`${API_BASE}/api/interpret_planets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -574,7 +575,7 @@ export default function NatalChart() {
     // Save events to DB if chart is saved
     if (savedId && isAuthenticated) {
       try {
-        await fetch(`${API_BASE}/api/charts/${savedId}/events`, {
+        await apiFetch(`${API_BASE}/api/charts/${savedId}/events`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify(events),
@@ -585,7 +586,7 @@ export default function NatalChart() {
     setRectifyError(null)
     setRectifyResult(null)
     try {
-      const res = await fetch(`${API_BASE}/api/rectify`, {
+      const res = await apiFetch(`${API_BASE}/api/rectify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -628,7 +629,7 @@ export default function NatalChart() {
     setRectifyError(null)
     setCompareResult(null)
     try {
-      const res = await fetch(`${API_BASE}/api/rectify/compare`, {
+      const res = await apiFetch(`${API_BASE}/api/rectify/compare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -654,7 +655,7 @@ export default function NatalChart() {
     setAscQuizLoading(true)
     try {
       const signs = top3.map(t => t.asc_sign).filter(Boolean)
-      const res = await fetch(`${API_BASE}/api/rectify/asc_quiz`, {
+      const res = await apiFetch(`${API_BASE}/api/rectify/asc_quiz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ asc_signs: signs }),
@@ -681,7 +682,7 @@ export default function NatalChart() {
     )
     setRecommendedIdx(top3.indexOf(best))
     // Load theme quiz
-    fetch(`${API_BASE}/api/rectify/theme_quiz`)
+    apiFetch(`${API_BASE}/api/rectify/theme_quiz`)
       .then(r => r.json()).then(d => setThemeQuizData(d.questions)).catch(() => {})
   }
 
@@ -694,7 +695,7 @@ export default function NatalChart() {
     })) || []
     setConfidenceLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/rectify/confidence`, {
+      const res = await apiFetch(`${API_BASE}/api/rectify/confidence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -716,7 +717,7 @@ export default function NatalChart() {
   async function handleDelete(id, e) {
     e.stopPropagation()
     if (!window.confirm('确认删除该星盘？此操作无法撤销。')) return
-    await fetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
+    await apiFetch(`${API_BASE}/api/charts/${id}`, { method: 'DELETE', headers: authHeaders() })
     if (savedId === id || editingChartId === id) {
       setSavedId(null)
       setEditingChartId(null)
@@ -746,7 +747,7 @@ export default function NatalChart() {
       const label = fd.name
         ? `${fd.name} · ${fd.year}/${fd.month}/${fd.day}`
         : `星盘 ${fd.year}/${fd.month}/${fd.day}`
-      const res = await fetch(`${API_BASE}/api/charts/${editingChartId}`, {
+      const res = await apiFetch(`${API_BASE}/api/charts/${editingChartId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({

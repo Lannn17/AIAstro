@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from '../utils/apiFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -20,7 +21,7 @@ export function useInterpret(endpoint) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      const res = await apiFetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
         body: JSON.stringify(body),

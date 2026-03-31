@@ -9,6 +9,7 @@ import SolarReturn from './pages/SolarReturn'
 import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ChartSessionProvider, useChartSession } from './contexts/ChartSessionContext'
+import { RegionProvider, useRegion } from './contexts/RegionContext'
 import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 
@@ -92,6 +93,60 @@ function UserBadge() {
   return null
 }
 
+function RegionToggle() {
+  const { region, isAuto, setRegion, resetToAuto } = useRegion()
+
+  function handleClick(val) {
+    if (region === val) {
+      resetToAuto()
+    } else {
+      setRegion(val)
+    }
+  }
+
+  const btnBase = {
+    padding: '4px 8px',
+    border: '1px solid #2a2a5a',
+    borderRadius: '5px',
+    fontSize: '0.72rem',
+    cursor: 'pointer',
+    background: 'transparent',
+    color: '#8888aa',
+    whiteSpace: 'nowrap',
+    lineHeight: 1.2,
+  }
+
+  const btnActive = {
+    ...btnBase,
+    borderColor: '#c9a84c',
+    color: '#c9a84c',
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+      <button
+        style={region === 'GLOBAL' ? btnActive : btnBase}
+        onClick={() => handleClick('GLOBAL')}
+        title={region === 'GLOBAL' && isAuto ? '自动检测（点击重置）' : undefined}
+      >
+        🌐 海外
+      </button>
+      <button
+        style={region === 'CN' ? btnActive : btnBase}
+        onClick={() => handleClick('CN')}
+        title={region === 'CN' && isAuto ? '自动检测（点击重置）' : undefined}
+      >
+        🇨🇳 国内
+      </button>
+      {isAuto && (
+        <span style={{ fontSize: '0.65rem', color: '#555577', marginLeft: '2px' }}>
+          自动
+        </span>
+      )}
+    </div>
+  )
+}
+
 function AppInner() {
   const { sessionKey } = useAuth()
   const { clearSessionCharts } = useChartSession()
@@ -136,6 +191,8 @@ function AppInner() {
 
             {/* User badge */}
             <UserBadge />
+            {/* Region toggle */}
+            <RegionToggle />
           </div>
         </header>
 
@@ -160,9 +217,11 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <ChartSessionProvider>
-        <AppInner />
-      </ChartSessionProvider>
+      <RegionProvider>
+        <ChartSessionProvider>
+          <AppInner />
+        </ChartSessionProvider>
+      </RegionProvider>
     </AuthProvider>
   )
 }
