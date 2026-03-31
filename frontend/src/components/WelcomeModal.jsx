@@ -30,7 +30,7 @@ export default function WelcomeModal() {
       <div className="welcome-modal" onClick={(e) => e.stopPropagation()}>
 
         <div className="welcome-header">
-          <h2>🌟 欢迎使用 AstroChat</h2>
+          <h2>🌟 欢迎使用 AIAstro</h2>
           <div className="welcome-version-row">
             <span className="welcome-version-badge">v{CURRENT_VERSION}</span>
             <span className="welcome-version-date">{CURRENT_DATE}</span>
