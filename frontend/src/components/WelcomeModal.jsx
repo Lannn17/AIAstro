@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LATEST_UPDATES, ALL_FEATURES, UPCOMING, CURRENT_VERSION, CURRENT_DATE } from "../utils/announcements";
+import { LATEST_UPDATES, ALL_FEATURES, UPCOMING, CURRENT_VERSION, CURRENT_DATE } from "../utils/Announcements";
 import "./WelcomeModal.css";
 
 const STORAGE_KEY = "welcome_modal_dismissed_version";
