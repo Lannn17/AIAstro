@@ -2085,10 +2085,10 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
 
 四交点分析要求（asc/dsc/mc/ic）：
-- asc（上升 {asc_sign}）：外在气质、第一印象、身体与外貌特征，50-80 字
-- dsc（下降 {dsc_sign}）：理想伴侣特质、人际关系模式与吸引规律，50-80 字
-- mc（天顶 {mc_sign}）：职业方向、社会形象与人生志向，50-80 字
-- ic（天底 {ic_sign}）：家庭底色、童年环境与内心安全感来源，50-80 字
+- asc（上升 {asc_sign}）：外在气质、第一印象、身体与外貌特征，80-120 字
+- dsc（下降 {dsc_sign}）：理想伴侣特质、人际关系模式与吸引规律，80-120 字
+- mc（天顶 {mc_sign}）：职业方向、社会形象与人生志向，80-120 字
+- ic（天底 {ic_sign}）：家庭底色、童年环境与内心安全感来源，80-120 字
 
 综合概述（overall）为结构化对象，包含以下字段：
 - tags: 字符串数组，**必须优先使用上方【确定性事实】中列出的标签**，再补充 AI 判断的其他特征（如「命主星逆行」「日月形成对冲」等），共 3-6 个
@@ -2123,18 +2123,29 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
         print(f"[planets] JSON parse error: {e}")
         return {"analyses": {}, "sources": [], "model_used": model_used}
 
-    # Detect any planet keys Gemini silently dropped (output token pressure)
-    missing_keys = [k for k in planet_keys if k not in parsed]
+    print(f"[planets] parsed keys: {list(parsed.keys())}", flush=True)
+    # Detect any planet/angle keys Gemini silently dropped (output token pressure)
+    _angle_sign_map = {'asc': asc_sign, 'dsc': dsc_sign, 'mc': mc_sign, 'ic': ic_sign}
+    angle_keys = [k for k, s in _angle_sign_map.items() if s]
+    missing_keys = [k for k in planet_keys + angle_keys if k not in parsed]
     if missing_keys:
-        print(f"[planets] Gemini dropped {missing_keys}, retrying for missing planets", flush=True)
-        missing_lines = [l for l in lines if any(f"(key: {k})" in l for k in missing_keys)]
+        print(f"[planets] Gemini dropped {missing_keys}, retrying", flush=True)
+        missing_planet_lines = [l for l in lines if any(f"(key: {k})" in l for k in missing_keys)]
+        _angle_desc = {
+            'asc': f"上升 ASC（key: asc）: {asc_sign} — 外在气质、第一印象、外貌特征",
+            'dsc': f"下降 DSC（key: dsc）: {dsc_sign} — 理想伴侣特质、人际关系模式",
+            'mc':  f"天顶 MC（key: mc）: {mc_sign} — 职业方向、社会形象与志向",
+            'ic':  f"天底 IC（key: ic）: {ic_sign} — 家庭底色、童年环境与安全感来源",
+        }
+        missing_angle_lines = [_angle_desc[k] for k in missing_keys if k in _angle_desc]
+        all_missing_lines = missing_planet_lines + missing_angle_lines
         missing_entries = ',\n  '.join(f'"{k}": "..."' for k in missing_keys)
-        retry_prompt = f"""请为以下本命盘行星位置生成占星解读，仅针对列出的行星。
+        retry_prompt = f"""请为以下本命盘位置生成占星解读，仅针对列出的条目。
 
 上升星座：{asc_sign}
 
-行星位置：
-{chr(10).join(missing_lines)}
+位置列表：
+{chr(10).join(all_missing_lines)}
 
 宫位起点星座：
 {house_summary}
@@ -2142,7 +2153,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 主要相位：
 {aspect_summary}
 
-每颗行星 80-120 字，专业简洁。以 JSON 格式返回：
+每项 80-120 字，专业简洁。以 JSON 格式返回：
 {{\n  {missing_entries}\n}}"""
         try:
             retry_resp = client.models.generate_content(
