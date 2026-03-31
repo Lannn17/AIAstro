@@ -222,8 +222,8 @@ export default function SolarReturn() {
             </select>
           </div>
           <div>
-            <label style={LABEL}>当前所在地</label>
             <LocationSearch
+              label="当前所在地"
               initialValue={location.locationName}
               latitude={location.latitude}
               longitude={location.longitude}

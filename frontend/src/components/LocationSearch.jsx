@@ -31,7 +31,7 @@ const labelStyle = {
  *   onSelect      – called with { latitude, longitude, locationName } when a result is chosen
  *                   called with { latitude: '', longitude: '', locationName: value } when input is cleared/changed
  */
-export default function LocationSearch({ initialValue = '', latitude, longitude, onSelect }) {
+export default function LocationSearch({ initialValue = '', latitude, longitude, onSelect, label = '出生地' }) {
   const [query, setQuery] = useState(initialValue)
   const [suggestions, setSuggestions] = useState([])
   const [searching, setSearching] = useState(false)
@@ -87,7 +87,7 @@ export default function LocationSearch({ initialValue = '', latitude, longitude,
 
   return (
     <div style={{ position: 'relative' }}>
-      <label style={labelStyle}>出生地</label>
+      <label style={labelStyle}>{label}</label>
       <div style={{ position: 'relative' }}>
         <input
           style={{
