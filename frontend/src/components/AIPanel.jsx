@@ -127,12 +127,19 @@ export default function AIPanel({
           </div>
 
           {/* Model label */}
-          {result.model_used && (
-            <div style={{ marginTop: '6px', textAlign: 'right' }}>
-              <span style={{ fontSize: '0.65rem', color: result.model_used === 'cached' ? '#6a8a6a' : '#7a6aaa', background: '#0f0f1e', border: '1px solid #2a2a4a', borderRadius: '10px', padding: '2px 7px' }}>
-                {result.model_used === 'cached' ? '缓存' : result.model_used.replace('gemini-', '')}
-              </span>
-            </div>
+          {(result.model_used || result.from_cache) && (
+            <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+              {result.from_cache && (
+                <span style={{ fontSize: '0.65rem', color: '#6a8a6a', background: '#0f0f1e', border: '1px solid #2a4a2a', borderRadius: '10px', padding: '2px 7px' }}>
+                  ⚡ 缓存
+                </span>
+              )}
+              {result.model_used && result.model_used !== 'cached' && (
+                <span style={{ fontSize: '0.65rem', color: '#7a6aaa', background: '#0f0f1e', border: '1px solid #2a2a4a', borderRadius: '10px', padding: '2px 7px' }}>
+                  {result.model_used.replace('gemini-', '')}
+                </span>
+              )}
+            </span>
           )}
 
           {/* Separate citations section */}

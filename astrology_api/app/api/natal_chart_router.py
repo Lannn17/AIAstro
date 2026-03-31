@@ -122,7 +122,12 @@ async def interpret_planets(body: InterpretPlanetsRequest):
     if body.chart_id and not body.force_refresh:
         cached = db_get_planet_cache(body.chart_id, chart_hash)
         if cached:
-            return {"analyses": _json.loads(cached), "sources": [], "from_cache": True, "model_used": "cached"}
+            return {
+                "analyses": _json.loads(cached["analyses"]),
+                "sources": [],
+                "from_cache": True,
+                "model_used": cached.get("model_used", "unknown")
+            }
 
     # 只读缓存模式：未命中时返回空，不调 AI
     if body.cache_only:
@@ -137,7 +142,8 @@ async def interpret_planets(body: InterpretPlanetsRequest):
 
         # 有 chart_id → 写入缓存（只缓存 analyses，不缓存 sources）
         if body.chart_id and analyses:
-            db_save_planet_cache(body.chart_id, chart_hash, _json.dumps(analyses, ensure_ascii=False))
+            model_used = result.get("model_used", "")
+            db_save_planet_cache(body.chart_id, chart_hash, _json.dumps(analyses, ensure_ascii=False), model_used)
 
         # 异步写入 analytics
         from ..api.interpret_router import _log_analytics

@@ -42,19 +42,13 @@ CREATE TABLE IF NOT EXISTS transit_overall_cache (
 )
 """
 
-_CREATE_PLANET_CACHE = """
-CREATE TABLE IF NOT EXISTS planet_analysis_cache (
-    chart_id INTEGER PRIMARY KEY,
-    analyses TEXT NOT NULL,
-    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-)
-"""
 
 _CREATE_PLANET_CACHE = """
 CREATE TABLE IF NOT EXISTS planet_analysis_cache (
     chart_id INTEGER PRIMARY KEY,
     chart_hash TEXT NOT NULL,
     analyses TEXT NOT NULL,
+    model_used TEXT DEFAULT '',
     created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 )
 """
@@ -143,6 +137,7 @@ CREATE TABLE IF NOT EXISTS users (
 """
 
 _MIGRATE_USER_ID = "ALTER TABLE saved_charts ADD COLUMN user_id INTEGER"
+_MIGRATE_PLANET_CACHE_MODEL = "ALTER TABLE planet_analysis_cache ADD COLUMN model_used TEXT DEFAULT ''"
 
 
 # ── Turso HTTP helpers ───────────────────────────────────────────
@@ -262,7 +257,14 @@ def create_tables():
         else:
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(_MIGRATE_USER_ID)
-
+        # Migrate: add model_used column to planet_analysis_cache
+    if not _has_column("planet_analysis_cache", "model_used"):
+        print("[DB] Adding model_used column to planet_analysis_cache")
+        if USE_TURSO:
+            _turso_exec(_MIGRATE_PLANET_CACHE_MODEL)
+        else:
+            with sqlite3.connect(_db_path) as conn:
+                conn.execute(_MIGRATE_PLANET_CACHE_MODEL)
 
 def db_list_charts() -> list[dict]:
     sql = (
@@ -443,26 +445,26 @@ def db_save_overall_cache(chart_id: int, transit_set_hash: str, overall: str):
 
 # ── Planet analysis cache ─────────────────────────────────────────
 
-def db_get_planet_cache(chart_id: int, chart_hash: str) -> str | None:
-    """Returns cached analyses JSON if chart_hash matches, else None."""
-    sql = "SELECT analyses FROM planet_analysis_cache WHERE chart_id = ? AND chart_hash = ?"
+def db_get_planet_cache(chart_id: int, chart_hash: str) -> dict | None:
+    """Returns cached analyses JSON and model_used if chart_hash matches, else None."""
+    sql = "SELECT analyses, model_used FROM planet_analysis_cache WHERE chart_id = ? AND chart_hash = ?"
     if USE_TURSO:
         rows = _to_dicts(_turso_exec(sql, [chart_id, chart_hash]))
-        return rows[0]["analyses"] if rows else None
+        return rows[0] if rows else None
     row = _sqlite_fetchone(sql, [chart_id, chart_hash])
-    return row["analyses"] if row else None
+    return row if row else None
 
 
-def db_save_planet_cache(chart_id: int, chart_hash: str, analyses_json: str):
+def db_save_planet_cache(chart_id: int, chart_hash: str, analyses_json: str, model_used: str = ""):
     sql = """
         INSERT OR REPLACE INTO planet_analysis_cache
-            (chart_id, chart_hash, analyses)
-        VALUES (?, ?, ?)
+            (chart_id, chart_hash, analyses, model_used)
+        VALUES (?, ?, ?, ?)
     """
     if USE_TURSO:
-        _turso_exec(sql, [chart_id, chart_hash, analyses_json])
+        _turso_exec(sql, [chart_id, chart_hash, analyses_json, model_used])
     else:
-        _sqlite_write(sql, [chart_id, chart_hash, analyses_json])
+        _sqlite_write(sql, [chart_id, chart_hash, analyses_json, model_used])
 
 
 # ── Query analytics ───────────────────────────────────────────────
