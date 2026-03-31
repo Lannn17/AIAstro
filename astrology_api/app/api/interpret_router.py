@@ -265,3 +265,68 @@ async def interpret_synastry(body: SynastryInterpretRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Synastry interpretation error: {e}")
+
+class SolarReturnInterpretRequest(BaseModel):
+    chart_id: int
+    natal_chart_data: Dict[str, Any]
+    sr_planets: Dict[str, Any]
+    sr_houses: Dict[str, Any]
+    sr_asc_degree: float
+    return_year: int
+    location_lat: float
+    location_lon: float
+    language: str = "zh"
+    force_refresh: bool = False
+
+
+@router.post("/interpret/solar-return")
+async def interpret_solar_return(body: SolarReturnInterpretRequest):
+    """
+    太阳回归年度报告：
+    1. 规则引擎打分（_compute_sr_theme_scores）
+    2. RAG + Gemini 生成报告（analyze_solar_return）
+    3. DB 缓存（solar_return_cache）
+    4. Analytics 记录
+    """
+    import json
+    from ..db import db_get_sr_cache, db_save_sr_cache
+
+    if body.chart_id <= 0:
+        raise HTTPException(status_code=400, detail="chart_id must be > 0 (guest mode not supported)")
+
+    location_hash = hashlib.md5(
+        f"{body.location_lat:.4f},{body.location_lon:.4f}".encode()
+    ).hexdigest()[:12]
+
+    if not body.force_refresh:
+        cached = db_get_sr_cache(body.chart_id, body.return_year, location_hash)
+        if cached:
+            cached["model_used"] = "cached"
+            return cached
+
+    try:
+        from ..rag import analyze_solar_return
+        result = analyze_solar_return(
+            sr_planets=body.sr_planets,
+            sr_houses=body.sr_houses,
+            natal_chart_data=body.natal_chart_data,
+            sr_asc_degree=body.sr_asc_degree,
+            return_year=body.return_year,
+            language=body.language,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+        print(f"[SR INTERPRET ERROR]\n{traceback.format_exc()}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Solar return interpretation error: {e}")
+
+    db_save_sr_cache(body.chart_id, body.return_year, location_hash,
+                     json.dumps(result, ensure_ascii=False))
+
+    top_themes = result.get("theme_scores", {})
+    top3 = sorted(top_themes.items(), key=lambda x: -x[1])[:3]
+    query = f"solar_return {body.return_year} " + " ".join(t[0] for t in top3)
+    asyncio.create_task(_log_analytics(query, result))
+
+    return result
