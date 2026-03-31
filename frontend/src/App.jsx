@@ -10,6 +10,7 @@ import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ChartSessionProvider, useChartSession } from './contexts/ChartSessionContext'
 import { RegionProvider, useRegion } from './contexts/RegionContext'
+import WelcomeModal from "./components/WelcomeModal";  // ← 加这行
 import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 
@@ -158,6 +159,7 @@ function AppInner() {
   return (
     <BrowserRouter>
       <LoginModal />
+      <WelcomeModal />
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a1a' }}>
 
         {/* Sticky header */}

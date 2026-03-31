@@ -1,0 +1,142 @@
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.welcome-modal {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 440px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: #e0e0e0;
+}
+
+.welcome-header {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.welcome-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.2rem;
+}
+
+.welcome-header p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.welcome-body {
+  padding: 16px 24px;
+}
+
+.welcome-section {
+  margin-bottom: 16px;
+}
+
+.welcome-section:last-child {
+  margin-bottom: 0;
+}
+
+.welcome-section h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.welcome-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.welcome-section li {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.welcome-section li:last-child {
+  border-bottom: none;
+}
+
+.welcome-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.welcome-item-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.welcome-item-desc {
+  font-size: 0.75rem;
+  color: #888;
+  margin: 2px 0 0;
+}
+
+.welcome-badge {
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.welcome-badge-new {
+  background: #4ade80;
+  color: #000;
+}
+
+.welcome-badge-soon {
+  background: rgba(255, 255, 255, 0.12);
+  color: #aaa;
+}
+
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.welcome-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: #888;
+  cursor: pointer;
+}
+
+.welcome-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 6px 20px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.welcome-btn:hover {
+  background: #4f46e5;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

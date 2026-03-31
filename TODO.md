@@ -17,9 +17,150 @@
 
 ## 候选功能（待排期）
  # 重要
-- 0. 本命盘分析的prompt格式优化 -- flag
+- 0. **本命盘分析的prompt格式优化** -- IMPORTANT
     - 同一类解释里出现明显矛盾的内容时,二次rag检索并解释矛盾
     - 调用多次后AI解释详细程度明显下降,需要设计一套rule进一步规范输出,比如强制超过多少字数?
+    '''
+    Prompt 格式优化
+Step 1: 矛盾检测与二次检索
+python
+# 方案：在 AI 输出后加一层 self-consistency check
+
+class InterpretationPipeline:
+    async def generate_with_consistency(self, chart_data, rag_context):
+        # 第一轮：正常生成
+        raw_output = await self.llm.generate(
+            system_prompt=NATAL_SYSTEM_PROMPT,
+            user_prompt=self._build_prompt(chart_data, rag_context)
+        )
+        
+        # 第二轮：矛盾检测
+        contradiction_check = await self.llm.generate(
+            system_prompt=CONTRADICTION_DETECTOR_PROMPT,
+            user_prompt=f"""
+            以下是对同一张本命盘的多段分析，请识别其中是否存在明显矛盾：
+            
+            {raw_output}
+            
+            如果发现矛盾，请：
+            1. 指出具体哪两段内容矛盾
+            2. 说明矛盾的来源（例如：土星限制 vs 木星扩张作用于同一宫位）
+            3. 给出整合解读（说明这种张力在实际生活中如何表现）
+            
+            如果没有矛盾，返回 "NO_CONTRADICTION"
+            """
+        )
+        
+        if "NO_CONTRADICTION" not in contradiction_check:
+            # 二次 RAG 检索：针对矛盾点精准检索
+            contradiction_topics = self._extract_topics(contradiction_check)
+            additional_context = await self.rag.search(
+                queries=contradiction_topics,
+                top_k=3,
+                filter={"type": "aspect_integration"}  # 专门检索"整合性"解读
+            )
+            
+            # 第三轮：整合生成
+            final_output = await self.llm.generate(
+                system_prompt=INTEGRATION_PROMPT,
+                user_prompt=f"""
+                原始分析：{raw_output}
+                矛盾点：{contradiction_check}
+                补充参考资料：{additional_context}
+                
+                请重新整合以上内容，保留原始分析的有效部分，
+                对矛盾点给出专业的整合解读。
+                """
+            )
+            return final_output
+        
+        return raw_output
+Step 2: 输出详细度规范
+python
+# 设计分层输出规范
+
+OUTPUT_RULES = {
+    "natal_planet_interpretation": {
+        "min_chars": 200,      # 每颗行星解读最少200字
+        "max_chars": 500,
+        "required_sections": [
+            "核心含义",          # 这颗行星在此星座/宫位的本质
+            "具体表现",          # 在日常生活中如何体现
+            "成长方向",          # 如何利用或平衡这个能量
+        ],
+        "forbidden_patterns": [
+            r"总之.*",          # 禁止空洞总结
+            r"需要注意.*平衡",   # 禁止万能废话
+        ]
+    },
+    "natal_aspect_interpretation": {
+        "min_chars": 150,
+        "max_chars": 400,
+        "required_sections": [
+            "相位能量描述",
+            "内在心理动力",
+            "外在事件倾向",
+        ]
+    },
+    "synastry_aspect": {
+        "min_chars": 120,
+        "max_chars": 350,
+        "required_sections": [
+            "互动模式",
+            "可能的摩擦点",
+            "关系建议",
+        ]
+    }
+}
+
+# 在 system prompt 中注入
+def build_system_prompt(interpretation_type: str) -> str:
+    rules = OUTPUT_RULES[interpretation_type]
+    return f"""
+    你是一位专业占星师。请严格遵循以下输出规范：
+    
+    【字数要求】每段解读 {rules['min_chars']}-{rules['max_chars']} 字
+    【必含段落】每段解读必须包含以下部分，用加粗标题标注：
+    {chr(10).join(f'  - **{s}**' for s in rules['required_sections'])}
+    
+    【禁止事项】
+    - 不要使用空洞总结句
+    - 不要给出不基于具体星盘配置的泛泛建议
+    - 如果多次调用，每次输出的详细程度必须一致
+    
+    【质量标准】
+    - 每个论点必须关联到具体的行星、星座或宫位
+    - 使用"因为你的[行星]在[星座/宫位]，所以..."的论证结构
+    """
+Step 3: 多次调用质量一致性
+python
+# 问题根源：temperature 随机性 + token budget 不稳定
+# 解决方案：锁定关键参数 + 输出后验证
+
+class QualityGuard:
+    def __init__(self):
+        self.min_length_ratio = 0.7  # 输出不能低于预期长度的70%
+    
+    async def guarded_generate(self, prompt, expected_min_chars, max_retries=2):
+        for attempt in range(max_retries + 1):
+            response = await self.llm.generate(
+                prompt=prompt,
+                temperature=0.7,        # 固定，不要每次变
+                max_tokens=2048,        # 给足空间
+                presence_penalty=0.3,   # 鼓励多样性但不跑题
+            )
+            
+            if len(response) >= expected_min_chars * self.min_length_ratio:
+                return response
+            
+            # 不够详细，追加要求
+            prompt += "\n\n【注意：你的回答过于简短，请展开详细论述每个要点。】"
+        
+        return response  # 最终兜底
+        '''
+
+
+
 - 1. 推盘逻辑优化: 增加星盘计算层,差异化确定事件权重赋值 - checking
 - ✅ ~~2. 开放注册功能,其他权限均与访客功能一致但允许注册用户保存自己输入的星盘在自己账号中.同时设置管理员账号,确保管理员可以读取所有用户保存上传的数据.~~
 - 3. ✅ ~~Mainland China地区端口设置配相应的国内版软件 - 3.31排期~~ 代码已完成，待配置 API key：
@@ -32,6 +173,8 @@
 - 6. 合盘列表关系维度全部显示并打分,将得分按从高到低排序并生成相应分析,解释得分高的关系为什么更可能形成以及为什么更难形成得分低的关系.合盘tag一并加入自由向AI提问对话的入口.
 - 7. 合盘界面前端UI升级,双人行星相位列表分类描述,不要以长文字列表形式呈现,增强用户可读性和可理解性.(当前显示的原始数据列表可以折叠做成一个按钮,用户点击后可展开具体查看)
 - 8. 同理本命盘界面关于人生主题的部分也应该显示全部领域并给出比例参考
+- 9. 设计登录弹窗,向用户介绍已有功能,最新上线功能和待开发功能 -- flag
+- 10. 设计用户留言反馈窗口,用户可提出意见,在TURSO中增加一张收集建议的表单
 
 # 次要
 - 1. 允许用户输入职业身份,使AI输出的分析结果更具体
@@ -63,8 +206,46 @@
 
 ## 已知问题
 - ✅ ~~1. 校对分析RAG分析遗留问题(引用未拆分,未出现RAG引用分析模块) -- 所有设置AI分析的端口服务都必须接入rag的分析接口~~
-- 2. 本命盘四交点无分析 -- flag
+- ✅ 本命盘四交点无分析 -- 二次测试失败
 - 3. 缓存标签出现后就无法再知道这段分析的生成模型了 需要将缓存标签和模型标签修复为不互斥 即可以共同显示两个标签
+'''
+// 前端：标签不应互斥，改为数组
+interface InterpretationMeta {
+  source: 'live' | 'cached';
+  model?: string;           // "gpt-4o" | "deepseek-v3" | etc.
+  cached_at?: string;       // ISO timestamp
+  generated_at: string;     // 原始生成时间
+  rag_sources_count?: number;
+}
+
+// 组件中渲染多个标签
+function InterpretationBadges({ meta }: { meta: InterpretationMeta }) {
+  return (
+    <div className="flex gap-1.5">
+      {/* 模型标签 — 始终显示 */}
+      {meta.model && (
+        <Badge variant="outline" className="text-xs">
+          {MODEL_DISPLAY_NAMES[meta.model]}
+        </Badge>
+      )}
+      
+      {/* 缓存标签 — 仅缓存时显示 */}
+      {meta.source === 'cached' && (
+        <Badge variant="secondary" className="text-xs">
+          ⚡ 缓存 {meta.cached_at && `· ${formatRelativeTime(meta.cached_at)}`}
+        </Badge>
+      )}
+      
+      {/* RAG 引用标签 */}
+      {meta.rag_sources_count && meta.rag_sources_count > 0 && (
+        <Badge variant="ghost" className="text-xs">
+          📚 {meta.rag_sources_count} 条引用
+        </Badge>
+      )}
+    </div>
+  );
+}
+'''
 - 4. mobile UI本命盘行星界面行星名字未对齐
 - ✅ ~~5. 注册用户密码没必要设置128位,改为最高16位~~
 - ✅ ~~6. 注册后第一次进入界面时行运页面有两个星盘(一个未保存),去掉未保存星盘逻辑~~
@@ -72,6 +253,50 @@
 - 8. ~~检查和render的部署,为什么还在持续deploy - 已delete service~~
 - ✅ ~~9. 本命盘标签简析存在为空的情况 未匹配return null,如何更好解决?~~ *(疑似解决)
 - 10. 本命盘标签解析的静态映射完善:当前在解释群星的时候只是笼统说"多颗行星",需要结合用户实际的本命盘把具体是哪些行星填入 --群星解析已详细补充,其他tag依然存在该问题;同样是群星水瓶座,部分用户有具体行星的补充,部分用户依然是多颗行星的笼统描述
+'''
+# 当前问题：群星描述用"多颗行星"代替具体行星名
+# 根因：静态映射没有接收 chart_data 上下文
+
+# 改进方案：将静态映射改为模板 + 动态注入
+
+STELLIUM_TEMPLATE = {
+    "zh": "群星{sign}（{planets}）",
+    "description_template": (
+        "你的{planets_readable}都落在{sign}，"
+        "形成了群星{sign}的格局。这意味着{sign}的能量"
+        "在你的星盘中被极大强化..."
+    )
+}
+
+def generate_stellium_tag(stellium_data: dict, chart_data: dict) -> dict:
+    """
+    stellium_data: {"sign": "Aquarius", "house": 3, "planets": ["Sun", "Mercury", "Venus", "Mars"]}
+    """
+    planet_names_zh = [PLANET_ZH_MAP[p] for p in stellium_data["planets"]]
+    planets_readable = "、".join(planet_names_zh)
+    sign_zh = SIGN_ZH_MAP[stellium_data["sign"]]
+    
+    return {
+        "tag_label": f"群星{sign_zh}（{planets_readable}）",
+        "tag_description": STELLIUM_TEMPLATE["description_template"].format(
+            planets_readable=planets_readable,
+            sign=sign_zh,
+        ),
+        "planets": stellium_data["planets"],  # 保留原始数据供前端使用
+    }
+
+# 同样的模式应用于所有 tag 类型
+def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
+    """统一入口：所有 tag 都必须传入 chart_data 以实现个性化"""
+    generators = {
+        "stellium": generate_stellium_tag,
+        "grand_trine": generate_grand_trine_tag,
+        "t_square": generate_t_square_tag,
+        "bucket": generate_bucket_tag,
+        # ...
+    }
+    return generators[tag_type](tag_data, chart_data)
+    '''
 - ✅ ~~11. 群星xx座映射还是会出现英文 --fixing~~ 
 - 12. 标签解读无缓存,重新加载后内容丢失,需要同样缓存该内容(?)
 - 13. 注册用户保存第二张以上星盘侧边栏未显示
@@ -87,7 +312,6 @@
 
 
 ## Code Review
-- 整体代码优化: 拆分大文件 -- flag
 - 当前管理员使用.env明文写入密码,注册用户使用hash编码,逻辑不统一: 考虑管理员密码也进行hash
 - 管理员uid=none,依赖uid的数据库操作可能报错: 考虑给管理员编码一个uid,或者管理员整条数据也编入数据库
 - 加上注册防刷功能, rate limit: 初阶段构想是只开放20个注册账号(管理员除外),判断此构想如何
