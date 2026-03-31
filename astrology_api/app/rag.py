@@ -1954,8 +1954,22 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     """
     planets = natal_chart.get('planets', {})
     asc = natal_chart.get('ascendant', {})
+    mc  = natal_chart.get('midheaven', {})
     asc_sign_raw = asc.get('sign_original') or asc.get('sign', '')
+    mc_sign_raw  = mc.get('sign_original')  or mc.get('sign', '')
     asc_sign = translate_sign(asc_sign_raw, 'zh') if asc_sign_raw else ''
+    mc_sign  = translate_sign(mc_sign_raw,  'zh') if mc_sign_raw  else ''
+
+    # 推算 DSC/IC 对点星座
+    _OPPOSITE = {
+        'Aries':'Libra','Taurus':'Scorpio','Gemini':'Sagittarius','Cancer':'Capricorn',
+        'Leo':'Aquarius','Virgo':'Pisces','Libra':'Aries','Scorpio':'Taurus',
+        'Sagittarius':'Gemini','Capricorn':'Cancer','Aquarius':'Leo','Pisces':'Virgo',
+    }
+    dsc_sign_raw = _OPPOSITE.get(asc_sign_raw, '')
+    ic_sign_raw  = _OPPOSITE.get(mc_sign_raw,  '')
+    dsc_sign = translate_sign(dsc_sign_raw, 'zh') if dsc_sign_raw else ''
+    ic_sign  = translate_sign(ic_sign_raw,  'zh') if ic_sign_raw  else ''
 
     # 行星列表（含逆行标注），同时记录 key 顺序用于生成 JSON 模板
     lines = []
@@ -1976,6 +1990,10 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     planet_entries = ',\n  '.join(f'"{k}": "..."' for k in planet_keys)
     json_template = (
         '{\n  ' + planet_entries + ',\n'
+        '  "asc": "...",\n'
+        '  "dsc": "...",\n'
+        '  "mc": "...",\n'
+        '  "ic": "...",\n'
         '  "overall": {\n'
         '    "tags": ["...", "..."],\n'
         '    "summary": "...",\n'
@@ -2035,10 +2053,19 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             + "\n\n".join(parts)
         )
 
-    prompt = f"""请为以下本命盘行星位置分别生成占星解读，并在最后给出一个综合概述。
+    # 四交点信息（供 prompt 使用）
+    angles_section = ""
+    if asc_sign or mc_sign:
+        angles_section = f"""
+四交点轴线：
+上升 ASC（第1宫起点）: {asc_sign}  |  下降 DSC（第7宫起点）: {dsc_sign}
+天顶 MC（第10宫起点）: {mc_sign}   |  天底 IC（第4宫起点）: {ic_sign}
+"""
+
+    prompt = f"""请为以下本命盘行星位置分别生成占星解读，并在最后给出四交点解读和综合概述。
 
 上升星座：{asc_sign}
-
+{angles_section}
 行星位置：
 {planet_list}
 
@@ -2057,6 +2084,12 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 
 每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
 
+四交点分析要求（asc/dsc/mc/ic）：
+- asc（上升 {asc_sign}）：外在气质、第一印象、身体与外貌特征，50-80 字
+- dsc（下降 {dsc_sign}）：理想伴侣特质、人际关系模式与吸引规律，50-80 字
+- mc（天顶 {mc_sign}）：职业方向、社会形象与人生志向，50-80 字
+- ic（天底 {ic_sign}）：家庭底色、童年环境与内心安全感来源，50-80 字
+
 综合概述（overall）为结构化对象，包含以下字段：
 - tags: 字符串数组，**必须优先使用上方【确定性事实】中列出的标签**，再补充 AI 判断的其他特征（如「命主星逆行」「日月形成对冲」等），共 3-6 个
 - summary: 主要人生命题、核心潜力与成长方向，100-150 字
@@ -2066,6 +2099,7 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 - health: 健康与身体领域分析，附占星依据，60-80 字
 
 **必须为以上列出的每一颗行星（包括凯龙、北交点、南交点、莉莉丝等小行星）生成解读，不得遗漏任何一个。**
+**必须为四交点（asc/dsc/mc/ic）各生成解读，不得遗漏。**
 
 **严格禁止**在任何行星解读文字（JSON 值）中出现：英文引用原文、书名标注、「参考《...》」格式、或任何引用注记。行星解读必须是纯中文分析文字。引用信息只能通过 source_refs 字段以中文概括表达。
 

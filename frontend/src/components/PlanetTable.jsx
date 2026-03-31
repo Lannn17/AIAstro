@@ -83,27 +83,36 @@ function formatDegree(longitude) {
   return `${deg}°${String(min).padStart(2, '0')}'`
 }
 
-function AngleRow({ label, cusp, language }) {
+function AngleRow({ label, cusp, language, analysis }) {
   if (!cusp) return null
   const L = UI_LABELS[language] || UI_LABELS['en']
   const signEn = cusp.sign_original || cusp.sign
   const signDisplay = SIGN_NAMES[language]?.[signEn] || cusp.sign
   return (
-    <tr style={{ borderBottom: '1px solid #1a1a3a' }}>
-      <td className="px-2 py-1.5 sm:px-4 sm:py-2 font-medium">
-        <span className="mr-1 sm:mr-2 text-base" style={{ color: '#c9a84c' }}>⊕</span>
-        <span className="text-xs sm:text-sm" style={{ color: '#c9a84c' }}>{label}</span>
-      </td>
-      <td className="px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm">
-        <span className="mr-0.5 sm:mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
-        {signDisplay}
-      </td>
-      <td className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
-        {formatDegree(cusp.longitude)}
-      </td>
-      <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
-      <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
-    </tr>
+    <React.Fragment>
+      <tr style={{ borderBottom: analysis ? 'none' : '1px solid #1a1a3a' }}>
+        <td className="px-2 py-1.5 sm:px-4 sm:py-2 font-medium">
+          <span className="mr-1 sm:mr-2 text-base" style={{ color: '#c9a84c' }}>⊕</span>
+          <span className="text-xs sm:text-sm" style={{ color: '#c9a84c' }}>{label}</span>
+        </td>
+        <td className="px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm">
+          <span className="mr-0.5 sm:mr-1">{SIGN_SYMBOLS[signDisplay] || SIGN_SYMBOLS[signEn] || ''}</span>
+          {signDisplay}
+        </td>
+        <td className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell" style={{ color: '#8888aa', fontFamily: 'monospace' }}>
+          {formatDegree(cusp.longitude)}
+        </td>
+        <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
+        <td className="px-2 py-1.5 sm:px-4 sm:py-2" />
+      </tr>
+      {analysis && (
+        <tr style={{ borderBottom: '1px solid #1a1a3a' }}>
+          <td colSpan={5} style={{ padding: '6px 12px 10px', color: '#9090b8', fontSize: '0.82rem', lineHeight: 1.8, background: '#0e0e1e' }}>
+            {analysis}
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
   )
 }
 
@@ -209,10 +218,10 @@ export default function PlanetTable({ planets, language = 'zh', analyses = {}, a
                     {L.angles}
                   </td>
                 </tr>
-                <AngleRow label={L.asc} cusp={ascendant} language={language} />
-                <AngleRow label={L.dsc} cusp={dsc} language={language} />
-                <AngleRow label={L.mc} cusp={midheaven} language={language} />
-                <AngleRow label={L.ic} cusp={ic} language={language} />
+                <AngleRow label={L.asc} cusp={ascendant} language={language} analysis={analyses.asc} />
+                <AngleRow label={L.dsc} cusp={dsc} language={language} analysis={analyses.dsc} />
+                <AngleRow label={L.mc} cusp={midheaven} language={language} analysis={analyses.mc} />
+                <AngleRow label={L.ic} cusp={ic} language={language} analysis={analyses.ic} />
               </>
             )}
           </tbody>
