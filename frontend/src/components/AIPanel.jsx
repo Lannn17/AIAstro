@@ -1,3 +1,5 @@
+import { useAuth } from '../contexts/AuthContext'
+
 /** Converts camelCase filenames to readable book titles, e.g. "modernAstrology" → "Modern Astrology" */
 function cleanSourceName(raw) {
   const base = raw.replace('[EN]', '').split('(')[0].split('/').pop().replace(/\.\w+$/, '').trim()
@@ -8,7 +10,8 @@ function cleanSourceName(raw) {
 }
 
 export function SourcesSection({ sources }) {
-  if (!sources?.length) return null
+  const { isAdmin } = useAuth()
+  if (!isAdmin || !sources?.length) return null
   const cited = sources.filter(s => s.cited)
   return (
     <div style={{
