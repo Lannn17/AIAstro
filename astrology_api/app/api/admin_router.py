@@ -1,8 +1,32 @@
+import uuid
+import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from ..security import require_auth
-from ..db import db_get_analytics_summary, db_get_analytics_records
+from ..db import (
+    db_get_analytics_summary, db_get_analytics_records,
+    db_list_prompt_versions, db_get_prompt_version,
+    db_insert_prompt_version, db_update_prompt_version,
+    db_get_deployed_version, db_get_chart,
+    db_insert_prompt_log, db_insert_prompt_evaluation,
+    db_get_evaluations_for_log, db_get_recent_log_for_version,
+    db_query_prompt_logs, db_get_evaluations_for_version,
+    _turso_query,
+)
+from ..prompt_version_cache import set_version_id as _cache_set
+
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+class CreateDraftRequest(BaseModel):
+    caller: str
+    prompt_text: str
+    system_instruction: str = ""
+
+class PatchDraftRequest(BaseModel):
+    prompt_text: str | None = None
+    system_instruction: str | None = None
 
 
 @router.get("/analytics")
@@ -52,3 +76,66 @@ def generate_analytics_report(_user: str = Depends(require_auth)):
         return {"report": resp.text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+    
+# ── Prompt versions CRUD ───────────────────────────────────────────
+
+@router.get("/prompt-versions")
+def list_prompt_versions(caller: str | None = None, _user: str = Depends(require_auth)):
+    return db_list_prompt_versions(caller=caller)
+
+
+@router.post("/prompt-versions")
+def create_draft(body: CreateDraftRequest, _user: str = Depends(require_auth)):
+    deployed = db_get_deployed_version(body.caller)
+    if deployed:
+        base = deployed["version_tag"]
+        all_versions = db_list_prompt_versions(caller=body.caller)
+        prefix = base + "."
+        minors = [
+            int(v["version_tag"].split(".")[-1])
+            for v in all_versions
+            if v["version_tag"].startswith(prefix) and v["version_tag"].split(".")[-1].isdigit()
+        ]
+        next_minor = max(minors, default=0) + 1
+        version_tag = f"{base}.{next_minor}"
+    else:
+        version_tag = "v1"
+
+    id_ = uuid.uuid4().hex[:16]
+    db_insert_prompt_version(
+        id_=id_,
+        caller=body.caller,
+        version_tag=version_tag,
+        prompt_text=body.prompt_text,
+        system_instruction=body.system_instruction or None,
+        status="draft" if deployed else "deployed",
+        deployed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if not deployed else None,
+    )
+    if not deployed:
+        _cache_set(body.caller, id_)
+    return db_get_prompt_version(id_)
+
+
+@router.get("/prompt-versions/{id}")
+def get_prompt_version(id: str, _user: str = Depends(require_auth)):
+    v = db_get_prompt_version(id)
+    if not v:
+        raise HTTPException(404, "Not found")
+    return v
+
+
+@router.patch("/prompt-versions/{id}")
+def patch_draft(id: str, body: PatchDraftRequest, _user: str = Depends(require_auth)):
+    v = db_get_prompt_version(id)
+    if not v:
+        raise HTTPException(404, "Not found")
+    if v["status"] != "draft":
+        raise HTTPException(400, "Only draft versions can be edited")
+    updates = {}
+    if body.prompt_text is not None:
+        updates["prompt_text"] = body.prompt_text
+    if body.system_instruction is not None:
+        updates["system_instruction"] = body.system_instruction
+    if updates:
+        db_update_prompt_version(id, **updates)
+    return db_get_prompt_version(id)
