@@ -330,7 +330,10 @@ export default function Transits() {
 
               {/* 逐相位卡片：新行运在前，缓存行运在后 */}
               {[...transit.result.active_transits]
-                .sort((a, b) => (a.is_new === b.is_new ? 0 : a.is_new ? -1 : 1))
+                .sort((a, b) => {
+                  if (a.is_new !== b.is_new) return a.is_new ? -1 : 1;
+                  return new Date(b.start_date) - new Date(a.start_date);
+                })
                 .map(t => (
                   <TransitCard key={t.key} transit={t} />
                 ))}

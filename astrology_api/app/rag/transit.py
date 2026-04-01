@@ -116,10 +116,15 @@ def analyze_active_transits_full(
     from ..db import (
         db_get_transit_cache, db_save_transit_cache,
         db_get_overall_cache, db_save_overall_cache,
+        db_delete_expired_transit_cache,
     )
 
     if not active_transits:
         return {"aspects": [], "overall": "当前没有在容许度内的活跃行运相位。"}
+
+    # ── 0. 清理已过期的缓存条目 ──
+    if chart_id:
+        db_delete_expired_transit_cache(chart_id, query_date)
 
     # ── 1. 逐条检查 DB 缓存 ──
     cached_aspects: dict[str, dict] = {}

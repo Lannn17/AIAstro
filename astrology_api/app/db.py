@@ -419,6 +419,15 @@ def db_save_transit_cache(
         _sqlite_write(sql, params)
 
 
+def db_delete_expired_transit_cache(chart_id: int, today: str):
+    """Delete per-transit cache rows whose end_date has passed."""
+    sql = "DELETE FROM transit_analysis_cache WHERE chart_id=? AND end_date < ?"
+    if USE_TURSO:
+        _turso_exec(sql, [chart_id, today])
+    else:
+        _sqlite_write(sql, [chart_id, today])
+
+
 def db_get_overall_cache(chart_id: int, transit_set_hash: str) -> str | None:
     sql = (
         "SELECT overall FROM transit_overall_cache "
