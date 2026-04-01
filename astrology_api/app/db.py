@@ -774,3 +774,104 @@ def db_get_all_deployed_versions() -> list[dict]:
     return _turso_query(
         "SELECT id, caller FROM prompt_versions WHERE status='deployed'", []
     )
+
+# ── Prompt logs helpers ────────────────────────────────────────────
+
+def db_insert_prompt_log(
+    id_: str, version_id: str | None, source: str,
+    input_data: str | None, rag_query: str, rag_chunks: str,
+    response_text: str, latency_ms: int, model_used: str,
+    temperature: float, finish_reason: str,
+    prompt_tokens_est: int, response_tokens_est: int,
+    user_id: str | None,
+) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sql = """INSERT INTO prompt_logs
+             (id, version_id, source, input_data, rag_query, rag_chunks,
+              response_text, latency_ms, model_used, temperature, finish_reason,
+              prompt_tokens_est, response_tokens_est, user_id, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+    args = [id_, version_id, source, input_data, rag_query, rag_chunks,
+            response_text, latency_ms, model_used, temperature, finish_reason,
+            prompt_tokens_est, response_tokens_est, user_id, now]
+    if USE_TURSO:
+        _turso_exec(sql, args)
+
+
+def db_query_prompt_logs(
+    version_id: str | None = None,
+    caller: str | None = None,
+    source: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    conditions, args = [], []
+    if version_id:
+        conditions.append("pl.version_id=?"); args.append(version_id)
+    if caller:
+        conditions.append("pv.caller=?"); args.append(caller)
+    if source:
+        conditions.append("pl.source=?"); args.append(source)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    sql = f"""SELECT pl.* FROM prompt_logs pl
+              LEFT JOIN prompt_versions pv ON pl.version_id=pv.id
+              {where} ORDER BY pl.created_at DESC LIMIT ?"""
+    args.append(limit)
+    return _turso_query(sql, args)
+
+
+def db_get_recent_log_for_version(version_id: str, source: str | None = None) -> dict | None:
+    if source:
+        rows = _turso_query(
+            "SELECT * FROM prompt_logs WHERE version_id=? AND source=? ORDER BY created_at DESC LIMIT 1",
+            [version_id, source]
+        )
+    else:
+        rows = _turso_query(
+            "SELECT * FROM prompt_logs WHERE version_id=? ORDER BY created_at DESC LIMIT 1",
+            [version_id]
+        )
+    return rows[0] if rows else None
+
+
+# ── Prompt evaluations helpers ─────────────────────────────────────
+
+def db_insert_prompt_evaluation(
+    id_: str, log_id: str, version_id: str | None,
+    evaluator_type: str, score_overall: float | None,
+    dimensions: str | None, notes: str | None,
+    suggestions: str | None, compared_to_log_id: str | None = None,
+) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sql = """INSERT INTO prompt_evaluations
+             (id, log_id, version_id, compared_to_log_id, evaluator_type,
+              score_overall, dimensions, notes, suggestions, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?)"""
+    args = [id_, log_id, version_id, compared_to_log_id, evaluator_type,
+            score_overall, dimensions, notes, suggestions, now]
+    if USE_TURSO:
+        _turso_exec(sql, args)
+
+
+def db_get_evaluations_for_log(log_id: str) -> list[dict]:
+    return _turso_query(
+        "SELECT * FROM prompt_evaluations WHERE log_id=? ORDER BY created_at DESC",
+        [log_id]
+    )
+
+
+def db_get_evaluations_for_version(version_id: str) -> list[dict]:
+    return _turso_query(
+        "SELECT * FROM prompt_evaluations WHERE version_id=? ORDER BY created_at DESC",
+        [version_id]
+    )
+
+
+# ── User feedback helpers ──────────────────────────────────────────
+
+def db_insert_user_feedback(
+    id_: str, caller: str | None, content: str, user_id: str | None
+) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sql = "INSERT INTO user_feedback (id, caller, content, user_id, created_at) VALUES (?,?,?,?,?)"
+    if USE_TURSO:
+        _turso_exec(sql, [id_, caller, content, user_id, now])
