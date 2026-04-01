@@ -247,6 +247,9 @@ def _to_dicts(result: dict) -> list[dict]:
         rows.append(d)
     return rows
 
+def _turso_query(sql: str, params: list = None) -> list[dict]:
+    """SELECT helper: execute sql and return rows as list[dict]."""
+    return _to_dicts(_turso_exec(sql, params or []))
 
 # ── SQLite helpers ───────────────────────────────────────────────
 
@@ -719,3 +722,55 @@ def db_get_user_by_username(username: str) -> dict | None:
         rows = _to_dicts(_turso_exec(sql, [username]))
         return rows[0] if rows else None
     return _sqlite_fetchone(sql, [username])
+
+# ── Prompt versions helpers ────────────────────────────────────────
+
+def db_insert_prompt_version(
+    id_: str, caller: str, version_tag: str,
+    prompt_text: str, system_instruction: str | None,
+    status: str = "draft", deployed_at: str | None = None,
+) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sql = """INSERT INTO prompt_versions
+             (id, caller, version_tag, prompt_text, system_instruction,
+              status, created_at, deployed_at)
+             VALUES (?,?,?,?,?,?,?,?)"""
+    args = [id_, caller, version_tag, prompt_text, system_instruction,
+            status, now, deployed_at]
+    if USE_TURSO:
+        _turso_exec(sql, args)
+
+
+def db_get_deployed_version(caller: str) -> dict | None:
+    sql = "SELECT * FROM prompt_versions WHERE caller=? AND status='deployed' LIMIT 1"
+    rows = _turso_query(sql, [caller])
+    return rows[0] if rows else None
+
+
+def db_list_prompt_versions(caller: str | None = None) -> list[dict]:
+    if caller:
+        sql = "SELECT * FROM prompt_versions WHERE caller=? ORDER BY created_at DESC"
+        return _turso_query(sql, [caller])
+    return _turso_query("SELECT * FROM prompt_versions ORDER BY created_at DESC", [])
+
+
+def db_get_prompt_version(id_: str) -> dict | None:
+    rows = _turso_query("SELECT * FROM prompt_versions WHERE id=?", [id_])
+    return rows[0] if rows else None
+
+
+def db_update_prompt_version(id_: str, **fields) -> None:
+    allowed = {"status", "version_tag", "deployed_at", "prompt_text", "system_instruction"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    sql = f"UPDATE prompt_versions SET {set_clause} WHERE id=?"
+    if USE_TURSO:
+        _turso_exec(sql, list(updates.values()) + [id_])
+
+
+def db_get_all_deployed_versions() -> list[dict]:
+    return _turso_query(
+        "SELECT id, caller FROM prompt_versions WHERE status='deployed'", []
+    )
