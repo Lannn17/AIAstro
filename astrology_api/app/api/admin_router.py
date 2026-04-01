@@ -15,6 +15,9 @@ from ..db import (
     _turso_query,
 )
 from ..prompt_version_cache import set_version_id as _cache_set
+from .. import rag
+from ..rag.client import GENERATE_MODEL
+from google.genai import types as _gtypes
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -27,6 +30,15 @@ class CreateDraftRequest(BaseModel):
 class PatchDraftRequest(BaseModel):
     prompt_text: str | None = None
     system_instruction: str | None = None
+
+class RunTestRequest(BaseModel):
+    chart_id: int
+
+class AdminEvalRequest(BaseModel):
+    log_id: str
+    score_overall: float | None = None
+    dimensions: dict | None = None
+    notes: str | None = None
 
 
 @router.get("/analytics")
@@ -139,3 +151,200 @@ def patch_draft(id: str, body: PatchDraftRequest, _user: str = Depends(require_a
     if updates:
         db_update_prompt_version(id, **updates)
     return db_get_prompt_version(id)
+
+# ── AI evaluation helper ───────────────────────────────────────────
+
+def _run_ai_evaluation(test_log_id, test_response, version_id, deployed_log):
+    results = []
+
+    abs_prompt = f"""请对以下占星 AI 分析输出进行质量评估。
+
+【输出内容】
+{test_response[:3000]}
+
+请以 JSON 格式返回：
+{{
+  "score_overall": <1-5的浮点数>,
+  "dimensions": {{"accuracy": <1-5>, "readability": <1-5>, "astro_quality": <1-5>}},
+  "notes": "<100字以内的综合评价>",
+  "suggestions": ["<改进建议1>", "<改进建议2>"]
+}}"""
+
+    try:
+        resp = rag.client.models.generate_content(
+            model=GENERATE_MODEL,
+            contents=abs_prompt,
+            config=_gtypes.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
+        data = json.loads(resp.text)
+        eval_id = uuid.uuid4().hex[:16]
+        db_insert_prompt_evaluation(
+            id_=eval_id, log_id=test_log_id, version_id=version_id,
+            evaluator_type="ai_absolute",
+            score_overall=data.get("score_overall"),
+            dimensions=json.dumps(data.get("dimensions"), ensure_ascii=False),
+            notes=data.get("notes"),
+            suggestions=json.dumps(data.get("suggestions", []), ensure_ascii=False),
+        )
+        results.append({"type": "ai_absolute", **data})
+    except Exception as e:
+        print(f"[eval] ai_absolute failed: {e}")
+
+    if deployed_log:
+        cmp_prompt = f"""请对比以下两个版本的占星 AI 分析输出质量。
+
+【当前版本（草稿）输出】
+{test_response[:2000]}
+
+【上一版本（线上）输出】
+{(deployed_log.get('response_text') or '')[:2000]}
+
+请以 JSON 格式返回：
+{{
+  "score_overall": <1-5，草稿版本的综合评分>,
+  "dimensions": {{"accuracy": <1-5>, "readability": <1-5>, "astro_quality": <1-5>}},
+  "notes": "<100字以内，对比分析草稿相对上一版本的优劣>",
+  "suggestions": ["<针对草稿的改进建议>"]
+}}"""
+        try:
+            resp = rag.client.models.generate_content(
+                model=GENERATE_MODEL,
+                contents=cmp_prompt,
+                config=_gtypes.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.3,
+                ),
+            )
+            data = json.loads(resp.text)
+            eval_id = uuid.uuid4().hex[:16]
+            db_insert_prompt_evaluation(
+                id_=eval_id, log_id=test_log_id, version_id=version_id,
+                evaluator_type="ai_comparative",
+                score_overall=data.get("score_overall"),
+                dimensions=json.dumps(data.get("dimensions"), ensure_ascii=False),
+                notes=data.get("notes"),
+                suggestions=json.dumps(data.get("suggestions", []), ensure_ascii=False),
+                compared_to_log_id=deployed_log["id"],
+            )
+            results.append({"type": "ai_comparative", "compared_to_log_id": deployed_log["id"], **data})
+        except Exception as e:
+            print(f"[eval] ai_comparative failed: {e}")
+
+    return results
+
+
+# ── Run test endpoint ──────────────────────────────────────────────
+
+@router.post("/prompt-versions/{id}/run-test")
+def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_auth)):
+    version = db_get_prompt_version(id)
+    if not version:
+        raise HTTPException(404, "Version not found")
+    if version["status"] != "draft":
+        raise HTTPException(400, "Only draft versions can be tested")
+
+    chart = db_get_chart(body.chart_id)
+    if not chart:
+        raise HTTPException(404, "Chart not found")
+
+    chart_data = json.loads(chart.get("chart_data") or "{}")
+    caller = version["caller"]
+
+    try:
+        from ..rag.prompt_registry import PROMPTS
+        from ..rag.chart_summary import format_chart_summary
+        cfg = PROMPTS.get(caller, {})
+        chart_summary = format_chart_summary(chart_data)
+
+        draft_prompt = version["prompt_text"]
+        try:
+            class _DefaultDict(dict):
+                def __missing__(self, key): return "{" + key + "}"
+            test_prompt = draft_prompt.format_map(_DefaultDict(chart_summary=chart_summary))
+        except Exception:
+            test_prompt = draft_prompt
+
+        import time
+        t0 = time.time()
+        resp = rag.client.models.generate_content(
+            model=GENERATE_MODEL,
+            contents=test_prompt,
+            config=_gtypes.GenerateContentConfig(
+                system_instruction=version.get("system_instruction") or None,
+                temperature=cfg.get("temperature", 0.5),
+            ),
+        )
+        latency_ms = int((time.time() - t0) * 1000)
+        response_text = getattr(resp, "text", "") or ""
+    except Exception as e:
+        raise HTTPException(500, f"AI call failed: {e}")
+
+    log_id = uuid.uuid4().hex[:16]
+    db_insert_prompt_log(
+        id_=log_id, version_id=id, source="test",
+        input_data=json.dumps({"chart_id": body.chart_id}, ensure_ascii=False),
+        rag_query="", rag_chunks="[]",
+        response_text=response_text[:5000],
+        latency_ms=latency_ms, model_used=GENERATE_MODEL,
+        temperature=cfg.get("temperature", 0.5),
+        finish_reason="STOP", prompt_tokens_est=0, response_tokens_est=0,
+        user_id=None,
+    )
+
+    deployed = db_get_deployed_version(caller)
+    deployed_log = None
+    if deployed:
+        deployed_log = db_get_recent_log_for_version(deployed["id"], source="test")
+        if not deployed_log:
+            deployed_log = db_get_recent_log_for_version(deployed["id"])
+
+    evaluations = _run_ai_evaluation(log_id, response_text, id, deployed_log)
+
+    return {
+        "log_id": log_id,
+        "response_text": response_text,
+        "latency_ms": latency_ms,
+        "evaluations": evaluations,
+        "deployed_response": deployed_log.get("response_text") if deployed_log else None,
+    }
+
+
+# ── Prompt logs + evaluations ──────────────────────────────────────
+
+@router.get("/prompt-logs")
+def list_prompt_logs(
+    version_id: str | None = None,
+    caller: str | None = None,
+    source: str | None = None,
+    limit: int = 50,
+    _user: str = Depends(require_auth),
+):
+    return db_query_prompt_logs(version_id=version_id, caller=caller, source=source, limit=limit)
+
+
+@router.get("/prompt-logs/{log_id}/evaluations")
+def get_log_evaluations(log_id: str, _user: str = Depends(require_auth)):
+    return db_get_evaluations_for_log(log_id)
+
+
+@router.post("/prompt-evaluations")
+def submit_admin_eval(body: AdminEvalRequest, _user: str = Depends(require_auth)):
+    version_id = None
+    try:
+        rows = _turso_query("SELECT version_id FROM prompt_logs WHERE id=?", [body.log_id])
+        version_id = rows[0]["version_id"] if rows else None
+    except Exception:
+        pass
+    eval_id = uuid.uuid4().hex[:16]
+    db_insert_prompt_evaluation(
+        id_=eval_id, log_id=body.log_id, version_id=version_id,
+        evaluator_type="admin",
+        score_overall=body.score_overall,
+        dimensions=json.dumps(body.dimensions, ensure_ascii=False) if body.dimensions else None,
+        notes=body.notes,
+        suggestions=None,
+    )
+    return {"id": eval_id, "status": "ok"}
