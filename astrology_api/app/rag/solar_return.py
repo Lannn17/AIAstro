@@ -4,6 +4,7 @@ app/rag/solar_return.py — Solar Return 规则引擎 + AI 年度报告生成
 from .client import get_last_model_used
 from .retrieval import _parse_json
 from .chat import rag_generate
+from .prompt_registry import PROMPTS as _PROMPTS  # noqa: F401 — registry ref; prompt migration pending
 from ..interpretations.translations import translate_planet
 
 # 权重三档：强=3 / 中=2 / 弱=1，避免细粒度数字导致伪精度排名翻转

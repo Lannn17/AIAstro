@@ -12,6 +12,7 @@ from .prompts import (
     _detect_citations,
 )
 from .chart_summary import format_chart_summary
+from .prompt_registry import PROMPTS as _PROMPTS
 
 
 def generate(query: str, chunks: list[dict]) -> str:
@@ -22,15 +23,8 @@ def generate(query: str, chunks: list[dict]) -> str:
         context_parts.append(f"[片段{i} · 来源: {source}]\n{c['text']}")
 
     context = "\n\n".join(context_parts)
-
-    prompt = f"""以下是来自占星书籍的相关片段：
-
-{context}
-
----
-用户问题：{query}
-
-请根据以上片段回答问题。"""
+    _tmpl = _PROMPTS["generate"]["prompt_template"]
+    prompt = _tmpl.format(context=context, query=query)
 
     response = client.models.generate_content(
         model=GENERATE_MODEL,
@@ -166,25 +160,20 @@ def chat_with_chart(query: str, chart_data: dict, k: int = 5,
             + (f"：{a.get('analysis', '')[:80]}…" if a.get('analysis') else "")
             for a in aspects[:8]
         )
-        base_prompt = f"""用户本命盘：
-
-{chart_summary}
-
-当前行运日期：{date}
-活跃行运相位：
-{aspect_lines}
-
-整体行运综述：{overall[:400] if overall else '（无）'}
-
----
-请结合以上本命盘与当日行运，回答用户问题：{query}"""
+        transit_context_str = (
+            f"\n当前行运日期：{date}\n活跃行运相位：\n{aspect_lines}\n\n"
+            f"整体行运综述：{overall[:400] if overall else '（无）'}"
+        )
+        query_suffix = f"\n请结合以上本命盘与当日行运，回答用户问题：{query}"
     else:
-        base_prompt = f"""用户本命盘：
+        transit_context_str = ""
+        query_suffix = f"\n用户问题：{query}"
 
-{chart_summary}
-
----
-用户问题：{query}"""
+    _tmpl = _PROMPTS["chat_with_chart"]["prompt_template"]
+    base_prompt = _tmpl.format(
+        chart_summary=chart_summary,
+        transit_context=transit_context_str,
+    ) + query_suffix
 
     full_prompt = base_prompt + _build_rag_section(chunks)
     contents = _build_contents(history or [], full_prompt, summary=summary)

@@ -6,6 +6,7 @@ from google.genai import types
 from .client import client, GENERATE_MODEL
 from .retrieval import retrieve, _load, _parse_json
 from .prompts import _clean_source_name, _SYSTEM_PROMPT_UNIFIED
+from .prompt_registry import PROMPTS as _PROMPTS  # noqa: F401 — registry ref; prompt migration pending
 from .chart_summary import format_chart_summary
 
 _EVENT_TYPE_ZH = {

@@ -11,6 +11,7 @@ from .retrieval import retrieve, _load, _parse_json, _index_source
 from .prompts import _clean_source_name
 from .chart_summary import format_chart_summary
 from .chat import rag_generate
+from .prompt_registry import PROMPTS as _PROMPTS
 
 
 def analyze_transits(
@@ -73,22 +74,15 @@ def analyze_transits(
             f" (容许度{orb:.1f}° {applying})"
         )
 
-    prompt = f"""行运日期：{transit_date}
-
-{chart_summary}
-
-【行运行星位置】
-{chr(10).join(planet_lines) or '（无数据）'}
-
-【行运-本命相位】（按容许度排序）
-{chr(10).join(aspect_lines) or '（无相位）'}
-
----
-请根据以上数据，对当日行运给出综合解读：
-1. 整体能量与基调
-2. 重点相位的具体影响（优先分析容许度≤2°的相位）
-3. 机遇与挑战
-4. 建议关注的事项"""
+    planet_lines_str = chr(10).join(planet_lines) or '（无数据）'
+    aspect_lines_str = chr(10).join(aspect_lines) or '（无相位）'
+    _tmpl = _PROMPTS["transits_single"]["prompt_template"]
+    prompt = _tmpl.format(
+        transit_date=transit_date,
+        chart_summary=chart_summary,
+        planet_lines_str=planet_lines_str,
+        aspect_lines_str=aspect_lines_str,
+    )
 
     answer, sources = rag_generate(query, prompt)
     return {
@@ -198,65 +192,25 @@ def analyze_active_transits_full(
 
     if new_transits:
         new_block = "\n\n".join(_line(i, t) for i, t in enumerate(new_transits, 1))
-        prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
-
-{chart_summary}
-
-━━━ 当前所有活跃行运（{query_date}，供整体分析参考） ━━━
-
-{all_block}
-
-━━━ 以下行运需要新的逐相位解读 ━━━
-
-{new_block}{rag_context}
-
-【分析要求】
-
-**对"需要新解读"的每条行运**（约 150-250 字/条）：
-- 结合本命盘中该行星的星座、宫位
-- 说明具体影响的生活领域
-- 若为逆行周期，点明三次过境节奏
-- 给出 tone（顺势/挑战/转化 之一）和 themes（从"事业、感情、家庭、财务、健康、自我成长、人际关系、创意、精神"中选 1-3 个）
-
-**整体行运综述**（约 300-400 字，基于所有活跃行运）：
-- 开头先点出当前阶段主要影响的人生命题（1-2 句）
-- 识别主题叠加（多个相位指向同一领域则标注"已获多重星象确认"）
-- 给出具体行动建议
-- 语言自然，避免机械罗列
-
-JSON 格式返回（aspects 只包含"需要新解读"的行运）：
-{{
-  "aspects": [
-    {{
-      "key": "<与上方 key 完全一致>",
-      "analysis": "<150-250字解读>",
-      "tone": "<顺势|挑战|转化>",
-      "themes": ["<主题1>", "<主题2>"]
-    }}
-  ],
-  "overall": "<整体综述>",
-  {source_refs_schema}
-}}
-"""
+        _tmpl_new = _PROMPTS["transits_full_new"]["prompt_template"]
+        prompt = _tmpl_new.format(
+            chart_summary=chart_summary,
+            query_date=query_date,
+            all_block=all_block,
+            new_block=new_block,
+            rag_context=rag_context,
+            source_refs_schema=source_refs_schema,
+        )
     else:
         # 全部命中缓存，只需生成 overall
-        prompt = f"""你是一位经验丰富的职业占星师，精通西方占星学的行运分析。
-
-{chart_summary}
-
-━━━ 当前所有活跃行运（{query_date}） ━━━
-
-{all_block}{rag_context}
-
-请提供整体行运综述（约 300-400 字）：
-- 开头先点出当前阶段主要影响的人生命题（1-2 句）
-- 识别主题叠加（多个相位指向同一领域则标注"已获多重星象确认"）
-- 给出具体行动建议
-- 语言自然，避免机械罗列
-
-JSON 格式返回：
-{{"overall": "<整体综述>", {source_refs_schema}}}
-"""
+        _tmpl_sum = _PROMPTS["transits_full_summary"]["prompt_template"]
+        prompt = _tmpl_sum.format(
+            chart_summary=chart_summary,
+            query_date=query_date,
+            all_block=all_block,
+            rag_context=rag_context,
+            source_refs_schema=source_refs_schema,
+        )
 
     # ── 6. 调用 Gemini ──
     response = client.models.generate_content(

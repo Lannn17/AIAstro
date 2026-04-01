@@ -8,6 +8,7 @@ from google.genai import types
 from .client import client, GENERATE_MODEL, get_last_model_used
 from .retrieval import retrieve, _load, _parse_json
 from .prompts import _clean_source_name
+from .prompt_registry import PROMPTS as _PROMPTS
 from ..interpretations.translations import translate_planet, translate_sign
 
 _SYNASTRY_OUTPUT_SCHEMA = {
@@ -138,22 +139,9 @@ def analyze_synastry(
         "cross_aspects": enriched_aspects,
     }
 
-    prompt = f"""你是专业占星师，请根据以下两人的完整星盘数据进行合盘分析。
-{rag_context}
-【数据】
-{json.dumps(context, ensure_ascii=False, indent=2)}
-
-【分析要求】
-1. 识别1-2个关系质感标签（从给定列表中选择），并用一句话说明依据
-2. 评估最可能自然形成的关系类型Top 3，给出0-100概率分，引用具体相位作为证据（最多3条），用2-3句话描述
-3. 对六个维度各给出0-100分和分析，分析中必须引用具体行星相位，使用普通用户能理解的语言
-
-注意：
-- 概率分反映"这段关系的能量自然倾向"，不是主观建议
-- 相位的星座背景很重要，请考虑星座特质对相位能量的调整
-- double whammy（双向命中）相位的权重更高
-- Top 3关系类型必须是三种不同的类型，不可重复
-- 请用中文回答"""
+    context_json = json.dumps(context, ensure_ascii=False, indent=2)
+    _tmpl = _PROMPTS["analyze_synastry"]["prompt_template"]
+    prompt = _tmpl.format(rag_context=rag_context, context_json=context_json)
 
     # ── 5. 调用 Gemini（强制 JSON schema）──
     response = client.models.generate_content(
