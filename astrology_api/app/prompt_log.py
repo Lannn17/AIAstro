@@ -17,6 +17,7 @@ class PromptLogEntry:
 
     # 调用方
     caller: str = ""
+    version_id: str = ""
 
     # 输入
     model: str = ""

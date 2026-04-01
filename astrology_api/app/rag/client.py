@@ -12,6 +12,7 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from ..prompt_log import PromptLogEntry, prompt_store
+from ..prompt_version_cache import get_version_id as _get_version_id
 
 load_dotenv()
 
@@ -161,6 +162,7 @@ class _ModelsWithFallback:
             caller=self._guess_caller(),
             temperature=getattr(config, 'temperature', 0) if config else 0,
         )
+        entry.version_id = _get_version_id(entry.caller) or ""
         sys_inst, prompt_text = self._extract_prompt_text(contents, config)
         entry.system_instruction = sys_inst
         entry.prompt_text = prompt_text
@@ -198,6 +200,7 @@ class _ModelsWithFallback:
                 entry.response_tokens_est = len(text) // 2
                 entry.latency_ms = int((time.time() - t0) * 1000)
                 prompt_store.append(entry)
+                _persist_prompt_log(entry)
                 return _DeepSeekResponse(text)
             except Exception as e:
                 print(f"[DeepSeek] failed, falling back to Gemini: {e}", flush=True)
@@ -218,6 +221,7 @@ class _ModelsWithFallback:
                 entry.response_tokens_est = len(entry.response_text) // 2
                 entry.latency_ms = int((time.time() - t0) * 1000)
                 prompt_store.append(entry)
+                _persist_prompt_log(entry)
                 return resp
 
             except Exception as e:
@@ -229,11 +233,13 @@ class _ModelsWithFallback:
                 entry.response_text = f"ERROR: {e}"
                 entry.latency_ms = int((time.time() - t0) * 1000)
                 prompt_store.append(entry)
+                _persist_prompt_log(entry)
                 raise
 
         entry.response_text = f"ALL_FAILED: {last_err}"
         entry.latency_ms = int((time.time() - t0) * 1000)
         prompt_store.append(entry)
+        _persist_prompt_log(entry)
         raise last_err
 
     def __getattr__(self, name):
@@ -251,3 +257,26 @@ class _ClientWithFallback:
 
 
 client = _ClientWithFallback(_raw_client)
+
+def _persist_prompt_log(entry) -> None:
+    try:
+        import json as _json, uuid as _uuid
+        from ..db import db_insert_prompt_log
+        db_insert_prompt_log(
+            id_=_uuid.uuid4().hex[:16],
+            version_id=entry.version_id or None,
+            source="production",
+            input_data=None,
+            rag_query=entry.rag_query,
+            rag_chunks=_json.dumps(entry.rag_chunks, ensure_ascii=False)[:4000],
+            response_text=entry.response_text[:5000],
+            latency_ms=entry.latency_ms,
+            model_used=entry.model_used,
+            temperature=entry.temperature,
+            finish_reason=entry.finish_reason,
+            prompt_tokens_est=entry.prompt_tokens_est,
+            response_tokens_est=entry.response_tokens_est,
+            user_id=None,
+        )
+    except Exception as e:
+        print(f"[PromptLog] persist failed: {e}", flush=True)
