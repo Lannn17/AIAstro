@@ -13,8 +13,8 @@ Plan: `docs/superpowers/plans/2026-04-01-prompt-log-backend-plan.md`
 | 1 | Create `prompt_registry.py` | ✅ Done |
 | 2 | Refactor `planets.py` | ✅ Done |
 | 3 | Refactor `transit.py` | ✅ Done |
-| 4 | Refactor `chat.py`, `synastry.py`, `solar_return.py`, `rectification.py` | 🔄 In Progress |
-| 5 | Add 4 DB tables to `db.py` | ⬜ Pending |
+| 4 | Refactor `chat.py`, `synastry.py`, `solar_return.py`, `rectification.py` | ✅ Done |
+| 5 | Add 4 DB tables to `db.py` | 🔄 In Progress |
 | 6 | Add DB helpers for prompt_versions (+ `_turso_query` wrapper) | ⬜ Pending |
 | 7 | Add DB helpers for prompt_logs, prompt_evaluations, user_feedback | ⬜ Pending |
 | 8 | Add `_deployed_version_cache` + startup warm-up | ⬜ Pending |
@@ -54,6 +54,22 @@ Plan: `docs/superpowers/plans/2026-04-01-prompt-log-backend-plan.md`
 - 实际 prompt 结构与注册表模板差异较大（不同占位符名称、内嵌 JSON schema）
 - 计划：只添加 import，暂不替换 prompt（避免行为变化）；后续可单独迁移
 
+**Task 4 完整收尾：**
+- `solar_return.py` + `rectification.py`：添加 import（`from .prompt_registry import PROMPTS as _PROMPTS`），prompt 体保留原样（模板结构差异太大，后续单独迁移）
+
+---
+
+## Checkpoint — Task 5 进行中
+
+**Task 5 — `db.py` 添加 4 张新表**
+
+已完成：
+- 在 `_CREATE_SR_CACHE` 之后添加 4 个 DDL 常量：`_CREATE_PROMPT_VERSIONS`, `_CREATE_PROMPT_LOGS`, `_CREATE_PROMPT_EVALUATIONS`, `_CREATE_USER_FEEDBACK`
+- 将 4 个常量加入 `create_tables()` 的 for 循环列表
+
+待完成：
+- 语法验证 + commit
+
 ### 下一步
 
-完成 Task 4 剩余部分（加 import），然后进入 Task 5：为 `db.py` 添加 4 张新表的 DDL。
+完成 Task 5 commit → Task 6：添加 `_turso_query` wrapper + `db_insert_prompt_version` 等 helper 函数。
