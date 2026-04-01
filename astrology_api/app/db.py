@@ -101,6 +101,65 @@ CREATE TABLE IF NOT EXISTS solar_return_cache (
 )
 """
 
+_CREATE_PROMPT_VERSIONS = """
+CREATE TABLE IF NOT EXISTS prompt_versions (
+    id TEXT PRIMARY KEY,
+    caller TEXT NOT NULL,
+    version_tag TEXT NOT NULL,
+    prompt_text TEXT NOT NULL,
+    system_instruction TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at TEXT NOT NULL,
+    deployed_at TEXT,
+    UNIQUE(caller, version_tag)
+)
+"""
+
+_CREATE_PROMPT_LOGS = """
+CREATE TABLE IF NOT EXISTS prompt_logs (
+    id TEXT PRIMARY KEY,
+    version_id TEXT,
+    source TEXT NOT NULL,
+    input_data TEXT,
+    rag_query TEXT,
+    rag_chunks TEXT,
+    response_text TEXT,
+    latency_ms INTEGER,
+    model_used TEXT,
+    temperature REAL,
+    finish_reason TEXT,
+    prompt_tokens_est INTEGER,
+    response_tokens_est INTEGER,
+    user_id TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
+_CREATE_PROMPT_EVALUATIONS = """
+CREATE TABLE IF NOT EXISTS prompt_evaluations (
+    id TEXT PRIMARY KEY,
+    log_id TEXT NOT NULL,
+    version_id TEXT,
+    compared_to_log_id TEXT,
+    evaluator_type TEXT NOT NULL,
+    score_overall REAL,
+    dimensions TEXT,
+    notes TEXT,
+    suggestions TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
+_CREATE_USER_FEEDBACK = """
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id TEXT PRIMARY KEY,
+    caller TEXT,
+    content TEXT NOT NULL,
+    user_id TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,7 +286,9 @@ def _has_column(table: str, column: str) -> bool:
 def create_tables():
     for ddl in [_CREATE_TABLE, _CREATE_TRANSIT_CACHE, _CREATE_TRANSIT_OVERALL,
                 _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS,
-                _CREATE_LIFE_EVENTS, _CREATE_SR_CACHE]:
+                _CREATE_LIFE_EVENTS, _CREATE_SR_CACHE,
+                _CREATE_PROMPT_VERSIONS, _CREATE_PROMPT_LOGS,
+                _CREATE_PROMPT_EVALUATIONS, _CREATE_USER_FEEDBACK]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
