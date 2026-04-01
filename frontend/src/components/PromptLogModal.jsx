@@ -1,23 +1,31 @@
 import { useState } from 'react'
 import { apiFetch } from '../utils/apiFetch'
+import { useAuth } from '../contexts/AuthContext'
 
 const CALLERS = ['', 'analyze_planets', 'analyze_transits', 'analyze_synastry', 'analyze_progressions', 'solar_return']
 
 export default function PromptLogModal({ onClose }) {
+  const { authHeaders } = useAuth()
   const [logs, setLogs] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [caller, setCaller] = useState('')
   const [expanded, setExpanded] = useState(null)
 
   async function fetchLogs() {
     setLoading(true)
+    setError(null)
     try {
       const q = caller ? `?caller=${caller}` : ''
-      const res = await apiFetch(`/api/debug/admin/prompts${q}`)
-      if (!res.ok) throw new Error(`${res.status}`)
+      const res = await apiFetch(`/api/debug/admin/prompts${q}`, { headers: authHeaders() })
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`${res.status}: ${body}`)
+      }
       setLogs(await res.json())
       setExpanded(null)
     } catch (e) {
+      setError(e.message)
       setLogs([])
     } finally {
       setLoading(false)
@@ -53,11 +61,14 @@ export default function PromptLogModal({ onClose }) {
 
         {/* List */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
-          {!logs && (
+          {!logs && !error && (
             <div style={{ color: '#5555aa', fontSize: '0.82rem', padding: '24px', textAlign: 'center' }}>点击「查询」加载日志</div>
           )}
-          {logs?.length === 0 && (
-            <div style={{ color: '#5555aa', fontSize: '0.82rem', padding: '24px', textAlign: 'center' }}>暂无记录</div>
+          {error && (
+            <div style={{ color: '#cc4444', fontSize: '0.82rem', padding: '24px', textAlign: 'center' }}>请求失败：{error}</div>
+          )}
+          {!error && logs?.length === 0 && (
+            <div style={{ color: '#5555aa', fontSize: '0.82rem', padding: '24px', textAlign: 'center' }}>暂无记录（后端重启后内存会清空）</div>
           )}
           {logs?.map(log => (
             <div key={log.id} style={{ borderBottom: '1px solid #1a1a3a' }}>
