@@ -329,6 +329,13 @@ def create_tables():
         else:
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(_MIGRATE_PLANET_CACHE_MODEL)
+        # Warm the deployed-version cache
+    try:
+        from .prompt_version_cache import warm_cache
+        warm_cache(db_get_all_deployed_versions())
+        print("[DB] prompt_version_cache warmed")
+    except Exception as e:
+        print(f"[WARN] Failed to warm prompt_version_cache: {e}")
 
 def db_list_charts() -> list[dict]:
     sql = (
