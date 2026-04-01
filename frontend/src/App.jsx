@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import './index.css'
 import NatalChart from './pages/NatalChart'
 import Transits from './pages/Transits'
@@ -10,9 +10,15 @@ import Directions from './pages/Directions'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ChartSessionProvider, useChartSession } from './contexts/ChartSessionContext'
 import { RegionProvider, useRegion } from './contexts/RegionContext'
-import WelcomeModal from "./components/WelcomeModal";  // ← 加这行
+import WelcomeModal from "./components/WelcomeModal"
 import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
+import { PromptRatingProvider } from './contexts/PromptRatingContext'
+import PromptRatingModal from './components/PromptRatingModal'
+import { usePromptRating } from './contexts/PromptRatingContext'
+import FeedbackButton from './components/FeedbackButton'
+import AdminPrompts from './pages/AdminPrompts'
+import AdminPromptDetail from './pages/AdminPromptDetail'
 
 const NAV_ITEMS = [
   { path: '/',              label: '星盘' },
@@ -148,9 +154,52 @@ function RegionToggle() {
   )
 }
 
+function InterceptedNavLink({ path, label }) {
+  const { pendingLogId } = usePromptRating()
+  const navigate = useNavigate()
+  const [showRating, setShowRating] = useState(false)
+
+  function handleClick(e) {
+    if (pendingLogId) {
+      e.preventDefault()
+      setShowRating(true)
+    }
+  }
+
+  return (
+    <>
+      <NavLink
+        to={path}
+        end={path === '/'}
+        style={navLinkStyle}
+        onClick={handleClick}
+      >
+        {label}
+      </NavLink>
+      {showRating && (
+        <PromptRatingModal
+          onClose={() => {
+            setShowRating(false)
+            navigate(path)
+          }}
+          onProceed={() => {
+            setShowRating(false)
+            navigate(path)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
 function AppInner() {
-  const { sessionKey } = useAuth()
+  const { sessionKey, isAuthenticated, isAdmin } = useAuth()
   const { clearSessionCharts } = useChartSession()
+
+  const navItems = [
+    ...NAV_ITEMS,
+    ...(isAuthenticated && isAdmin ? [{ path: '/admin/prompts', label: '管理' }] : []),
+  ]
 
   useEffect(() => {
     clearSessionCharts()
@@ -158,6 +207,7 @@ function AppInner() {
 
   return (
     <BrowserRouter>
+      <PromptRatingProvider>
       <LoginModal />
       <WelcomeModal />
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a1a' }}>
@@ -179,15 +229,8 @@ function AppInner() {
 
             {/* Nav tabs */}
             <nav className="app-nav">
-              {NAV_ITEMS.map(({ path, label }) => (
-                <NavLink
-                  key={path}
-                  to={path}
-                  end={path === '/'}
-                  style={navLinkStyle}
-                >
-                  {label}
-                </NavLink>
+              {navItems.map(({ path, label }) => (
+                <InterceptedNavLink key={path} path={path} label={label} />
               ))}
             </nav>
 
@@ -208,10 +251,14 @@ function AppInner() {
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
             <Route path="/admin"         element={<Analytics />} />
+            <Route path="/admin/prompts"  element={<AdminPrompts />} />
+            <Route path="/admin/prompts/:id" element={<AdminPromptDetail />} />
           </Routes>
         </main>
 
+      <FeedbackButton />
       </div>
+      </PromptRatingProvider>
     </BrowserRouter>
   )
 }

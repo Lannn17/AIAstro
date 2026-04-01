@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '../utils/apiFetch'
+import { usePromptRating } from '../contexts/PromptRatingContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -16,6 +17,7 @@ export function useInterpret(endpoint) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const { registerResult } = usePromptRating()
 
   async function run(body, extraHeaders = {}) {
     setLoading(true)
@@ -34,6 +36,12 @@ export function useInterpret(endpoint) {
       }
       const json = await res.json()
       setResult(json)
+
+      // 注册 log_id 到评分 context，用于导航拦截
+      if (json?.log_id) {
+        registerResult(json.log_id)
+      }
+
       return json          // caller can use result immediately without waiting for re-render
     } catch (e) {
       setError(e.message)

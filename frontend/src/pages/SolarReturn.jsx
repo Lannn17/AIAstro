@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import LocationSearch from '../components/LocationSearch'
 import { SourcesSection } from '../components/AIPanel'
 import { useAuth } from '../contexts/AuthContext'
+import { usePromptRating } from '../contexts/PromptRatingContext'
 import ReactMarkdown from 'react-markdown'
 import { apiFetch } from '../utils/apiFetch'
 
@@ -29,6 +30,7 @@ const THEME_NAMES = {
 
 export default function SolarReturn() {
   const { isAuthenticated, authHeaders } = useAuth()
+  const { registerResult } = usePromptRating()
   const [savedCharts, setSavedCharts] = useState([])
   const [selectedChartId, setSelectedChartId] = useState('')
   const [selectedChart, setSelectedChart] = useState(null)
@@ -177,7 +179,11 @@ export default function SolarReturn() {
         }),
       })
       if (!res.ok) throw new Error(`报告生成失败: ${res.status}`)
-      setReport(await res.json())
+      const reportData = await res.json()
+      setReport(reportData)
+      if (reportData?.log_id) {
+        registerResult(reportData.log_id)
+      }
     } catch (err) {
       setError(err.message || '报告生成失败')
     } finally {
