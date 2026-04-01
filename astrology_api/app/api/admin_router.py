@@ -348,3 +348,79 @@ def submit_admin_eval(body: AdminEvalRequest, _user: str = Depends(require_auth)
         suggestions=None,
     )
     return {"id": eval_id, "status": "ok"}
+
+# ── Deploy, revise, compare ────────────────────────────────────────
+
+@router.post("/prompt-versions/{id}/deploy")
+def deploy_version(id: str, _user: str = Depends(require_auth)):
+    version = db_get_prompt_version(id)
+    if not version:
+        raise HTTPException(404, "Not found")
+    if version["status"] != "draft":
+        raise HTTPException(400, "Only draft can be deployed")
+
+    caller = version["caller"]
+    all_versions = db_list_prompt_versions(caller=caller)
+    major_tags = [
+        int(v["version_tag"].lstrip("v"))
+        for v in all_versions
+        if v["version_tag"].startswith("v") and "." not in v["version_tag"]
+        and v["version_tag"].lstrip("v").isdigit()
+    ]
+    next_major = max(major_tags, default=0) + 1
+    new_tag = f"v{next_major}"
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    deployed = db_get_deployed_version(caller)
+    if deployed:
+        db_update_prompt_version(deployed["id"], status="retired")
+
+    db_update_prompt_version(id, status="deployed", version_tag=new_tag, deployed_at=now)
+    _cache_set(caller, id)
+
+    return db_get_prompt_version(id)
+
+
+@router.post("/prompt-versions/{id}/revise")
+def revise_version(id: str, _user: str = Depends(require_auth)):
+    version = db_get_prompt_version(id)
+    if not version:
+        raise HTTPException(404, "Not found")
+    if version["status"] != "draft":
+        raise HTTPException(400, "Only draft can be revised")
+
+    caller = version["caller"]
+    current_tag = version["version_tag"]
+
+    parts = current_tag.split(".")
+    base = parts[0]
+    minor = int(parts[1]) if len(parts) > 1 else 0
+    new_tag = f"{base}.{minor + 1}"
+
+    db_update_prompt_version(id, status="superseded")
+
+    new_id = uuid.uuid4().hex[:16]
+    db_insert_prompt_version(
+        id_=new_id,
+        caller=caller,
+        version_tag=new_tag,
+        prompt_text=version["prompt_text"],
+        system_instruction=version.get("system_instruction"),
+        status="draft",
+    )
+    return db_get_prompt_version(new_id)
+
+
+@router.get("/prompt-versions/{id}/compare")
+def compare_versions(id: str, _user: str = Depends(require_auth)):
+    version = db_get_prompt_version(id)
+    if not version:
+        raise HTTPException(404, "Not found")
+    deployed = db_get_deployed_version(version["caller"])
+    return {
+        "draft": version,
+        "deployed": deployed,
+        "draft_evaluations": db_get_evaluations_for_version(id),
+        "deployed_evaluations": db_get_evaluations_for_version(deployed["id"]) if deployed else [],
+    }
