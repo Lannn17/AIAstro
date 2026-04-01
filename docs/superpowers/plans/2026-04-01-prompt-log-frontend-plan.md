@@ -899,7 +899,7 @@ export default function AdminPromptDetail() {
     setRevising(true)
     try {
       const resp = await fetch(`/api/admin/prompt-versions/${id}/revise`, {
-        method: 'POST', headers: authHeaders,
+        method: 'POST', headers: authHeaders(),
       })
       const newVersion = await resp.json()
       navigate(`/admin/prompts/${newVersion.id}`)
@@ -913,7 +913,7 @@ export default function AdminPromptDetail() {
     setDeploying(true)
     try {
       await fetch(`/api/admin/prompt-versions/${id}/deploy`, {
-        method: 'POST', headers: authHeaders,
+        method: 'POST', headers: authHeaders(),
       })
       navigate('/admin/prompts')
     } finally {
