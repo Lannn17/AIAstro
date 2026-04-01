@@ -6,6 +6,7 @@ from google.genai import types
 from .client import client, GENERATE_MODEL, get_last_model_used
 from .retrieval import retrieve, _load, _parse_json
 from .prompts import _clean_source_name, _SYSTEM_PROMPT_UNIFIED
+from .prompt_registry import PROMPTS as _PROMPTS
 from .chart_summary import _SIGN_ELEMENT, _SIGN_MODALITY
 from ..interpretations.translations import translate_planet, translate_sign
 
@@ -235,49 +236,18 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
 天顶 MC（第10宫起点）: {mc_sign}   |  天底 IC（第4宫起点）: {ic_sign}
 """
 
-    prompt = f"""请为以下本命盘行星位置分别生成占星解读，并在最后给出四交点解读和综合概述。
-
-上升星座：{asc_sign}
-{angles_section}
-行星位置：
-{planet_list}
-
-宫位起点星座（用于推算飞星/守护星落位）：
-{house_summary}
-
-主要相位：
-{aspect_summary}{facts_section}
-
-分析要求——每颗行星必须同时结合以下维度：
-1. 【星座特质】该行星在此星座的表达方式与能量底色
-2. 【宫位主题】该宫位代表的人生领域，以及行星如何在此显化
-3. 【飞星影响】该行星所在星座的守护星落在哪个宫位，形成何种能量流向；若行星本身也是某宫主星，一并说明其飞入他宫的含义
-4. 若有重要相位（容许度<4°），简述其对该行星能量的加强或挑战
-5. 逆行行星需特别说明内化/重新审视的主题
-
-每颗行星 80-120 字，风格专业简洁，直接指向对当事人的影响。
-
-四交点分析要求（asc/dsc/mc/ic）：
-- asc（上升 {asc_sign}）：外在气质、第一印象、身体与外貌特征，80-120 字
-- dsc（下降 {dsc_sign}）：理想伴侣特质、人际关系模式与吸引规律，80-120 字
-- mc（天顶 {mc_sign}）：职业方向、社会形象与人生志向，80-120 字
-- ic（天底 {ic_sign}）：家庭底色、童年环境与内心安全感来源，80-120 字
-
-综合概述（overall）为结构化对象，包含以下字段：
-- tags: 字符串数组，**必须优先使用上方【确定性事实】中列出的标签**，再补充 AI 判断的其他特征（如「命主星逆行」「日月形成对冲」等），共 3-6 个
-- summary: 主要人生命题、核心潜力与成长方向，100-150 字
-- career: 学业与事业领域分析，列出支持该结论的具体行星/宫位依据，80-100 字
-- love: 恋爱与家庭领域分析，附占星依据，80-100 字
-- wealth: 财富与物质领域分析，附占星依据，80-100 字
-- health: 健康与身体领域分析，附占星依据，60-80 字
-
-**必须为以上列出的每一颗行星（包括凯龙、北交点、南交点、莉莉丝等小行星）生成解读，不得遗漏任何一个。**
-**必须为四交点（asc/dsc/mc/ic）各生成解读，不得遗漏。**
-
-**严格禁止**在任何行星解读文字（JSON 值）中出现：英文引用原文、书名标注、「参考《...》」格式、或任何引用注记。行星解读必须是纯中文分析文字。引用信息只能通过 source_refs 字段以中文概括表达。
-
-以 JSON 格式返回（严格使用以下 key，每个 key 对应一段解读文字，overall 为嵌套对象；source_refs 仅填写实际引用的参考编号）：
-{json_template}{rag_context}"""
+    _tmpl = _PROMPTS["interpret_planets"]["prompt_template"]
+    prompt = _tmpl.format(
+        asc_sign=asc_sign,
+        dsc_sign=dsc_sign,
+        mc_sign=mc_sign,
+        ic_sign=ic_sign,
+        angles_section=angles_section,
+        planet_list=planet_list,
+        house_summary=house_summary,
+        aspect_summary=aspect_summary,
+        facts_section=facts_section,
+    ) + json_template + rag_context
 
     response = client.models.generate_content(
         model=GENERATE_MODEL,
