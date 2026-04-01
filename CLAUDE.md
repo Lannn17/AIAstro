@@ -12,8 +12,23 @@
 - **后端需要重启时自动执行**：凡后端代码有改动、或用户提到后端无响应/需要重启，自动运行 kill+restart 命令并通知用户"后端已重启"。Kill 命令：`for /f "tokens=5" %a in ('netstat -ano ^| findstr :8001') do taskkill /F /PID %a`，然后在 `astrology_api/` 目录启动 uvicorn。
 - **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
 - 不要自行修改代码中的格式问题
+- 严格执行进度管理和token控制规则,避免中断再开后重读大段context,避免任务进程中的其他重读.
 
 ---
+
+## 进度管理规则
+- 每完成一个主要步骤后，立即更新 PROGRESS.md
+- 长任务每完成 3-5 步主动写一次 checkpoint
+- PROGRESS.md 必须包含：已完成的改动（具体文件+改了什么）、未完成的步骤、当前问题或关键决策、下一步从哪里开始
+- 如果我说"写进度"或"存档"，立即将当前完整状态写入 PROGRESS.md
+- 新会话开始时，如果存在 PROGRESS.md，先读取它再开始工作
+
+## Token 控制规则
+- 不要一次性读取超过 5 个文件
+- 优先用 grep 定位再精确读取，不要整个文件全读
+- 每完成 3 个 task 写一次 PROGRESS.md
+- 自主执行，不需要每步确认
+- 每完成一个 task 用中文一句话告诉我改了什么
 
 ## 工作流程 / Workflow
 
@@ -109,7 +124,7 @@ RAG 知识增强：调用 Qdrant 检索相关书籍片段，拼入 prompt 作为
  sources 数据已从 API 响应中正确传递到组件 props
 
 ## Current version / 当前版本
-v0.8.0 — 太阳回归完整功能 + 用户注册 + CN 地区 DeepSeek 切换 + 本命盘 tag tooltip + 行星解读重新生成 + Prompt 可观测性 debug 接口。
+v0.8.1 — Prompt 注册表 + DB 持久化基础（prompt_registry + 4 张新表 + rag 模块重构）。
 See CHANGELOG.md for full history.
 
 ## Commands / 命令

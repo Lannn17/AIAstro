@@ -12,6 +12,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.1] - 2026-04-01
+
+### Added
+- **Prompt 注册表** — `astrology_api/app/rag/prompt_registry.py`，12 个 caller key 的 prompt 模板集中管理，作为 prompt 版本化的单一来源
+- **4 张新 DB 表** — `prompt_versions`、`prompt_logs`、`prompt_evaluations`、`user_feedback`，为 prompt 持久化与评分系统做准备
+
+### Changed
+- **RAG 模块重构** — `planets.py`、`transit.py`、`chat.py`、`synastry.py` 改为从 `prompt_registry` 读取模板，消除内联 f-string prompt
+
+---
+
 ## [0.8.0] - 2026-03-31
 
 ### Added

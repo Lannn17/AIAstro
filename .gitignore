@@ -43,7 +43,6 @@ astrology_api/data/
 .claude/
 
 # Task Master / other tool artifacts
-.env.example
 .taskmaster/
 
 # Git worktrees
