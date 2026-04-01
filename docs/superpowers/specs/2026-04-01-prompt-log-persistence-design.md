@@ -298,6 +298,77 @@ CREATE TABLE IF NOT EXISTS user_feedback (
 
 ---
 
+## Prompt Registry（集中式 prompt 管理）
+
+### 目标
+
+将所有业务 prompt 从函数体内联 f-string 抽出，集中到单一文件 `astrology_api/app/rag/prompt_registry.py`，作为：
+1. 人类可读的 prompt 参考（直接看文件即可，无需打开数据库）
+2. Seed 脚本的数据源（首次部署时自动将 `v1` 写入 `prompt_versions`）
+3. 代码运行时的 source of truth（各函数 import 并填入变量）
+
+### 结构
+
+```python
+# astrology_api/app/rag/prompt_registry.py
+
+PROMPTS: dict[str, dict] = {
+    "interpret_planets": {
+        "system_instruction": "你是一位执业25年的西方占星师...",
+        "prompt_template": "请分析以下本命盘行星配置：\n{chart_summary}\n...",
+        "temperature": 0.3,
+        "description": "本命盘逐行星 AI 解读",
+    },
+    "transits_full": {
+        "system_instruction": None,   # 使用 _SYSTEM_PROMPT_UNIFIED 或 None
+        "prompt_template": "行运日期：{transit_date}\n{chart_summary}\n...",
+        "temperature": 0.5,
+        "description": "行运完整分析",
+    },
+    # ... 其余 caller
+}
+```
+
+### 覆盖的 caller
+
+| caller | 当前 prompt 位置 |
+|---|---|
+| `interpret_planets` | `rag/planets.py` |
+| `transits_single` | `rag/transit.py` |
+| `transits_full` | `rag/transit.py` |
+| `chat_with_chart` | `rag/chat.py` |
+| `generate` | `rag/chat.py` |
+| `analyze_synastry` | `rag/synastry.py` |
+| `analyze_solar_return` | `rag/solar_return.py` |
+| `analyze_rectification` | `rag/rectification.py` |
+| `generate_asc_quiz` | `rag/rectification.py` |
+| `calc_confidence` | `rag/rectification.py` |
+| `system` | `rag/prompts.py`（`_SYSTEM_PROMPT_UNIFIED`）|
+
+### 函数改造模式
+
+各函数改为从 registry 取模板后填入本地变量：
+
+```python
+from ..rag.prompt_registry import PROMPTS
+
+tmpl = PROMPTS["interpret_planets"]["prompt_template"]
+prompt = tmpl.format(chart_summary=chart_summary, planet_lines=planet_lines)
+```
+
+### Seed 脚本
+
+`astrology_api/app/db_seed.py`（新增，可独立运行也可在 `create_tables()` 中调用）：
+
+```python
+# 对每个 caller，若 DB 中不存在 status=deployed 的记录，则插入 v1
+for caller, cfg in PROMPTS.items():
+    if not _has_deployed_version(caller):
+        insert_prompt_version(caller, "v1", cfg["prompt_template"], cfg["system_instruction"])
+```
+
+---
+
 ## 迁移说明
 
 - `prompt_log.py` 的内存 `prompt_store` 保留，用于实时 debug 查看（现有 debug_router 接口不变）
