@@ -330,6 +330,20 @@ def create_tables():
             with sqlite3.connect(_db_path) as conn:
                 conn.execute(_MIGRATE_PLANET_CACHE_MODEL)
         # Warm the deployed-version cache
+    
+        # Seed v1 from prompt_registry
+    try:
+        from .db_seed import seed_prompt_versions
+        seed_prompt_versions()
+    except Exception as e:
+        print(f"[WARN] Seed failed: {e}")
+    # Re-warm cache after seeding
+    try:
+        from .prompt_version_cache import warm_cache
+        warm_cache(db_get_all_deployed_versions())
+    except Exception as e:
+        print(f"[WARN] Re-warm after seed failed: {e}")
+        
     try:
         from .prompt_version_cache import warm_cache
         warm_cache(db_get_all_deployed_versions())
