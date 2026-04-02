@@ -89,6 +89,7 @@ export default function ChartForm({ onSubmit, loading, initialData, onFormChange
     day: String(initialData.day ?? ''),
     hour: String(initialData.hour ?? ''),
     minute: String(initialData.minute ?? ''),
+    birth_time_confirmed: initialData.birth_time_confirmed ?? false,
     latitude: String(initialData.latitude ?? ''),
     longitude: String(initialData.longitude ?? ''),
     tz_str: initialData.tz_str || 'Asia/Shanghai',
@@ -101,6 +102,7 @@ export default function ChartForm({ onSubmit, loading, initialData, onFormChange
     day: '',
     hour: '',
     minute: '',
+    birth_time_confirmed: false,
     latitude: '',
     longitude: '',
     tz_str: 'Asia/Shanghai',
@@ -145,6 +147,7 @@ export default function ChartForm({ onSubmit, loading, initialData, onFormChange
       minute: parseInt(form.minute),
       latitude: parseFloat(form.latitude),
       longitude: parseFloat(form.longitude),
+      birth_time_confirmed: form.birth_time_confirmed,
     }, locationName)
   }
 
@@ -196,6 +199,35 @@ export default function ChartForm({ onSubmit, loading, initialData, onFormChange
             <input style={inputStyle} type="number" min="0" max="59" placeholder="0–59" required
               value={form.minute} onChange={e => set('minute', e.target.value)} />
           </div>
+        </div>
+
+        {/* Birth time confirmation checkbox */}
+        <div style={{
+          borderRadius: '6px',
+          padding: '10px 12px',
+          backgroundColor: '#0d0d22',
+          border: '1px solid #2a2a5a',
+        }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={form.birth_time_confirmed}
+              onChange={e => set('birth_time_confirmed', e.target.checked)}
+              style={{ marginTop: '2px', accentColor: '#c9a84c', flexShrink: 0, cursor: 'pointer' }}
+            />
+            <span style={{ color: '#c8c8e8', fontSize: '0.8rem', lineHeight: 1.5 }}>
+              我确认此出生时间精确到分钟
+            </span>
+          </label>
+          {form.birth_time_confirmed ? (
+            <p style={{ margin: '6px 0 0 24px', color: '#6a8a6a', fontSize: '0.72rem', lineHeight: 1.5 }}>
+              感谢确认。此数据可能被匿名收集，用于训练出生时间校正模型，以提升未来的校正精准度。
+            </p>
+          ) : (
+            <p style={{ margin: '6px 0 0 24px', color: '#8888aa', fontSize: '0.72rem', lineHeight: 1.5 }}>
+              若不确定出生时间，建议前往「<span style={{ color: '#c9a84c' }}>方向法</span>」页面使用出生时间校正功能，通过生命事件反推更准确的出生时刻。
+            </p>
+          )}
         </div>
 
         {/* Location search */}
