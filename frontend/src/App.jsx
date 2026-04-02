@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import './index.css'
 import NatalChart from './pages/NatalChart'
@@ -45,7 +45,7 @@ const navLinkStyle = ({ isActive }) => ({
 })
 
 function UserBadge() {
-  const { isAuthenticated, isGuest, username, logout, setShowLoginModal } = useAuth()
+  const { isAuthenticated, username, logout } = useAuth()
 
   if (isAuthenticated) {
     return (
@@ -72,28 +72,6 @@ function UserBadge() {
           退出
         </button>
       </div>
-    )
-  }
-
-  if (isGuest) {
-    return (
-      <button
-        onClick={() => setShowLoginModal(true)}
-        title="点击登录"
-        style={{
-          flexShrink: 0,
-          padding: '5px 12px',
-          backgroundColor: 'transparent',
-          border: '1px solid #4a3a1a',
-          borderRadius: '6px',
-          color: '#c9a84c',
-          fontSize: '0.78rem',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        访客 · 登录
-      </button>
     )
   }
 
@@ -250,9 +228,9 @@ function AppInner() {
             <Route path="/progressions"  element={<Progressions />} />
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
-            <Route path="/admin"         element={<Analytics />} />
-            <Route path="/admin/prompts"  element={<AdminPrompts />} />
-            <Route path="/admin/prompts/:id" element={<AdminPromptDetail />} />
+            <Route path="/admin"         element={isAdmin ? <Analytics /> : <Navigate to="/" replace />} />
+            <Route path="/admin/prompts"  element={isAdmin ? <AdminPrompts /> : <Navigate to="/" replace />} />
+            <Route path="/admin/prompts/:id" element={isAdmin ? <AdminPromptDetail /> : <Navigate to="/" replace />} />
           </Routes>
         </main>
 

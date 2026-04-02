@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from ..security import require_auth
+from ..security import require_admin
 from ..db import (
     db_get_analytics_summary, db_get_analytics_records,
     db_list_prompt_versions, db_get_prompt_version,
@@ -42,7 +42,7 @@ class AdminEvalRequest(BaseModel):
 
 
 @router.get("/analytics")
-def get_analytics(_user: str = Depends(require_auth)):
+def get_analytics(_user: str = Depends(require_admin)):
     """返回 query_analytics 的聚合摘要 + 最近200条记录。"""
     return {
         "summary": db_get_analytics_summary(),
@@ -51,7 +51,7 @@ def get_analytics(_user: str = Depends(require_auth)):
 
 
 @router.post("/analytics/report")
-def generate_analytics_report(_user: str = Depends(require_auth)):
+def generate_analytics_report(_user: str = Depends(require_admin)):
     """用 Gemini 生成 RAG 质量分析报告。"""
     summary = db_get_analytics_summary()
     if not summary:
@@ -92,12 +92,12 @@ def generate_analytics_report(_user: str = Depends(require_auth)):
 # ── Prompt versions CRUD ───────────────────────────────────────────
 
 @router.get("/prompt-versions")
-def list_prompt_versions(caller: str | None = None, _user: str = Depends(require_auth)):
+def list_prompt_versions(caller: str | None = None, _user: str = Depends(require_admin)):
     return db_list_prompt_versions(caller=caller)
 
 
 @router.post("/prompt-versions")
-def create_draft(body: CreateDraftRequest, _user: str = Depends(require_auth)):
+def create_draft(body: CreateDraftRequest, _user: str = Depends(require_admin)):
     deployed = db_get_deployed_version(body.caller)
     if deployed:
         base = deployed["version_tag"]
@@ -129,7 +129,7 @@ def create_draft(body: CreateDraftRequest, _user: str = Depends(require_auth)):
 
 
 @router.get("/prompt-versions/{id}")
-def get_prompt_version(id: str, _user: str = Depends(require_auth)):
+def get_prompt_version(id: str, _user: str = Depends(require_admin)):
     v = db_get_prompt_version(id)
     if not v:
         raise HTTPException(404, "Not found")
@@ -137,7 +137,7 @@ def get_prompt_version(id: str, _user: str = Depends(require_auth)):
 
 
 @router.patch("/prompt-versions/{id}")
-def patch_draft(id: str, body: PatchDraftRequest, _user: str = Depends(require_auth)):
+def patch_draft(id: str, body: PatchDraftRequest, _user: str = Depends(require_admin)):
     v = db_get_prompt_version(id)
     if not v:
         raise HTTPException(404, "Not found")
@@ -239,7 +239,7 @@ def _run_ai_evaluation(test_log_id, test_response, version_id, deployed_log):
 # ── Run test endpoint ──────────────────────────────────────────────
 
 @router.post("/prompt-versions/{id}/run-test")
-def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_auth)):
+def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_admin)):
     version = db_get_prompt_version(id)
     if not version:
         raise HTTPException(404, "Version not found")
@@ -320,18 +320,18 @@ def list_prompt_logs(
     caller: str | None = None,
     source: str | None = None,
     limit: int = 50,
-    _user: str = Depends(require_auth),
+    _user: str = Depends(require_admin),
 ):
     return db_query_prompt_logs(version_id=version_id, caller=caller, source=source, limit=limit)
 
 
 @router.get("/prompt-logs/{log_id}/evaluations")
-def get_log_evaluations(log_id: str, _user: str = Depends(require_auth)):
+def get_log_evaluations(log_id: str, _user: str = Depends(require_admin)):
     return db_get_evaluations_for_log(log_id)
 
 
 @router.post("/prompt-evaluations")
-def submit_admin_eval(body: AdminEvalRequest, _user: str = Depends(require_auth)):
+def submit_admin_eval(body: AdminEvalRequest, _user: str = Depends(require_admin)):
     version_id = None
     try:
         rows = _turso_query("SELECT version_id FROM prompt_logs WHERE id=?", [body.log_id])
@@ -352,7 +352,7 @@ def submit_admin_eval(body: AdminEvalRequest, _user: str = Depends(require_auth)
 # ── Deploy, revise, compare ────────────────────────────────────────
 
 @router.post("/prompt-versions/{id}/deploy")
-def deploy_version(id: str, _user: str = Depends(require_auth)):
+def deploy_version(id: str, _user: str = Depends(require_admin)):
     version = db_get_prompt_version(id)
     if not version:
         raise HTTPException(404, "Not found")
@@ -383,7 +383,7 @@ def deploy_version(id: str, _user: str = Depends(require_auth)):
 
 
 @router.post("/prompt-versions/{id}/revise")
-def revise_version(id: str, _user: str = Depends(require_auth)):
+def revise_version(id: str, _user: str = Depends(require_admin)):
     version = db_get_prompt_version(id)
     if not version:
         raise HTTPException(404, "Not found")
@@ -413,7 +413,7 @@ def revise_version(id: str, _user: str = Depends(require_auth)):
 
 
 @router.get("/prompt-versions/{id}/compare")
-def compare_versions(id: str, _user: str = Depends(require_auth)):
+def compare_versions(id: str, _user: str = Depends(require_admin)):
     version = db_get_prompt_version(id)
     if not version:
         raise HTTPException(404, "Not found")

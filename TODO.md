@@ -205,51 +205,13 @@ class QualityGuard:
 
 ## 已知问题
 - ✅ ~~1. 校对分析RAG分析遗留问题(引用未拆分,未出现RAG引用分析模块) -- 所有设置AI分析的端口服务都必须接入rag的分析接口~~
-- 2. 本命盘四交点无分析 --二次测试失败 --flag --排期4.1 --延期4.2
+- ✅ ~~本命盘四交点无分析 --二次测试失败 --flag --排期4.1 --延期4.2~~
 - ✅ ~~缓存标签出现后就无法再知道这段分析的生成模型了 需要将缓存标签和模型标签修复为不互斥 即可以共同显示两个标签~~
-'''
-// 前端：标签不应互斥，改为数组
-interface InterpretationMeta {
-  source: 'live' | 'cached';
-  model?: string;           // "gpt-4o" | "deepseek-v3" | etc.
-  cached_at?: string;       // ISO timestamp
-  generated_at: string;     // 原始生成时间
-  rag_sources_count?: number;
-}
-
-// 组件中渲染多个标签
-function InterpretationBadges({ meta }: { meta: InterpretationMeta }) {
-  return (
-    <div className="flex gap-1.5">
-      {/* 模型标签 — 始终显示 */}
-      {meta.model && (
-        <Badge variant="outline" className="text-xs">
-          {MODEL_DISPLAY_NAMES[meta.model]}
-        </Badge>
-      )}
-      
-      {/* 缓存标签 — 仅缓存时显示 */}
-      {meta.source === 'cached' && (
-        <Badge variant="secondary" className="text-xs">
-          ⚡ 缓存 {meta.cached_at && `· ${formatRelativeTime(meta.cached_at)}`}
-        </Badge>
-      )}
-      
-      {/* RAG 引用标签 */}
-      {meta.rag_sources_count && meta.rag_sources_count > 0 && (
-        <Badge variant="ghost" className="text-xs">
-          📚 {meta.rag_sources_count} 条引用
-        </Badge>
-      )}
-    </div>
-  );
-}
-'''
 - 4. mobile UI本命盘行星界面行星名字未对齐
 - ✅ ~~5. 注册用户密码没必要设置128位,改为最高16位~~
 - ✅ ~~6. 注册后第一次进入界面时行运页面有两个星盘(一个未保存),去掉未保存星盘逻辑~~
 - ✅ ~~注册用户保存的星盘直接存入主数据库,无需管理员核审 -- 此处应和访客逻辑相同,需要管理员核审~~
-- 8. ~~检查和render的部署,为什么还在持续deploy - 已delete service~~
+- ✅ ~~检查和render的部署,为什么还在持续deploy~~ - 已delete service
 - ✅ ~~9. 本命盘标签简析存在为空的情况 未匹配return null,如何更好解决?~~ *(疑似解决)
 - 10. 本命盘标签解析的静态映射完善:当前在解释群星的时候只是笼统说"多颗行星",需要结合用户实际的本命盘把具体是哪些行星填入 --群星解析已详细补充,其他tag依然存在该问题;同样是群星水瓶座,部分用户有具体行星的补充,部分用户依然是多颗行星的笼统描述
 '''

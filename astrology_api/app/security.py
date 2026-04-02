@@ -91,3 +91,11 @@ async def require_auth(token: str = Depends(oauth2_scheme)) -> UserInfo:
         raise HTTPException(status_code=401, detail="令牌已失效，请重新登录")
     except ValueError:
         raise HTTPException(status_code=401, detail="无效的令牌")
+
+
+async def require_admin(token: str = Depends(oauth2_scheme)) -> UserInfo:
+    """Raises 401/403 if not authenticated or not admin."""
+    user = await require_auth(token)
+    if not user["is_admin"]:
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    return user

@@ -8,10 +8,10 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'))
   const [username, setUsername] = useState(() => localStorage.getItem('auth_username') || '')
-  const [isGuest, setIsGuest] = useState(() => localStorage.getItem('guest_mode') === 'true')
+  const [isGuest] = useState(false)
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('is_admin') === 'true')
   const [showLoginModal, setShowLoginModal] = useState(
-    () => !localStorage.getItem('auth_token') && localStorage.getItem('guest_mode') !== 'true'
+    () => !localStorage.getItem('auth_token')
   )
   const [sessionKey, setSessionKey] = useState(0)
 
@@ -23,7 +23,6 @@ export function AuthProvider({ children }) {
     setToken(access_token)
     setIsAdmin(!!admin)
     setUsername(name || '')
-    setIsGuest(false)
     setShowLoginModal(false)
     setSessionKey(k => k + 1)
   }
@@ -62,17 +61,6 @@ export function AuthProvider({ children }) {
     _applyToken(access_token, false, regUsername)
   }
 
-  function continueAsGuest() {
-    localStorage.setItem('guest_mode', 'true')
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('is_admin')
-    setIsGuest(true)
-    setToken(null)
-    setIsAdmin(false)
-    setShowLoginModal(false)
-    setSessionKey(k => k + 1)
-  }
-
   function logout() {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('guest_mode')
@@ -80,7 +68,6 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('auth_username')
     setToken(null)
     setUsername('')
-    setIsGuest(false)
     setIsAdmin(false)
     setShowLoginModal(true)
     setSessionKey(k => k + 1)
@@ -100,7 +87,6 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!token,
       login,
       register,
-      continueAsGuest,
       logout,
       authHeaders,
       showLoginModal,

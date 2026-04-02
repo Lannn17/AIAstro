@@ -18,7 +18,7 @@ const btnPrimary = (disabled) => ({
 })
 
 export default function LoginModal() {
-  const { showLoginModal, login, register, continueAsGuest } = useAuth()
+  const { showLoginModal, login, register } = useAuth()
   const [mode, setMode] = useState('login') // 'login' | 'register'
 
   // Login state
@@ -186,25 +186,6 @@ export default function LoginModal() {
           </form>
         )}
 
-        {/* Divider + Guest */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '18px 0' }}>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#2a2a5a' }} />
-          <span style={{ color: '#5a5a8a', fontSize: '0.8rem' }}>或</span>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#2a2a5a' }} />
-        </div>
-        <button
-          onClick={continueAsGuest}
-          style={{
-            width: '100%', padding: '10px',
-            backgroundColor: 'transparent', border: '1px solid #3a3a6a',
-            borderRadius: '8px', color: '#8888aa', fontSize: '0.9rem', cursor: 'pointer',
-          }}
-        >
-          以访客身份使用
-        </button>
-        <div style={{ color: '#5a5a7a', fontSize: '0.75rem', textAlign: 'center', marginTop: '10px', lineHeight: 1.5 }}>
-          访客可使用所有计算功能，但无法查看已保存的星盘
-        </div>
         <div style={{ color: '#3a3a5a', fontSize: '0.7rem', textAlign: 'center', marginTop: '16px' }}>
           v{__APP_VERSION__}
         </div>
