@@ -1,11 +1,14 @@
 """
-region_router.py — GET /api/region
+region_router.py — GET /api/region  +  GET /api/geocode
 IP 地理位置检测，返回 CN 或 GLOBAL。
-使用 ip-api.com（免费，无需 key）+ 24h in-memory cache。
+地理编码代理：CN 调高德，GLOBAL 调 Nominatim（key 放后端 env，不暴露前端）。
 """
+import os
 import time
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
+
+AMAP_KEY = os.getenv("AMAP_KEY", "")
 
 router = APIRouter()
 
@@ -38,3 +41,47 @@ async def get_region(request: Request):
     if ip:
         _region_cache[ip] = (region, now)
     return {"region": region}
+
+
+@router.get("/api/geocode")
+async def geocode(
+    q: str = Query(..., min_length=1),
+    region: str = Query("GLOBAL"),
+):
+    """地理编码代理：CN → 高德，GLOBAL → Nominatim。"""
+    if region == "CN":
+        if not AMAP_KEY:
+            return {"results": [], "error": "AMAP_KEY not configured"}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "https://restapi.amap.com/v3/geocode/geo",
+                    params={"address": q, "key": AMAP_KEY, "output": "json"},
+                    timeout=5.0,
+                )
+            data = resp.json()
+            geocodes = data.get("geocodes") or []
+            results = [
+                {
+                    "place_id": f"amap_{i}",
+                    "display_name": g["formatted_address"],
+                    "lat": g["location"].split(",")[1],
+                    "lon": g["location"].split(",")[0],
+                }
+                for i, g in enumerate(geocodes)
+            ]
+            return {"results": results}
+        except Exception as e:
+            return {"results": [], "error": str(e)}
+    else:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": q, "format": "json", "limit": 6, "addressdetails": 1},
+                    headers={"Accept-Language": "zh-CN,zh,en", "User-Agent": "AIAstro/1.0"},
+                    timeout=5.0,
+                )
+            return {"results": resp.json()}
+        except Exception as e:
+            return {"results": [], "error": str(e)}
