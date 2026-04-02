@@ -4,18 +4,395 @@
 
 ---
 
-## 手动增加了debug路由 需要review --0327
-
 ## Stub 页面（路由已建，功能未实现）
-
 - 🔨 合盘 Synastry（`/synastry`）— 已开发,待优化UI和logic
-- 🚧 推运 Progressions（`/progressions`）
+- 月亮推运 Progressions --排期4.6
+核心概念
+text
+次限推运: 出生后第 N 天的星盘 = 人生第 N 年的内在状态
+推运月亮: 约 2.5 年换一个星座，反映"人生情绪季节"
+
+例: 用户今年 30 岁
+  → 取出生后第 30 天的月亮位置
+  → 该位置的星座/宫位 = 当前内心情绪主题
+产品设计建议
+1）情绪时间轴（核心交互）
+text
+┌──────────────────────────────────────────────────┐
+│  🌙 你的情绪季节地图                                │
+│                                                    │
+│  ──●────────●────────●────────●────────●──        │
+│   2020     2022     2024     2026     2028        │
+│   ♋巨蟹    ♌狮子    ♌狮子    ♍处女    ♍处女        │
+│   内在安全   自我表达   自我表达   务实整理  务实整理    │
+│                       ↑                            │
+│                    你在这里                          │
+│                                                    │
+│  📖 当前阶段: 推运月亮在狮子座第5宫                    │
+│  "这是一个渴望被看见、需要创造性表达的阶段..."           │
+└──────────────────────────────────────────────────┘
+2）推运月亮与本命行星的相位事件
+python
+# 后端数据结构建议
+progressed_moon_events = [
+    {
+        "date": "2025-03",
+        "event": "推运月亮合本命金星",
+        "aspect": "conjunction",
+        "orb": 0.5,
+        "theme": "relationships",
+        "interpretation": "情感关系迎来柔软的新篇章...",
+        "duration": "2025-01 ~ 2025-05",  # 推运相位持续时间长
+    },
+    {
+        "date": "2025-09",
+        "event": "推运月亮刑本命土星",
+        "aspect": "square",
+        "orb": 1.2,
+        "theme": "emotional_pressure",
+        "interpretation": "内心可能感受到责任与情感的张力...",
+        "duration": "2025-07 ~ 2025-11",
+    },
+]
+3）与太阳回归联动
+text
+💡 关键洞察: 推运月亮 + 太阳回归 = 内外呼应
+
+太阳回归告诉你: "今年外在世界会发生什么"
+月亮推运告诉你: "今年内心会经历什么"
+
+产品上可以做:
+┌────────────────────────────────────────┐
+│  2025 年度双视角                         │
+│                                        │
+│  🔆 外在主题 (太阳回归)                   │
+│  → 事业扩张、健康纪律、沟通重塑            │
+│                                        │
+│  🌙 内在主题 (月亮推运)                   │
+│  → 自我表达的渴望、创造力觉醒              │
+│                                        │
+│  🔗 联动解读:                            │
+│  "事业扩张的外在机遇，恰好呼应了内心        │
+│   渴望被看见的情绪周期，今年是将内在         │
+│   创造力转化为职业突破的最佳时机"           │
+└────────────────────────────────────────┘
+4）规则引擎设计思路
+python
+# 类似 solar_return.py 的架构
+
+_PROG_MOON_SIGN_THEMES = {
+    "Aries":   {"keywords": ["重新出发", "勇气", "独立"], "element": "fire"},
+    "Taurus":  {"keywords": ["安定", "感官享受", "积累"], "element": "earth"},
+    "Cancer":  {"keywords": ["归属感", "家庭", "情感安全"], "element": "water"},
+    # ...
+}
+
+_PROG_MOON_HOUSE_THEMES = {
+    "1":  "重新定义自我认同",
+    "4":  "家庭与内在根基的重建",
+    "5":  "创造力与自我表达的觉醒",
+    "7":  "关系模式的深层转变",
+    "10": "社会角色与使命感的情绪共振",
+    # ...
+}
+
+def compute_progressed_moon(natal_data, current_age):
+    """
+    1. 计算推运月亮当前位置（星座/宫位/度数）
+    2. 计算推运月亮与本命行星的相位
+    3. 计算推运月亮换座时间表
+    4. 生成情绪阶段解读
+    """
+    pass
+
 
 ---
 
+- 每日运势
+1）卡片信息层次
+text
+┌─────────────────────────────────────┐
+│  📅 2025年6月15日 星期日               │
+│                                     │
+│  🌙 月亮在天蝎座                      │
+│  今日情绪色彩: 深沉、洞察、转化          │
+│                                     │
+│  ⭐ 今日关键星象                       │
+│  ┌─────────────────────────────┐    │
+│  │ 金星三分木星 (精确)            │    │
+│  │ 人际关系与社交中有愉悦的能量流动  │    │
+│  └─────────────────────────────┘    │
+│                                     │
+│  🎯 对你的个人影响                     │
+│  行运木星正经过你的第7宫               │
+│  → 今天适合主动拓展社交圈              │
+│                                     │
+│  💡 今日一句                          │
+│  "信任直觉带来的深层洞察"              │
+│                                     │
+│  ┌────────┐  ┌────────┐            │
+│  │ 📤 分享  │  │ 📝 记录  │            │
+│  └────────┘  └────────┘            │
+└─────────────────────────────────────┘
+2）信息架构
+text
+Layer 1: 通用层 (所有用户相同)
+├── 当日月亮星座 + 情绪基调
+├── 主要行星相位 (精确相位 orb < 1°)
+└── 全局能量关键词
+
+Layer 2: 个人化层 (基于本命盘)
+├── 今日行运触发了你的哪个宫位
+├── 行运行星与本命行星的相位
+└── 个人化建议
+
+后端架构:
+# app/rag/daily_card.py
+
+from datetime import date
+from functools import lru_cache
+
+@lru_cache(maxsize=1)  # 通用层每天只算一次
+def compute_daily_universal(target_date: date) -> dict:
+    """所有用户共享的当日星象"""
+    return {
+        "moon_sign": "Scorpio",
+        "moon_phase": "waning_crescent",
+        "major_aspects": [
+            {"planet1": "venus", "planet2": "jupiter", 
+             "aspect": "trine", "orb": 0.3,
+             "keywords": ["social_harmony", "abundance"]},
+        ],
+        "void_of_course": {"start": "14:30", "end": "18:45"},
+        "daily_keywords": ["洞察", "社交", "转化"],
+    }
+
+def compute_daily_personal(target_date: date, natal_data: dict) -> dict:
+    """个人化的行运触发"""
+    transits = get_current_transits(target_date)
+    natal_planets = natal_data["planets"]
+    
+    personal_hits = []
+    for transit in transits:
+        for natal_key, natal_planet in natal_planets.items():
+            aspect = check_aspect(transit["longitude"], 
+                                   natal_planet["longitude"], orb=2.0)
+            if aspect:
+                personal_hits.append({
+                    "transit_planet": transit["name"],
+                    "natal_planet": natal_key,
+                    "natal_house": natal_planet["house"],
+                    "aspect": aspect,
+                    "theme": infer_theme(transit, natal_key, aspect),
+                })
+    
+    return {
+        "personal_transits": personal_hits,
+        "focus_house": most_activated_house(personal_hits),
+        "energy_level": estimate_energy(personal_hits),
+    }
+策略:
+┌─────────────────────────────────────────────┐
+│  通用层: 每天凌晨定时任务预计算                   │
+│  → 缓存到 Redis/DB，所有用户共享                │
+│                                             │
+│  个人层: 基于规则引擎实时计算                     │
+│  → 纯 Python 计算，不调 LLM（毫秒级）           │
+│                                             │
+│  文案层: 模板 + 变量填充                        │
+│  → 预写 100+ 模板，根据星象组合选择              │
+│  → 只在"深度解读"时才调 LLM                     │
+└─────────────────────────────────────────────┘
+python
+# 文案模板示例（不依赖 LLM）
+_TRANSIT_TEMPLATES = {
+    ("jupiter", "trine", "natal_venus"): [
+        "社交与人际关系中有温暖的能量流动，适合主动联络重要的人",
+        "今天的人际互动可能带来意想不到的愉悦与机遇",
+    ],
+    ("saturn", "square", "natal_moon"): [
+        "情绪上可能感到些许沉重，给自己留出独处空间是明智的",
+        "内心的责任感与情感需求之间需要找到平衡点",
+    ],
+}
+5）社交裂变设计
+text
+分享卡片 → 生成精美图片 → 朋友看到 → 想知道自己的 → 注册
+
+┌─────────────────────────┐
+│  [精美背景图]              │
+│                         │
+│  🌙 6月15日 天蝎月亮       │
+│  "信任直觉带来的深层洞察"   │
+│                         │
+│  ⭐ 金星三分木星            │
+│  今日关键词: 社交·丰盛·洞察  │
+│                         │
+│  ── [App Logo] ──       │
+│  扫码查看你的个人星运 →     │
+└─────────────────────────┘
+考虑增加其他内容
+
+- 占星骰子 --排期4.3
+传统占星骰子: 掷三颗骰子
+  🎲 行星骰 (12面): 决定"什么能量"
+  🎲 星座骰 (12面): 决定"什么方式"  
+  🎲 宫位骰 (12面): 决定"什么领域"
+
+例: 金星 + 天蝎座 + 第7宫
+  → "在关系领域(7宫)，以深入的、执着的方式(天蝎)
+     处理与爱/价值相关的议题(金星)"
+Step 1: 输入问题
+┌─────────────────────────────────┐
+│  🎲 占星骰子                      │
+│                                 │
+│  在心中想好一个具体问题            │
+│  ┌───────────────────────────┐  │
+│  │ 我该不该接受这份工作邀请？    │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  选择问题类型: (帮助 AI 更精准解读) │
+│  [💼事业] [❤️感情] [💰财务]       │
+│  [🏠家庭] [📚学习] [🔮其他]       │
+│                                 │
+│        [ 🎲 掷骰子 ]              │
+└─────────────────────────────────┘
+
+Step 2: 骰子动画 + 结果
+┌─────────────────────────────────┐
+│                                 │
+│     🎲          🎲         🎲    │
+│    金星        天蝎座       第7宫  │
+│   (能量)       (方式)      (领域) │
+│                                 │
+│  ─────────────────────────────  │
+│                                 │
+│  核心解读:                       │
+│  这份工作可能涉及深度合作关系，     │
+│  需要你投入真实的情感与信任。       │
+│  金星暗示这份工作能带来价值感，     │
+│  但天蝎的方式意味着过程不会轻松，   │
+│  需要面对一些隐藏的权力动态...      │
+│                                 │
+│  行动建议:                       │
+│  ✅ 倾向于接受，但要深入了解        │
+│     合作方的真实意图               │
+│                                 │
+│  [📤 分享] [🔄 再掷一次]          │
+└─────────────────────────────────┘
+2）后端解读引擎
+python
+# app/rag/astro_dice.py
+
+# 行星 = 能量主题
+_DICE_PLANET_MEANINGS = {
+    "sun":     {"core": "核心自我", "keywords": ["目标", "方向", "自我实现"]},
+    "moon":    {"core": "情绪需求", "keywords": ["安全感", "本能", "习惯"]},
+    "mercury": {"core": "思维沟通", "keywords": ["信息", "交流", "学习"]},
+    "venus":   {"core": "价值关系", "keywords": ["喜好", "和谐", "吸引"]},
+    "mars":    {"core": "行动驱力", "keywords": ["主动", "竞争", "冲突"]},
+    "jupiter": {"core": "扩展机遇", "keywords": ["成长", "乐观", "过度"]},
+    "saturn":  {"core": "限制责任", "keywords": ["纪律", "时间", "考验"]},
+    "uranus":  {"core": "突变革新", "keywords": ["意外", "自由", "打破"]},
+    "neptune": {"core": "梦幻模糊", "keywords": ["直觉", "迷惑", "理想"]},
+    "pluto":   {"core": "深层转化", "keywords": ["权力", "死亡重生", "执念"]},
+    "north_node": {"core": "命运方向", "keywords": ["成长方向", "使命"]},
+    "chiron":  {"core": "伤痛疗愈", "keywords": ["脆弱", "疗愈", "教导"]},
+}
+
+# 星座 = 方式/风格
+_DICE_SIGN_MEANINGS = {
+    "Aries":   {"style": "直接果断", "element": "fire"},
+    "Taurus":  {"style": "稳定务实", "element": "earth"},
+    "Scorpio": {"style": "深入执着", "element": "water"},
+    # ...
+}
+
+# 宫位 = 生活领域
+_DICE_HOUSE_MEANINGS = {
+    "1":  {"domain": "自我形象", "life_area": "个人行动"},
+    "7":  {"domain": "一对一关系", "life_area": "合作与对手"},
+    "10": {"domain": "事业声望", "life_area": "社会地位"},
+    # ...
+}
+
+def roll_dice() -> dict:
+    """随机掷骰子"""
+    import random
+    planets = list(_DICE_PLANET_MEANINGS.keys())
+    signs = list(_DICE_SIGN_MEANINGS.keys())
+    houses = [str(i) for i in range(1, 13)]
+    
+    return {
+        "planet": random.choice(planets),
+        "sign": random.choice(signs),
+        "house": random.choice(houses),
+    }
+
+def interpret_dice(
+    planet: str, 
+    sign: str, 
+    house: str, 
+    question: str,
+    category: str,
+) -> dict:
+    """
+    三层解读:
+    1. 规则引擎: 组合关键词（确定性）
+    2. RAG: 检索相关解读片段
+    3. LLM: 结合问题生成个性化回答
+    """
+    # 规则层
+    p = _DICE_PLANET_MEANINGS[planet]
+    s = _DICE_SIGN_MEANINGS[sign]
+    h = _DICE_HOUSE_MEANINGS[house]
+    
+    core_sentence = (
+        f"在{h['domain']}领域，"
+        f"以{s['style']}的方式，"
+        f"处理与{p['core']}相关的议题"
+    )
+    
+    # RAG + LLM 层
+    rag_query = f"{planet} in {sign} {house}th house horary"
+    prompt = f"""用户问题: {question}
+问题类别: {category}
+骰子结果: {planet} + {sign} + 第{house}宫
+核心含义: {core_sentence}
+关键词: {', '.join(p['keywords'] + [s['style']] + [h['life_area']])}
+
+请给出 100-150 字的针对性解读 + 一条行动建议。
+语气温和，使用概率性表达。"""
+    
+    answer, sources = rag_generate(rag_query, prompt, k=3)
+    
+    return {
+        "dice": {"planet": planet, "sign": sign, "house": house},
+        "core_sentence": core_sentence,
+        "interpretation": answer,
+        "keywords": p["keywords"],
+        "sources": sources,
+    }
+
+    互动增强
+text
+🔄 追问机制:
+  "觉得解读不够清晰？再掷一颗补充骰子"
+  → 补充骰只掷行星骰，作为"辅助能量"
+
+📚 历史记录:
+  "你最近 10 次掷骰，金星出现了 4 次"
+  → "近期你的核心关切似乎集中在价值与关系领域"
+
+🎯 每日限制:
+  "同一个问题只能掷一次"（占卜传统：心诚则灵）
+  → 既符合传统，又控制 API 成本
+
+
+
 ## 候选功能（待排期）
  # 重要
-- 0. **本命盘分析的prompt格式优化** -- IMPORTANT FLAG
+- 0. **本命盘分析的prompt格式优化** -- IMPORTANT FLAG--4.2测试感觉输出很良好
     - 同一类解释里出现明显矛盾的内容时,二次rag检索并解释矛盾
     - 调用多次后AI解释详细程度明显下降,需要设计一套rule进一步规范输出,比如强制超过多少字数?
     '''
@@ -163,7 +540,7 @@ class QualityGuard:
     - 增加星盘计算层,差异化确定事件权重赋值 - checking
     - 校正逻辑:用户确认的时间范围内如果本身就没有出现配置的变化,弹出提示
     - 推盘step2&3的问卷不够合理,较难进行选择,需要优化
-- ✅ ~~3. Mainland China地区端口设置配相应的国内版软件 - 3.31排期~~ 
+- ✅ ~~3. Mainland China地区端口设置配相应的国内版软件 - ~~ 
 - 4. 不确定分钟(但确定小时)的情况,调盘界面里不好选择.是否可以在校正之前先告诉用户在不确定的时间范围之内其本命盘配置变动的可能范围 
 - 6. 合盘列表关系维度全部显示并打分,将得分按从高到低排序并生成相应分析,解释得分高的关系为什么更可能形成以及为什么更难形成得分低的关系.合盘tag一并加入自由向AI提问对话的入口.
 - 7. 合盘界面前端UI升级,双人行星相位列表分类描述,不要以长文字列表形式呈现,增强用户可读性和可理解性.(当前显示的原始数据列表可以折叠做成一个按钮,用户点击后可展开具体查看)
@@ -201,8 +578,8 @@ class QualityGuard:
 
 ## 已知问题
 - ✅ ~~1. 校对分析RAG分析遗留问题(引用未拆分,未出现RAG引用分析模块) -- 所有设置AI分析的端口服务都必须接入rag的分析接口~~
-- ✅ ~~本命盘四交点无分析 --二次测试失败 --排期4.1 --延期4.2~~
-- ✅ ~~缓存标签出现后就无法再知道这段分析的生成模型了 需要将缓存标签和模型标签修复为不互斥 即可以共同显示两个标签~~
+- ✅ ~~本命盘四交点无分析 --二次测试失败 --~~
+- ✅ ~~缓存标签出现后就无法再知道这段分析的生成模型了 需要将缓存标签和模型标签修复为S不互斥 即可以共同显示两个标签~~
 - 4. mobile UI本命盘行星界面行星名字未对齐
 - ✅ ~~5. 注册用户密码没必要设置128位,改为最高16位~~
 - ✅ ~~6. 注册后第一次进入界面时行运页面有两个星盘(一个未保存),去掉未保存星盘逻辑~~
@@ -225,6 +602,7 @@ class QualityGuard:
     - generate的prompt似乎无法测试,只能测试各个具体业务的prompt.优化对比逻辑
 - ✅ ~~主页tag位置调整,把太阳回归放在行运之后,推运名称改为月亮推运,放在太阳回归之后~~
 - ✅ ~~24. 增加checkbox:用户输入星盘信息时,在出生时间输出栏附近增加checkbox让用户确认是否可以肯定该出生时间精确到分钟,如果可以确认则打勾,并说明清楚该数据将会被收集用于训练模型进行出生时间校正,如果不确定则推荐用户去测试校正功能~~
+- 25. 当前用/admin方式进入的查看rag分析的界面,访问方式修改,改为集成到管理员界面中的管理tag中.
 
 
 ## 非重要待优化项
