@@ -319,7 +319,8 @@ def analyze_solar_return(
 规则：
 - 只使用输入中给出的信息，不要杜撰相位或宫位
 - 使用"倾向、重点、可能、容易"等概率性表达，不做绝对预言
-- themes 必须按得分从高到低排列，且与 theme_scores 一致
+- themes 的 score 字段必须是 0-100 的百分制整数（最强主题接近100，其余按相对强度换算），不要直接复制 theme_scores 的原始数值
+- themes 必须按得分从高到低排列，且顺序与 theme_scores 一致
 - 对健康、财务等敏感主题避免确定性建议
 """
 
@@ -332,6 +333,14 @@ def analyze_solar_return(
         parsed = {}
 
     themes_out = parsed.get("themes", [])
+
+    # 兜底归一化：若 Gemini 仍输出了原始小分（最高值 < 20），换算为百分制
+    if themes_out:
+        max_t = max((t.get("score", 0) for t in themes_out), default=0)
+        if 0 < max_t < 20:
+            for t in themes_out:
+                t["score"] = round(t.get("score", 0) / max_t * 100)
+
     if not themes_out:
         themes_out = [
             {
