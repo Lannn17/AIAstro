@@ -1,5 +1,5 @@
 """
-app/rag/client.py — AI 客户端：Gemini + DeepSeek fallback + 区域切换
+app/rag/client.py — AI 客户端：Gemini + SiliconFlow fallback + 区域切换
 """
 import os
 import time
@@ -20,8 +20,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL   = "deepseek-chat"
+SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
+SILICONFLOW_MODEL   = "deepseek-ai/DeepSeek-V3"
 
 _raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -61,7 +61,7 @@ class _DSCandidate:
 
 
 class _DeepSeekResponse:
-    """Minimal adapter so DeepSeek responses look like Gemini GenerateContentResponse."""
+    """Minimal adapter so SiliconFlow responses look like Gemini GenerateContentResponse."""
     def __init__(self, text: str):
         self.text = text
         self.candidates = [_DSCandidate()]
@@ -180,21 +180,21 @@ class _ModelsWithFallback:
         last_err = None
         t0 = time.time()
 
-        # ── DeepSeek path (CN region) ──
-        if get_thread_region() == "CN" and DEEPSEEK_API_KEY:
+        # ── SiliconFlow path (CN region) ──
+        if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
             try:
                 from openai import OpenAI as _OpenAI
-                ds = _OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+                sf = _OpenAI(api_key=SILICONFLOW_API_KEY, base_url="https://api.siliconflow.cn/v1")
                 msgs = self._to_openai_messages(contents, config)
                 temp = getattr(config, 'temperature', 0.5) if config else 0.5
-                completion = ds.chat.completions.create(
-                    model=DEEPSEEK_MODEL,
+                completion = sf.chat.completions.create(
+                    model=SILICONFLOW_MODEL,
                     messages=msgs,
                     temperature=temp,
                 )
                 text = completion.choices[0].message.content or ""
-                _local.model_used = DEEPSEEK_MODEL
-                entry.model_used = DEEPSEEK_MODEL
+                _local.model_used = SILICONFLOW_MODEL
+                entry.model_used = SILICONFLOW_MODEL
                 entry.response_text = text[:5000]
                 entry.finish_reason = "STOP"
                 entry.response_tokens_est = len(text) // 2
@@ -203,7 +203,7 @@ class _ModelsWithFallback:
                 _persist_prompt_log(entry)
                 return _DeepSeekResponse(text)
             except Exception as e:
-                print(f"[DeepSeek] failed, falling back to Gemini: {e}", flush=True)
+                print(f"[SiliconFlow] failed, falling back to Gemini: {e}", flush=True)
 
         for m in chain:
             try:
