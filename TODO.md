@@ -274,6 +274,7 @@ def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
     - generate的prompt似乎无法测试,只能测试各个具体业务的prompt.优化对比逻辑
 - 22. 校正逻辑:用户确认的时间范围内如果本身就没有出现配置的变化,弹出提示
 - 23. 主页tag位置调整,把太阳回归放在行运之后,推运名称改为月亮推运,放在太阳回归之后
+- 24. 增加checkbox:用户保存星盘时
 
 
 ## 非重要待优化项
@@ -285,7 +286,7 @@ def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
 - 当前管理员使用.env明文写入密码,注册用户使用hash编码,逻辑不统一: 考虑管理员密码也进行hash
 - 管理员uid=none,依赖uid的数据库操作可能报错: 考虑给管理员编码一个uid,或者管理员整条数据也编入数据库
 - 加上注册防刷功能, rate limit: 初阶段构想是只开放20个注册账号(管理员除外),判断此构想如何
-- 彻底去掉访客功能,访客访问要求访客先进行注册:现有is_guest名字全部改为is_approved.管理员审批功能保留.
+- 现有is_guest名字全部改为is_approved.管理员审批功能保留.
 - 多语言支持: 把所有硬编码转为使用独立翻译文件(e.g. i18n.py /locales目录存放翻译文件)
 - interpret.py内代码拆分(检讨)
 - 调用Ai次数限制: 目前考虑是每个调用接口只允许生成一次,结果存入该注册用户db,之后调用如果没有新信息就全部直接命中缓存,不额外消耗调用次数.管理员无限制
