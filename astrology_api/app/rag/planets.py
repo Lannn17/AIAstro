@@ -121,6 +121,22 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
     return facts
 
 
+def _enforce_chart_facts_in_tags(parsed: dict, chart_facts: list[str]) -> None:
+    """确保 overall.tags 包含所有确定性事实（含具体行星名），替换不完整版本，缺失则追加。"""
+    overall = parsed.get("overall")
+    if not isinstance(overall, dict):
+        return
+    tags = overall.get("tags") if isinstance(overall.get("tags"), list) else []
+    for fact in chart_facts:
+        prefix = fact.split("（")[0]
+        idx = next((i for i, t in enumerate(tags) if isinstance(t, str) and t.startswith(prefix)), None)
+        if idx is not None:
+            tags[idx] = fact  # 替换为含行星名的完整版本
+        else:
+            tags.append(fact)
+    overall["tags"] = tags
+
+
 def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
     """
     为本命盘每颗行星生成简洁解读（单次 Gemini 调用，返回全部结果）。
@@ -313,6 +329,9 @@ def analyze_planets(natal_chart: dict, language: str = 'zh') -> dict:
             parsed.update(retry_parsed)
         except Exception as e:
             print(f"[planets] retry for missing planets failed: {e}", flush=True)
+
+    # 强制将确定性事实写入 overall.tags（替换不完整版本或补充缺失项）
+    _enforce_chart_facts_in_tags(parsed, chart_facts)
 
     source_refs = parsed.pop("source_refs", {}) or {}
     rag_sources = []
