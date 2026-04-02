@@ -22,10 +22,12 @@ if not GOOGLE_API_KEY:
 
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
 SILICONFLOW_MODEL   = os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen3.5-4B")
+SILICONFLOW_BASE    = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1")  # ★ 默认用 .com
 
 # ★ 启动时打印，方便确认环境变量
 print(f"[STARTUP] SILICONFLOW_API_KEY: {'SET (' + SILICONFLOW_API_KEY[:8] + '...)' if SILICONFLOW_API_KEY else 'NOT SET'}", flush=True)
 print(f"[STARTUP] SILICONFLOW_MODEL: {SILICONFLOW_MODEL}", flush=True)
+print(f"[STARTUP] SILICONFLOW_BASE: {SILICONFLOW_BASE}", flush=True)
 
 _raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -177,12 +179,32 @@ class _ModelsWithFallback:
         # ── SiliconFlow path (CN region) ──
         if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
             print(f"[SiliconFlow] ✅ Region=CN, calling model={SILICONFLOW_MODEL}", flush=True)
+            print(f"[SiliconFlow] Base URL: {SILICONFLOW_BASE}", flush=True)
             try:
                 from openai import OpenAI as _OpenAI
+                import httpx as _httpx
+
+                # ★ 先快速测试连通性（5秒内知道能不能通）
+                try:
+                    _test = _httpx.get(
+                        f"{SILICONFLOW_BASE}/models",
+                        headers={"Authorization": f"Bearer {SILICONFLOW_API_KEY}"},
+                        timeout=5.0,
+                    )
+                    print(f"[SiliconFlow] Connectivity test: HTTP {_test.status_code}", flush=True)
+                except Exception as _ce:
+                    print(f"[SiliconFlow] ❌ Cannot reach {SILICONFLOW_BASE}: {_ce}", flush=True)
+                    entry.model_used = SILICONFLOW_MODEL
+                    entry.response_text = f"ERROR: Cannot reach SiliconFlow: {_ce}"
+                    entry.latency_ms = int((time.time() - t0) * 1000)
+                    prompt_store.append(entry)
+                    _persist_prompt_log(entry)
+                    return _DeepSeekResponse(f"⚠️ 无法连接AI服务({SILICONFLOW_BASE})，请稍后重试。")
+
                 sf = _OpenAI(
                     api_key=SILICONFLOW_API_KEY,
-                    base_url="https://api.siliconflow.cn/v1",
-                    timeout=120.0,  # ★ 加超时
+                    base_url=SILICONFLOW_BASE,
+                    timeout=30.0,  # ★ 30秒超时
                 )
                 msgs = self._to_openai_messages(contents, config)
                 temp = getattr(config, 'temperature', 0.5) if config else 0.5
@@ -211,17 +233,16 @@ class _ModelsWithFallback:
             except Exception as e:
                 error_msg = f"{type(e).__name__}: {e}"
                 print(f"[SiliconFlow] ❌ FAILED: {error_msg}", flush=True)
-                # ★ 大陆用户不要回退 Gemini（访问不了），直接返回错误
                 entry.model_used = SILICONFLOW_MODEL
                 entry.response_text = f"ERROR: {error_msg}"
                 entry.latency_ms = int((time.time() - t0) * 1000)
                 prompt_store.append(entry)
                 _persist_prompt_log(entry)
-                return _DeepSeekResponse(f"⚠️ AI服务暂时不可用，请稍后重试。\n\n调试信息: {error_msg}")
+                return _DeepSeekResponse(f"⚠️ AI服务暂时不可用，请稍后重试。\n错误: {error_msg}")
+
         else:
             if get_thread_region() == "CN":
                 print(f"[SiliconFlow] ❌ Region=CN but SILICONFLOW_API_KEY is empty!", flush=True)
-            # else: GLOBAL, use Gemini normally
 
         # ── Gemini Fallback 调用 (GLOBAL only) ──
         chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
