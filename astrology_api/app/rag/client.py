@@ -21,7 +21,11 @@ if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
-SILICONFLOW_MODEL   = "Qwen/Qwen3.5-4B"
+SILICONFLOW_MODEL   = os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen3.5-4B")
+
+# ★ 启动时打印，方便确认环境变量
+print(f"[STARTUP] SILICONFLOW_API_KEY: {'SET (' + SILICONFLOW_API_KEY[:8] + '...)' if SILICONFLOW_API_KEY else 'NOT SET'}", flush=True)
+print(f"[STARTUP] SILICONFLOW_MODEL: {SILICONFLOW_MODEL}", flush=True)
 
 _raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -33,9 +37,8 @@ _FALLBACK_MODELS = [
     "gemini-2.5-flash-lite",
 ]
 
-_local = threading.local()  # per-thread tracking of last model used
+_local = threading.local()
 
-# Per-request region (CN / GLOBAL) — ContextVar is async-safe
 _region_var: ContextVar[str] = ContextVar('region', default='GLOBAL')
 
 
@@ -48,7 +51,6 @@ def get_thread_region() -> str:
 
 
 def get_last_model_used() -> str:
-    """返回本线程最近一次 generate_content 实际使用的模型名。"""
     return getattr(_local, 'model_used', GENERATE_MODEL)
 
 
@@ -75,7 +77,6 @@ class _ModelsWithFallback:
 
     @staticmethod
     def _extract_prompt_text(contents, config) -> tuple[str, str]:
-        """从 contents 和 config 中提取可读文本，返回 (system_instruction, prompt_text)"""
         sys_inst = ""
         if config:
             si = getattr(config, 'system_instruction', None)
@@ -100,7 +101,6 @@ class _ModelsWithFallback:
 
     @staticmethod
     def _guess_caller() -> str:
-        """遍历调用栈，找到 app/ 目录下的业务函数名"""
         for frame_info in inspect.stack():
             fn_name = frame_info.function
             filename = frame_info.filename
@@ -114,7 +114,6 @@ class _ModelsWithFallback:
 
     @staticmethod
     def _to_openai_messages(contents, config=None) -> list[dict]:
-        """Convert Gemini contents + config to OpenAI chat messages format."""
         messages = []
         if config:
             si = getattr(config, 'system_instruction', None)
@@ -136,7 +135,6 @@ class _ModelsWithFallback:
 
     @staticmethod
     def _serialize_contents(contents) -> list:
-        """将 contents 序列化为可 JSON 化的 list"""
         try:
             if isinstance(contents, str):
                 return [{"role": "user", "text": contents}]
@@ -169,35 +167,23 @@ class _ModelsWithFallback:
         entry.prompt_tokens_est = len(prompt_text) // 2
         entry.contents = self._serialize_contents(contents)
 
-        # 读取 retrieve() 暂存的 RAG 信息
         entry.rag_query = getattr(_local, 'pending_rag_query', '')
         _local.pending_rag_query = ''
         entry.rag_chunks = getattr(_local, 'pending_rag_chunks', [])
         _local.pending_rag_chunks = []
 
-        # ── Fallback 调用 ──
-        chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
-        last_err = None
         t0 = time.time()
 
-
-        print(f"[DIAG] get_thread_region() = {get_thread_region()}", flush=True)
-        print(f"[DIAG] SILICONFLOW_API_KEY = {repr(SILICONFLOW_API_KEY)}", flush=True)
-        print(f"[DIAG] SILICONFLOW_MODEL = {repr(SILICONFLOW_MODEL)}", flush=True)
-        print(f"[DIAG] Condition: region=={'CN'==get_thread_region()}, key_exists={bool(SILICONFLOW_API_KEY)}", flush=True)
-
         # ── SiliconFlow path (CN region) ──
         if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
-            print("[DIAG] ✅ Entering SiliconFlow path", flush=True)
-            # ... 你的代码 ...
-        else:
-            print("[DIAG] ❌ Skipped SiliconFlow path, falling to Gemini", flush=True)
-                
-        # ── SiliconFlow path (CN region) ──
-        if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
+            print(f"[SiliconFlow] ✅ Region=CN, calling model={SILICONFLOW_MODEL}", flush=True)
             try:
                 from openai import OpenAI as _OpenAI
-                sf = _OpenAI(api_key=SILICONFLOW_API_KEY, base_url="https://api.siliconflow.cn/v1")
+                sf = _OpenAI(
+                    api_key=SILICONFLOW_API_KEY,
+                    base_url="https://api.siliconflow.cn/v1",
+                    timeout=120.0,  # ★ 加超时
+                )
                 msgs = self._to_openai_messages(contents, config)
                 temp = getattr(config, 'temperature', 0.5) if config else 0.5
                 wants_json = (
@@ -206,8 +192,12 @@ class _ModelsWithFallback:
                 create_kwargs = dict(model=SILICONFLOW_MODEL, messages=msgs, temperature=temp)
                 if wants_json:
                     create_kwargs['response_format'] = {"type": "json_object"}
+
+                print(f"[SiliconFlow] Sending request: msgs={len(msgs)}, temp={temp}, json={wants_json}", flush=True)
                 completion = sf.chat.completions.create(**create_kwargs)
                 text = completion.choices[0].message.content or ""
+                print(f"[SiliconFlow] ✅ Success! Response length={len(text)}", flush=True)
+
                 _local.model_used = SILICONFLOW_MODEL
                 entry.model_used = SILICONFLOW_MODEL
                 entry.response_text = text[:5000]
@@ -217,8 +207,25 @@ class _ModelsWithFallback:
                 prompt_store.append(entry)
                 _persist_prompt_log(entry)
                 return _DeepSeekResponse(text)
+
             except Exception as e:
-                print(f"[SiliconFlow] failed, falling back to Gemini: {e}", flush=True)
+                error_msg = f"{type(e).__name__}: {e}"
+                print(f"[SiliconFlow] ❌ FAILED: {error_msg}", flush=True)
+                # ★ 大陆用户不要回退 Gemini（访问不了），直接返回错误
+                entry.model_used = SILICONFLOW_MODEL
+                entry.response_text = f"ERROR: {error_msg}"
+                entry.latency_ms = int((time.time() - t0) * 1000)
+                prompt_store.append(entry)
+                _persist_prompt_log(entry)
+                return _DeepSeekResponse(f"⚠️ AI服务暂时不可用，请稍后重试。\n\n调试信息: {error_msg}")
+        else:
+            if get_thread_region() == "CN":
+                print(f"[SiliconFlow] ❌ Region=CN but SILICONFLOW_API_KEY is empty!", flush=True)
+            # else: GLOBAL, use Gemini normally
+
+        # ── Gemini Fallback 调用 (GLOBAL only) ──
+        chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
+        last_err = None
 
         for m in chain:
             try:
@@ -262,7 +269,6 @@ class _ModelsWithFallback:
 
 
 class _ClientWithFallback:
-    """Wraps genai.Client so client.models uses fallback logic."""
     def __init__(self, original):
         self._orig = original
         self.models = _ModelsWithFallback(original.models)
@@ -272,6 +278,7 @@ class _ClientWithFallback:
 
 
 client = _ClientWithFallback(_raw_client)
+
 
 def _persist_prompt_log(entry) -> None:
     try:
