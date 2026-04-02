@@ -23,6 +23,7 @@ if not GOOGLE_API_KEY:
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL   = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.6-plus-preview:free")
 OPENROUTER_BASE    = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_ENABLED = os.getenv("OPENROUTER_ENABLED", "false").lower() == "true" 
 
 # ★ 启动时打印，方便确认环境变量
 print(f"[STARTUP] OPENROUTER_API_KEY: {'SET (' + OPENROUTER_API_KEY[:8] + '...)' if OPENROUTER_API_KEY else 'NOT SET'}", flush=True)
@@ -177,7 +178,7 @@ class _ModelsWithFallback:
         t0 = time.time()
 
         # ── OpenRouter path (CN region) ──
-        if get_thread_region() == "CN" and OPENROUTER_API_KEY:
+        if OPENROUTER_ENABLED and get_thread_region() == "CN" and OPENROUTER_API_KEY:
             print(f"[OpenRouter] ✅ Region=CN, calling model={OPENROUTER_MODEL}", flush=True)
             print(f"[OpenRouter] Base URL: {OPENROUTER_BASE}", flush=True)
             try:
