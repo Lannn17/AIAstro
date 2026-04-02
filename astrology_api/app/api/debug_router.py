@@ -5,7 +5,6 @@ app/api/debug_router.py — Prompt 可观测性接口
 import os
 from fastapi import APIRouter, Query, Header, HTTPException, Body, Depends
 from ..prompt_log import prompt_store
-from ..security import require_auth, UserInfo
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
 
@@ -196,34 +195,3 @@ def compare_prompts(
             "latencies_ms":    [l["latency_ms"] for l in logs],
         },
     }
-
-
-# ── 管理员 JWT 端点（前端直接调用，无需 DEBUG_TOKEN） ──────────────
-
-@router.get("/admin/prompts")
-def admin_list_prompts(
-    limit: int = Query(30, ge=1, le=200),
-    caller: str = Query(""),
-    user: UserInfo = Depends(require_auth),
-):
-    """GET /api/debug/admin/prompts — 管理员专用，用 Bearer JWT 鉴权"""
-    if not user["is_admin"]:
-        raise HTTPException(403, "admin only")
-
-    logs = prompt_store.get_by_caller(caller, limit=limit) if caller else prompt_store.get_all(limit=limit)
-
-    return [
-        {
-            "id":               log["id"],
-            "timestamp":        log["timestamp_readable"],
-            "caller":           log["caller"],
-            "model_used":       log["model_used"],
-            "latency_ms":       log["latency_ms"],
-            "prompt_tokens_est": log["prompt_tokens_est"],
-            "finish_reason":    log["finish_reason"],
-            "prompt_preview":   log["prompt_text"][:300] + "…" if len(log["prompt_text"]) > 300 else log["prompt_text"],
-            "prompt_text":      log["prompt_text"],
-            "response_preview": log["response_text"][:200] + "…" if len(log["response_text"]) > 200 else log["response_text"],
-        }
-        for log in logs
-    ]

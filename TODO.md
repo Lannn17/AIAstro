@@ -160,18 +160,15 @@ class QualityGuard:
 
 
 
-- 1. 推盘逻辑优化: 增加星盘计算层,差异化确定事件权重赋值 - checking
-- 3. ✅ ~~Mainland China地区端口设置配相应的国内版软件 - 3.31排期~~ 代码已完成，待配置 API key：
-  - [ ] `astrology_api/.env` 添加 `SILICONFLOW_API_KEY=...`（本地）
-  - [ ] `frontend/.env` 创建并添加 `VITE_AMAP_KEY=...`（本地）
-  - [ ] HuggingFace Spaces → Settings → **Secrets** 添加 `SILICONFLOW_API_KEY`（生产）
-  - [ ] HuggingFace Spaces → Settings → **Variables** 添加 `VITE_AMAP_KEY`（生产，构建时注入）
-  -- debug: [SiliconFlow] failed, falling back to Gemini: No module named 'openai'
+- 1. 推盘逻辑优化
+    - 增加星盘计算层,差异化确定事件权重赋值 - checking
+    - 校正逻辑:用户确认的时间范围内如果本身就没有出现配置的变化,弹出提示
+- ✅ ~~3. Mainland China地区端口设置配相应的国内版软件 - 3.31排期~~ 
 - 4. 不确定分钟(但确定小时)的情况,调盘界面里不好选择.是否可以在校正之前先告诉用户在不确定的时间范围之内其本命盘配置变动的可能范围 
 - 6. 合盘列表关系维度全部显示并打分,将得分按从高到低排序并生成相应分析,解释得分高的关系为什么更可能形成以及为什么更难形成得分低的关系.合盘tag一并加入自由向AI提问对话的入口.
 - 7. 合盘界面前端UI升级,双人行星相位列表分类描述,不要以长文字列表形式呈现,增强用户可读性和可理解性.(当前显示的原始数据列表可以折叠做成一个按钮,用户点击后可展开具体查看)
 - 8. 同理本命盘界面关于人生主题的部分也应该显示全部领域并给出比例参考
-- 10. 设计用户留言反馈窗口,用户可提出意见,在TURSO中增加一张收集建议的表单（`user_feedback` 表已建好 v0.8.1，待实现 API endpoint + 前端入口）--debug 当前提交后一直显示提交中,可能未接到数据库表单里
+- ✅ ~~10. 设计用户留言反馈窗口,用户可提出意见,在TURSO中增加一张收集建议的表单~~
 - 11. 增加用户使用引导和每个功能的用处等介绍
 - 12. 每日运势?占星骰子?新的每日小功能开发. 涉及整个主页UI修改
 
@@ -213,53 +210,8 @@ class QualityGuard:
 - ✅ ~~注册用户保存的星盘直接存入主数据库,无需管理员核审 -- 此处应和访客逻辑相同,需要管理员核审~~
 - ✅ ~~检查和render的部署,为什么还在持续deploy~~ - 已delete service
 - ✅ ~~9. 本命盘标签简析存在为空的情况 未匹配return null,如何更好解决?~~ *(疑似解决)
-- 10. 本命盘标签解析的静态映射完善:当前在解释群星的时候只是笼统说"多颗行星",需要结合用户实际的本命盘把具体是哪些行星填入 --群星解析已详细补充,其他tag依然存在该问题;同样是群星水瓶座,部分用户有具体行星的补充,部分用户依然是多颗行星的笼统描述
-'''
-# 当前问题：群星描述用"多颗行星"代替具体行星名
-# 根因：静态映射没有接收 chart_data 上下文
-
-# 改进方案：将静态映射改为模板 + 动态注入
-
-STELLIUM_TEMPLATE = {
-    "zh": "群星{sign}（{planets}）",
-    "description_template": (
-        "你的{planets_readable}都落在{sign}，"
-        "形成了群星{sign}的格局。这意味着{sign}的能量"
-        "在你的星盘中被极大强化..."
-    )
-}
-
-def generate_stellium_tag(stellium_data: dict, chart_data: dict) -> dict:
-    """
-    stellium_data: {"sign": "Aquarius", "house": 3, "planets": ["Sun", "Mercury", "Venus", "Mars"]}
-    """
-    planet_names_zh = [PLANET_ZH_MAP[p] for p in stellium_data["planets"]]
-    planets_readable = "、".join(planet_names_zh)
-    sign_zh = SIGN_ZH_MAP[stellium_data["sign"]]
-    
-    return {
-        "tag_label": f"群星{sign_zh}（{planets_readable}）",
-        "tag_description": STELLIUM_TEMPLATE["description_template"].format(
-            planets_readable=planets_readable,
-            sign=sign_zh,
-        ),
-        "planets": stellium_data["planets"],  # 保留原始数据供前端使用
-    }
-
-# 同样的模式应用于所有 tag 类型
-def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
-    """统一入口：所有 tag 都必须传入 chart_data 以实现个性化"""
-    generators = {
-        "stellium": generate_stellium_tag,
-        "grand_trine": generate_grand_trine_tag,
-        "t_square": generate_t_square_tag,
-        "bucket": generate_bucket_tag,
-        # ...
-    }
-    return generators[tag_type](tag_data, chart_data)
-    '''
+- ✅ ~~10. 本命盘标签解析的静态映射完善:当前在解释群星的时候只是笼统说"多颗行星",需要结合用户实际的本命盘把具体是哪些行星填入 --群星解析已详细补充,其他tag依然存在该问题;同样是群星水瓶座,部分用户有具体行星的补充,部分用户依然是多颗行星的笼统描述~~
 - ✅ ~~11. 群星xx座映射还是会出现英文 --fixing~~ 
-- 12. 标签解读无缓存,重新加载后内容丢失,需要同样缓存该内容(?)
 - ✅ ~~13. 注册用户保存第二张以上星盘侧边栏未显示~~
 - ✅ ~~检查当前是否有限制AI输出字数的字段~~
 - ✅ ~~solar return有些用户自动生成的报告里分数异常,只有3or2~~
@@ -268,11 +220,10 @@ def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
 - ✅ ~~18. 行运优先显示最新发生的,并以标签形式突出展现.(生成行运时读取缓存,缓存中没有的条目打上最新的标签.)另外确认行运缓存逻辑,该轮行运结束后清空缓存.~~
 - ✅ ~~19. 现在任何人都可以/admin访问rag分析报告,加一个权限,仅限管理员访问.~~
 - ✅ ~~20. 完全去掉访客入口,所有用户必须注册才能使用~~
-- 21. Prompt管理界面问题
+- 21. Prompt管理界面问题 --checking
     - 存在显示限制无法完全显示prompt全文
     - 当前每生成一次就记录为一版新的草稿,prompt本身根本没有任何变化.逻辑错误.
     - generate的prompt似乎无法测试,只能测试各个具体业务的prompt.优化对比逻辑
-- 22. 校正逻辑:用户确认的时间范围内如果本身就没有出现配置的变化,弹出提示
 - ✅ ~~主页tag位置调整,把太阳回归放在行运之后,推运名称改为月亮推运,放在太阳回归之后~~
 - ✅ ~~24. 增加checkbox:用户输入星盘信息时,在出生时间输出栏附近增加checkbox让用户确认是否可以肯定该出生时间精确到分钟,如果可以确认则打勾,并说明清楚该数据将会被收集用于训练模型进行出生时间校正,如果不确定则推荐用户去测试校正功能~~
 
