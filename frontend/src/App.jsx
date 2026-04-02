@@ -23,9 +23,9 @@ import AdminPromptDetail from './pages/AdminPromptDetail'
 const NAV_ITEMS = [
   { path: '/',              label: '星盘' },
   { path: '/transits',     label: '行运' },
-  { path: '/synastry',     label: '合盘' },
-  { path: '/progressions', label: '推运' },
   { path: '/solar-return', label: '太阳回归' },
+  { path: '/progressions', label: '月亮推运' },
+  { path: '/synastry',     label: '合盘' },
   { path: '/directions',   label: '方向法' },
 ]
 
