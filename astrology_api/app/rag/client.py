@@ -180,18 +180,19 @@ class _ModelsWithFallback:
         last_err = None
         t0 = time.time()
 
-        # ★ 在 if 判断之前加这几行
-    print(f"[DIAG] get_thread_region() = {get_thread_region()}", flush=True)
-    print(f"[DIAG] SILICONFLOW_API_KEY = {repr(SILICONFLOW_API_KEY)}", flush=True)
-    print(f"[DIAG] SILICONFLOW_MODEL = {repr(SILICONFLOW_MODEL)}", flush=True)
-    print(f"[DIAG] Condition: region=={'CN'==get_thread_region()}, key_exists={bool(SILICONFLOW_API_KEY)}", flush=True)
 
-# ── SiliconFlow path (CN region) ──
-if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
-    print("[DIAG] ✅ Entering SiliconFlow path", flush=True)
-    # ... 你的代码 ...
-else:
-    print("[DIAG] ❌ Skipped SiliconFlow path, falling to Gemini", flush=True)
+        print(f"[DIAG] get_thread_region() = {get_thread_region()}", flush=True)
+        print(f"[DIAG] SILICONFLOW_API_KEY = {repr(SILICONFLOW_API_KEY)}", flush=True)
+        print(f"[DIAG] SILICONFLOW_MODEL = {repr(SILICONFLOW_MODEL)}", flush=True)
+        print(f"[DIAG] Condition: region=={'CN'==get_thread_region()}, key_exists={bool(SILICONFLOW_API_KEY)}", flush=True)
+
+        # ── SiliconFlow path (CN region) ──
+        if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
+            print("[DIAG] ✅ Entering SiliconFlow path", flush=True)
+            # ... 你的代码 ...
+        else:
+            print("[DIAG] ❌ Skipped SiliconFlow path, falling to Gemini", flush=True)
+                
         # ── SiliconFlow path (CN region) ──
         if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
             try:
