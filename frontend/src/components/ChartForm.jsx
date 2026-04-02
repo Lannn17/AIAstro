@@ -225,7 +225,7 @@ export default function ChartForm({ onSubmit, loading, initialData, onFormChange
             </p>
           ) : (
             <p style={{ margin: '6px 0 0 24px', color: '#8888aa', fontSize: '0.72rem', lineHeight: 1.5 }}>
-              若不确定出生时间，建议前往「<span style={{ color: '#c9a84c' }}>方向法</span>」页面使用出生时间校正功能，通过生命事件反推更准确的出生时刻。
+              若不确定出生时间，可先计算星盘，生成后下方会出现「<span style={{ color: '#c9a84c' }}>出生时间校正</span>」按钮，通过生命事件反推更准确的出生时刻。
             </p>
           )}
         </div>
