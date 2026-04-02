@@ -38,10 +38,21 @@ export default function SolarReturn() {
   const [svgContent, setSvgContent] = useState('')
   const [srData, setSrData] = useState(null)
   const [report, setReport] = useState(null)
+  const [selectedYear, setSelectedYear] = useState(null)
+  const [activeYear, setActiveYear] = useState(null)
   const [loading, setLoading] = useState(false)
   const [reportLoading, setReportLoading] = useState(false)
   const [error, setError] = useState('')
   const currentYear = new Date().getFullYear()
+
+  function computeActiveYear(chart) {
+    const today = new Date()
+    const bm = chart.birth_month
+    const bd = chart.birth_day
+    const todayMD = (today.getMonth() + 1) * 100 + today.getDate()
+    const birthMD = bm * 100 + bd
+    return todayMD >= birthMD ? currentYear : currentYear - 1
+  }
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -58,14 +69,22 @@ export default function SolarReturn() {
     setSrData(null)
     setSvgContent('')
     setReport(null)
+    setSelectedYear(null)
+    setActiveYear(null)
     if (!id) return
     try {
       const res = await apiFetch(`${API_BASE}/api/charts/${id}`, { headers: authHeaders() })
-      if (res.ok) setSelectedChart(await res.json())
+      if (res.ok) {
+        const chart = await res.json()
+        setSelectedChart(chart)
+        const ay = computeActiveYear(chart)
+        setActiveYear(ay)
+        setSelectedYear(ay)
+      }
     } catch { /* ignore */ }
   }
 
-  const canCalculate = selectedChart && location.latitude && location.longitude
+  const canCalculate = selectedChart && location.latitude && location.longitude && selectedYear
 
   async function handleCalculate() {
     if (!canCalculate) return
@@ -88,7 +107,7 @@ export default function SolarReturn() {
             tz_str: selectedChart.tz_str,     house_system: selectedChart.house_system,
             language: 'zh',
           },
-          return_year: currentYear,
+          return_year: selectedYear,
           location_latitude: parseFloat(location.latitude),
           location_longitude: parseFloat(location.longitude),
           location_tz_str: selectedChart.tz_str,
@@ -116,7 +135,7 @@ export default function SolarReturn() {
           },
           chart_type: 'transit',
           transit_chart: {
-            year: parseInt(sr.return_date?.slice(0, 4) || currentYear),
+            year: parseInt(sr.return_date?.slice(0, 4) || selectedYear),
             month: parseInt(sr.return_date?.slice(5, 7) || 1),
             day: parseInt(sr.return_date?.slice(8, 10) || 1),
             hour: parseInt(sr.return_date?.slice(11, 13) || 0),
@@ -171,7 +190,7 @@ export default function SolarReturn() {
           sr_planets: srPlanets,
           sr_houses: srHouses,
           sr_asc_degree: srAscDegree,
-          return_year: currentYear,
+          return_year: selectedYear,
           location_lat: parseFloat(location.latitude),
           location_lon: parseFloat(location.longitude),
           language: 'zh',
@@ -209,10 +228,10 @@ export default function SolarReturn() {
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 16px 40px' }}>
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ color: '#c9a84c', fontSize: '1.4rem', fontWeight: 600, letterSpacing: '0.08em' }}>
-          ☀ 太阳回归 {currentYear}
+          ☀ 太阳回归 {selectedYear || currentYear}
         </h1>
         <p style={{ color: '#8888aa', fontSize: '0.8rem', marginTop: '4px' }}>
-          基于当年太阳回归盘分析年度主题与人生重点
+          基于太阳回归盘分析年度主题与人生重点
         </p>
       </div>
 
@@ -240,12 +259,40 @@ export default function SolarReturn() {
             />
           </div>
         </div>
+        {selectedYear && (
+          <div style={{ marginBottom: '14px' }}>
+            <label style={LABEL}>选择年份</label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[selectedYear - 1, selectedYear, selectedYear + 1].map(yr => {
+                const isActive = yr === activeYear
+                const isSelected = yr === selectedYear
+                return (
+                  <button
+                    key={yr}
+                    onClick={() => { setSelectedYear(yr); setSrData(null); setSvgContent(''); setReport(null) }}
+                    style={{
+                      ...BTN_SECONDARY,
+                      ...(isSelected ? { backgroundColor: '#c9a84c', color: '#0a0a1a', borderColor: '#c9a84c' } : {}),
+                    }}
+                  >
+                    {yr}{isActive ? ' ★' : ''}
+                  </button>
+                )
+              })}
+            </div>
+            {activeYear && selectedYear !== activeYear && (
+              <p style={{ color: '#8888aa', fontSize: '0.72rem', marginTop: '6px' }}>
+                ★ = 当前生效盘（{activeYear} 年）
+              </p>
+            )}
+          </div>
+        )}
         <button
           style={{ ...BTN_PRIMARY, opacity: canCalculate ? 1 : 0.5 }}
           disabled={!canCalculate || loading}
           onClick={handleCalculate}
         >
-          {loading ? '计算中…' : `计算 ${currentYear} 年太阳回归盘`}
+          {loading ? '计算中…' : `计算 ${selectedYear || currentYear} 年太阳回归盘`}
         </button>
         {error && <p style={{ color: '#ff6666', fontSize: '0.8rem', marginTop: '8px' }}>{error}</p>}
       </div>
@@ -254,7 +301,7 @@ export default function SolarReturn() {
       {svgContent && (
         <div style={SECTION_STYLE}>
           <p style={{ color: '#8888aa', fontSize: '0.75rem', marginBottom: '12px' }}>
-            外圈：{currentYear} 太阳回归盘 &nbsp;|&nbsp; 内圈：本命盘
+            外圈：{selectedYear} 太阳回归盘 &nbsp;|&nbsp; 内圈：本命盘
           </p>
           <div
             style={{ width: '100%', maxWidth: '700px', margin: '0 auto' }}
@@ -268,7 +315,7 @@ export default function SolarReturn() {
         <div style={SECTION_STYLE}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ color: '#c9a84c', fontSize: '1rem', fontWeight: 600, margin: 0 }}>
-              {currentYear} 年度报告
+              {selectedYear} 年度报告
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {report?.model_used && (
