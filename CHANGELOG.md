@@ -12,6 +12,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.2] - 2026-04-02
+
+### Fixed
+- **Tag 标签** — 行星名嵌入所有标签类型（stellium/house/mode/element/ruler），显示时剥离，统一修复
+- **Admin prompts** — 修复 3 个 prompt 管理界面问题
+- **Debug UI** — 从本命盘页面移除 prompt log 调试面板
+
+---
+
 ## [0.8.1] - 2026-04-01
 
 ### Added

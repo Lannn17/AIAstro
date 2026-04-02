@@ -124,7 +124,7 @@ RAG 知识增强：调用 Qdrant 检索相关书籍片段，拼入 prompt 作为
  sources 数据已从 API 响应中正确传递到组件 props
 
 ## Current version / 当前版本
-v0.8.1 — Prompt 注册表 + DB 持久化基础（prompt_registry + 4 张新表 + rag 模块重构）。
+v0.8.2 — Tag 标签优化 + admin-prompts 修复 + debug UI 清理。
 See CHANGELOG.md for full history.
 
 ## Commands / 命令
