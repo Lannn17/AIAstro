@@ -8,6 +8,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+    <!-- 高德 JS API 安全配置：安全密钥通过后端 /_AMapService 代理注入，不暴露在前端 -->
+    <script>
+      window._AMapSecurityConfig = {
+        serviceHost: window.location.origin + '/_AMapService',
+      }
+    </script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=%VITE_AMAP_KEY%&plugin=AMap.AutoComplete"></script>
   </head>
   <body>
     <div id="root"></div>

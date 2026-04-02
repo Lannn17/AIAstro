@@ -1,17 +1,18 @@
 """
-region_router.py — GET /api/region  +  GET /api/geocode
+region_router.py — GET /api/region  +  GET /api/geocode  +  GET /_AMapService/{path}
 
 IP 地理位置检测，返回 CN 或 GLOBAL。
 地理编码代理：
-  CN  → 高德 API（GCJ-02）→ 转换为 WGS-84 后返回
+  CN  → 前端使用高德 JS SDK，通过 /_AMapService 代理注入 jscode（安全密钥不暴露前端）
   GLOBAL → Nominatim（原生 WGS-84）
-两者严格隔离，不互相 fallback。
+/_AMapService: 高德 JS API 安全代理，将 jscode 拼入后转发到 restapi.amap.com。
 """
 import os
 import math
 import time
 import httpx
 from fastapi import APIRouter, Request, Query
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -81,6 +82,28 @@ async def get_region(request: Request):
     return {"region": region}
 
 
+# ── 高德 JS API 安全代理 ──────────────────────────────────────────────────────
+
+@router.get("/_AMapService/{path:path}")
+async def amap_service_proxy(path: str, request: Request):
+    """将高德 JS SDK 请求代理到 restapi.amap.com，注入 jscode（安全密钥）。"""
+    security_key = os.getenv("AMAP_SECURITY_KEY", "")
+    params = dict(request.query_params)
+    if security_key:
+        params["jscode"] = security_key
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://restapi.amap.com/{path}",
+                params=params,
+                headers={"User-Agent": "AIAstro/1.0"},
+                timeout=5.0,
+            )
+        return JSONResponse(content=resp.json())
+    except Exception as e:
+        return JSONResponse(content={"status": "0", "info": str(e)}, status_code=502)
+
+
 # ── 地理编码代理 ─────────────────────────────────────────────────────────────
 
 @router.get("/api/geocode")
@@ -88,45 +111,15 @@ async def geocode(
     q: str = Query(..., min_length=1),
     region: str = Query("GLOBAL"),
 ):
-    """地理编码代理。CN → 高德（GCJ-02 → WGS-84）；GLOBAL → Nominatim。严格隔离不 fallback。"""
-    if region == "CN":
-        amap_key = os.getenv("AMAP_KEY", "")
-        if not amap_key:
-            return {"results": [], "error": "AMAP_KEY not configured"}
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://restapi.amap.com/v3/geocode/geo",
-                    params={"address": q, "key": amap_key, "output": "json"},
-                    timeout=5.0,
-                )
-            data = resp.json()
-            print(f"[geocode/CN] q={q!r} status={data.get('status')} info={data.get('info')} infocode={data.get('infocode')} count={data.get('count')} raw={data}", flush=True)
-            if data.get("status") != "1":
-                return {"results": [], "error": data.get("info", "Amap error")}
-            geocodes = data.get("geocodes") or []
-            results = []
-            for i, g in enumerate(geocodes):
-                raw_lng, raw_lat = (float(v) for v in g["location"].split(","))
-                wgs_lng, wgs_lat = gcj02_to_wgs84(raw_lng, raw_lat)
-                results.append({
-                    "place_id": f"amap_{i}",
-                    "display_name": g["formatted_address"],
-                    "lat": str(round(wgs_lat, 6)),
-                    "lon": str(round(wgs_lng, 6)),
-                })
-            return {"results": results}
-        except Exception as e:
-            return {"results": [], "error": str(e)}
-    else:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={"q": q, "format": "json", "limit": 6, "addressdetails": 1},
-                    headers={"Accept-Language": "zh-CN,zh,en", "User-Agent": "AIAstro/1.0"},
-                    timeout=5.0,
-                )
-            return {"results": resp.json()}
-        except Exception as e:
-            return {"results": [], "error": str(e)}
+    """地理编码代理。GLOBAL → Nominatim。CN 由前端 JS SDK + /_AMapService 直接处理。"""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q, "format": "json", "limit": 6, "addressdetails": 1},
+                headers={"Accept-Language": "zh-CN,zh,en", "User-Agent": "AIAstro/1.0"},
+                timeout=5.0,
+            )
+        return {"results": resp.json()}
+    except Exception as e:
+        return {"results": [], "error": str(e)}
