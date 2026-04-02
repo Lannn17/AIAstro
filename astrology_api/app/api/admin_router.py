@@ -33,6 +33,7 @@ class PatchDraftRequest(BaseModel):
 
 class RunTestRequest(BaseModel):
     chart_id: int
+    query_text: str = ""
 
 class AdminEvalRequest(BaseModel):
     log_id: str
@@ -243,8 +244,6 @@ def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_admin))
     version = db_get_prompt_version(id)
     if not version:
         raise HTTPException(404, "Version not found")
-    if version["status"] != "draft":
-        raise HTTPException(400, "Only draft versions can be tested")
 
     chart = db_get_chart(body.chart_id)
     if not chart:
@@ -260,12 +259,48 @@ def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_admin))
         chart_summary = format_chart_summary(chart_data)
 
         draft_prompt = version["prompt_text"]
-        try:
-            class _DefaultDict(dict):
-                def __missing__(self, key): return "{" + key + "}"
-            test_prompt = draft_prompt.format_map(_DefaultDict(chart_summary=chart_summary))
-        except Exception:
-            test_prompt = draft_prompt
+        rag_query = ""
+        rag_chunks_json = "[]"
+
+        if caller == "generate":
+            # generate 需要 RAG 检索 + query 注入
+            query = body.query_text or "占星基础问答"
+            rag_query = query
+            try:
+                from ..rag.retrieval import retrieve
+                chunks = retrieve(query, k=4)
+                rag_chunks_json = json.dumps(chunks, ensure_ascii=False)[:4000]
+                context_parts = []
+                for i, c in enumerate(chunks, 1):
+                    source = c["source"].replace("[EN]", "").split("(")[0].strip()
+                    context_parts.append(f"[片段{i} · 来源: {source}]\n{c['text']}")
+                context = "\n\n".join(context_parts)
+            except Exception:
+                context = "（RAG 检索失败，使用空上下文）"
+            try:
+                class _DD(dict):
+                    def __missing__(self, key): return "{" + key + "}"
+                test_prompt = draft_prompt.format_map(_DD(context=context, query=query))
+            except Exception:
+                test_prompt = draft_prompt
+
+        elif caller == "chat_with_chart":
+            # chat_with_chart 需要 chart_summary + transit_context
+            try:
+                class _DD(dict):
+                    def __missing__(self, key): return "{" + key + "}"
+                test_prompt = draft_prompt.format_map(_DD(chart_summary=chart_summary, transit_context=""))
+            except Exception:
+                test_prompt = draft_prompt
+
+        else:
+            # 其他业务 prompt 注入 chart_summary
+            try:
+                class _DD(dict):
+                    def __missing__(self, key): return "{" + key + "}"
+                test_prompt = draft_prompt.format_map(_DD(chart_summary=chart_summary))
+            except Exception:
+                test_prompt = draft_prompt
 
         import time
         t0 = time.time()
@@ -285,8 +320,8 @@ def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_admin))
     log_id = uuid.uuid4().hex[:16]
     db_insert_prompt_log(
         id_=log_id, version_id=id, source="test",
-        input_data=json.dumps({"chart_id": body.chart_id}, ensure_ascii=False),
-        rag_query="", rag_chunks="[]",
+        input_data=json.dumps({"chart_id": body.chart_id, "query_text": body.query_text}, ensure_ascii=False),
+        rag_query=rag_query, rag_chunks=rag_chunks_json,
         response_text=response_text[:5000],
         latency_ms=latency_ms, model_used=GENERATE_MODEL,
         temperature=cfg.get("temperature", 0.5),
@@ -294,9 +329,10 @@ def run_test(id: str, body: RunTestRequest, _user: str = Depends(require_admin))
         user_id=None,
     )
 
+    # 对比逻辑：deployed 版本取最近同类型 test log；当前版本若即为 deployed，取前一条
     deployed = db_get_deployed_version(caller)
     deployed_log = None
-    if deployed:
+    if deployed and deployed["id"] != id:
         deployed_log = db_get_recent_log_for_version(deployed["id"], source="test")
         if not deployed_log:
             deployed_log = db_get_recent_log_for_version(deployed["id"])
@@ -390,9 +426,17 @@ def revise_version(id: str, _user: str = Depends(require_admin)):
     if version["status"] != "draft":
         raise HTTPException(400, "Only draft can be revised")
 
+    # 若 prompt_text 与上一个 superseded/deployed 版本完全相同，直接返回当前版本
     caller = version["caller"]
-    current_tag = version["version_tag"]
+    all_versions = db_list_prompt_versions(caller=caller)
+    prev_texts = {
+        v["prompt_text"] for v in all_versions
+        if v["id"] != id and v["status"] in ("deployed", "superseded")
+    }
+    if version["prompt_text"] in prev_texts:
+        return version
 
+    current_tag = version["version_tag"]
     parts = current_tag.split(".")
     base = parts[0]
     minor = int(parts[1]) if len(parts) > 1 else 0

@@ -18,6 +18,7 @@ export default function AdminPromptDetail() {
   const [draftText, setDraftText] = useState('')
   const [charts, setCharts] = useState([])
   const [selectedChart, setSelectedChart] = useState(null)
+  const [queryText, setQueryText] = useState('')
   const [running, setRunning] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [adminNote, setAdminNote] = useState('')
@@ -73,6 +74,8 @@ export default function AdminPromptDetail() {
     }, 1000)
   }
 
+  const needsQuery = version && ['generate', 'chat_with_chart'].includes(version.caller)
+
   async function handleRunTest() {
     if (!selectedChart) return
     setRunning(true)
@@ -81,7 +84,7 @@ export default function AdminPromptDetail() {
       const resp = await apiFetch(`${API_BASE}/api/admin/prompt-versions/${id}/run-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ chart_id: selectedChart }),
+        body: JSON.stringify({ chart_id: selectedChart, query_text: queryText }),
       })
       setTestResult(await resp.json())
     } catch (e) {
@@ -164,7 +167,12 @@ export default function AdminPromptDetail() {
         </button>
         <h2 style={{ color: '#c9c9e0', margin: 0 }}>
           {version.caller} · {version.version_tag}{' '}
-          <span style={{ color: '#c9a84c', fontSize: '0.85rem' }}>草稿</span>
+          <span style={{
+            color: version.status === 'deployed' ? '#4caf50' : version.status === 'draft' ? '#c9a84c' : '#5a5a8a',
+            fontSize: '0.85rem',
+          }}>
+            {version.status === 'deployed' ? '线上' : version.status === 'draft' ? '草稿' : version.status}
+          </span>
         </h2>
       </div>
 
@@ -172,26 +180,34 @@ export default function AdminPromptDetail() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
         <div>
           <p style={{ color: '#8888aa', fontSize: '0.82rem', margin: '0 0 6px' }}>
-            草稿 Prompt（可编辑，自动保存）
+            {version.status === 'draft' ? '草稿 Prompt（可编辑，自动保存）' : `Prompt 全文（${version.version_tag}，只读）`}
           </p>
           <textarea
+            readOnly={version.status !== 'draft'}
             value={draftText}
-            onChange={e => handleDraftChange(e.target.value)}
+            onChange={version.status === 'draft' ? e => handleDraftChange(e.target.value) : undefined}
             style={{
-              width: '100%', height: '300px', background: '#0d0d1f',
-              border: '1px solid #3a3a6a', borderRadius: '6px',
-              color: '#c9c9e0', padding: '12px', fontSize: '0.85rem',
+              width: '100%', height: '300px',
+              background: version.status === 'draft' ? '#0d0d1f' : '#0a0a17',
+              border: `1px solid ${version.status === 'draft' ? '#3a3a6a' : '#2a2a4a'}`,
+              borderRadius: '6px',
+              color: version.status === 'draft' ? '#c9c9e0' : '#8888aa',
+              padding: '12px', fontSize: '0.85rem',
               resize: 'vertical', boxSizing: 'border-box',
             }}
           />
         </div>
         <div>
           <p style={{ color: '#8888aa', fontSize: '0.82rem', margin: '0 0 6px' }}>
-            当前线上版本（{deployed?.version_tag || '无'}，只读）
+            {version.status === 'draft'
+              ? `当前线上版本（${deployed?.version_tag || '无'}，只读）`
+              : `线上版本（${deployed?.version_tag || '无'}，只读）`}
           </p>
           <textarea
             readOnly
-            value={deployed?.prompt_text || '（暂无线上版本）'}
+            value={version.status === 'draft'
+              ? (deployed?.prompt_text || '（暂无线上版本）')
+              : (deployed && deployed.id !== version.id ? deployed.prompt_text : '（此版本即为线上版本）')}
             style={{
               width: '100%', height: '300px', background: '#0a0a17',
               border: '1px solid #2a2a4a', borderRadius: '6px',
@@ -203,33 +219,53 @@ export default function AdminPromptDetail() {
       </div>
 
       {/* Run test */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <select
-          value={selectedChart || ''}
-          onChange={e => setSelectedChart(Number(e.target.value))}
-          style={{
-            background: '#1a1a2e', border: '1px solid #3a3a6a',
-            borderRadius: '6px', color: '#c9c9e0', padding: '8px 12px',
-          }}
-        >
-          {charts.map(c => (
-            <option key={c.id} value={c.id}>{c.label || c.name || `Chart #${c.id}`}</option>
-          ))}
-        </select>
-        <button
-          onClick={handleRunTest}
-          disabled={running || !selectedChart}
-          style={{
-            padding: '8px 22px',
-            background: running ? '#3a3a6a' : '#c9a84c',
-            border: 'none', borderRadius: '6px',
-            color: running ? '#8888aa' : '#0a0a1a',
-            fontWeight: 600,
-            cursor: running ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {running ? '运行中…' : '运行测试'}
-        </button>
+      <div style={{ marginBottom: '24px' }}>
+        {needsQuery && (
+          <div style={{ marginBottom: '10px' }}>
+            <p style={{ color: '#8888aa', fontSize: '0.82rem', margin: '0 0 6px' }}>
+              测试问句（generate / chat_with_chart 必填）
+            </p>
+            <input
+              value={queryText}
+              onChange={e => setQueryText(e.target.value)}
+              placeholder="例：土星回归是什么意思？"
+              style={{
+                width: '100%', background: '#0d0d1f',
+                border: '1px solid #3a3a6a', borderRadius: '6px',
+                color: '#c9c9e0', padding: '8px 12px',
+                fontSize: '0.85rem', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <select
+            value={selectedChart || ''}
+            onChange={e => setSelectedChart(Number(e.target.value))}
+            style={{
+              background: '#1a1a2e', border: '1px solid #3a3a6a',
+              borderRadius: '6px', color: '#c9c9e0', padding: '8px 12px',
+            }}
+          >
+            {charts.map(c => (
+              <option key={c.id} value={c.id}>{c.label || c.name || `Chart #${c.id}`}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleRunTest}
+            disabled={running || !selectedChart || (needsQuery && !queryText.trim())}
+            style={{
+              padding: '8px 22px',
+              background: running ? '#3a3a6a' : '#c9a84c',
+              border: 'none', borderRadius: '6px',
+              color: running ? '#8888aa' : '#0a0a1a',
+              fontWeight: 600,
+              cursor: (running || (needsQuery && !queryText.trim())) ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {running ? '运行中…' : '运行测试'}
+          </button>
+        </div>
       </div>
 
       {/* Test results — side by side */}
@@ -351,31 +387,33 @@ export default function AdminPromptDetail() {
         </div>
       )}
 
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-        <button
-          onClick={handleRevise}
-          disabled={revising}
-          style={{
-            padding: '10px 22px', background: 'transparent',
-            border: '1px solid #3a3a6a', borderRadius: '6px',
-            color: '#8888aa', cursor: 'pointer',
-          }}
-        >
-          {revising ? '创建中…' : '保存草稿并继续修改'}
-        </button>
-        <button
-          onClick={handleDeploy}
-          disabled={deploying}
-          style={{
-            padding: '10px 22px', background: '#2a4a2a',
-            border: '1px solid #4a8a4a', borderRadius: '6px',
-            color: '#4caf50', fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          {deploying ? '部署中…' : '确认部署为下一版本'}
-        </button>
-      </div>
+      {/* Action buttons — draft only */}
+      {version.status === 'draft' && (
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={handleRevise}
+            disabled={revising}
+            style={{
+              padding: '10px 22px', background: 'transparent',
+              border: '1px solid #3a3a6a', borderRadius: '6px',
+              color: '#8888aa', cursor: 'pointer',
+            }}
+          >
+            {revising ? '创建中…' : '保存草稿并继续修改'}
+          </button>
+          <button
+            onClick={handleDeploy}
+            disabled={deploying}
+            style={{
+              padding: '10px 22px', background: '#2a4a2a',
+              border: '1px solid #4a8a4a', borderRadius: '6px',
+              color: '#4caf50', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {deploying ? '部署中…' : '确认部署为下一版本'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

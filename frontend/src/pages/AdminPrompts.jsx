@@ -128,13 +128,13 @@ export default function AdminPrompts() {
             return (
               <div
                 key={v.id}
-                onClick={() => v.status === 'draft' && navigate(`/admin/prompts/${v.id}`)}
+                onClick={() => navigate(`/admin/prompts/${v.id}`)}
                 style={{
                   background: v.status === 'deployed' ? '#0f1f0f' : '#12121f',
                   border: `1px solid ${v.status === 'deployed' ? '#2a4a2a' : '#2a2a4a'}`,
                   borderRadius: '8px', padding: '14px 18px',
                   display: 'flex', alignItems: 'center', gap: '16px',
-                  cursor: v.status === 'draft' ? 'pointer' : 'default',
+                  cursor: 'pointer',
                   transition: 'border-color 0.15s',
                 }}
               >
@@ -151,11 +151,9 @@ export default function AdminPrompts() {
                 <span style={{ color: '#5a5a8a', fontSize: '0.82rem' }}>
                   {v.created_at?.slice(0, 10)}
                 </span>
-                {v.status === 'draft' && (
-                  <span style={{ marginLeft: 'auto', color: '#c9a84c', fontSize: '0.82rem' }}>
-                    点击查看 →
-                  </span>
-                )}
+                <span style={{ marginLeft: 'auto', color: '#c9a84c', fontSize: '0.82rem' }}>
+                  查看 →
+                </span>
               </div>
             )
           })}

@@ -26,7 +26,6 @@ const NAV_ITEMS = [
   { path: '/solar-return', label: '太阳回归' },
   { path: '/progressions', label: '月亮推运' },
   { path: '/synastry',     label: '合盘' },
-  { path: '/directions',   label: '方向法' },
 ]
 
 const navLinkStyle = ({ isActive }) => ({

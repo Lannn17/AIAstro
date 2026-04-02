@@ -1152,7 +1152,7 @@ export default function NatalChart() {
                 fontWeight: rectifyOpen ? 600 : 400,
               }}
             >
-              ◈ 校对出生时间
+              ◈ 出生时间校正
             </button>
           )}
         </div>
