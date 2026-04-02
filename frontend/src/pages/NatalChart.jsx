@@ -278,6 +278,25 @@ export default function NatalChart() {
       const svgData = svgRes.ok ? await svgRes.text() : null
       if (svgData) setSvgContent(svgData)
       addSessionChart({ name: formData.name || '未命名', chartData: data, formData, locationName, svgData })
+
+      // 用户已确认出生时间精确到分钟，匿名上报用于校正数据集
+      if (formData.birth_time_confirmed) {
+        apiFetch(`${API_BASE}/api/confirmed-birth-time`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            birth_year:    formData.year,
+            birth_month:   formData.month,
+            birth_day:     formData.day,
+            birth_hour:    formData.hour,
+            birth_minute:  formData.minute,
+            latitude:      formData.latitude,
+            longitude:     formData.longitude,
+            tz_str:        formData.tz_str,
+            location_name: locationName || null,
+          }),
+        }).catch(() => {})  // 静默失败，不影响主流程
+      }
     } catch (e) {
       setError(e.message)
     } finally {

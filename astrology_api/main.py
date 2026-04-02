@@ -30,6 +30,7 @@ from app.api.admin_router import router as admin_router
 from app.api.debug_router import router as debug_router
 from app.api.region_router import router as region_router
 from app.api.user_router import router as user_router
+from app.api.confirmed_time_router import router as confirmed_time_router
 from app.db import create_tables
 from app import rag
 
@@ -85,6 +86,7 @@ app.include_router(admin_router)
 app.include_router(debug_router)
 app.include_router(region_router)
 app.include_router(user_router)
+app.include_router(confirmed_time_router)
 
 # ── Serve frontend static files in production ──────────────────────────────
 DIST_DIR = Path(__file__).parent / "dist"

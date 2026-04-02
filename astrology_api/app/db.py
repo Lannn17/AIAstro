@@ -150,6 +150,22 @@ CREATE TABLE IF NOT EXISTS prompt_evaluations (
 )
 """
 
+_CREATE_CONFIRMED_BIRTH_TIMES = """
+CREATE TABLE IF NOT EXISTS confirmed_birth_times (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    birth_year   INTEGER NOT NULL,
+    birth_month  INTEGER NOT NULL,
+    birth_day    INTEGER NOT NULL,
+    birth_hour   INTEGER NOT NULL,
+    birth_minute INTEGER NOT NULL,
+    latitude     REAL    NOT NULL,
+    longitude    REAL    NOT NULL,
+    tz_str       TEXT    NOT NULL,
+    location_name TEXT,
+    created_at   TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
 _CREATE_USER_FEEDBACK = """
 CREATE TABLE IF NOT EXISTS user_feedback (
     id TEXT PRIMARY KEY,
@@ -291,7 +307,8 @@ def create_tables():
                 _CREATE_PLANET_CACHE, _CREATE_SYNASTRY_CACHE, _CREATE_QUERY_ANALYTICS,
                 _CREATE_LIFE_EVENTS, _CREATE_SR_CACHE,
                 _CREATE_PROMPT_VERSIONS, _CREATE_PROMPT_LOGS,
-                _CREATE_PROMPT_EVALUATIONS, _CREATE_USER_FEEDBACK]:
+                _CREATE_PROMPT_EVALUATIONS, _CREATE_USER_FEEDBACK,
+                _CREATE_CONFIRMED_BIRTH_TIMES]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -888,6 +905,26 @@ def db_get_evaluations_for_version(version_id: str) -> list[dict]:
 
 
 # ── User feedback helpers ──────────────────────────────────────────
+
+# ── Confirmed birth times helpers ──────────────────────────────────────────
+
+def db_insert_confirmed_birth_time(
+    birth_year: int, birth_month: int, birth_day: int,
+    birth_hour: int, birth_minute: int,
+    latitude: float, longitude: float,
+    tz_str: str, location_name: str | None
+) -> None:
+    sql = """INSERT INTO confirmed_birth_times
+             (birth_year, birth_month, birth_day, birth_hour, birth_minute,
+              latitude, longitude, tz_str, location_name)
+             VALUES (?,?,?,?,?,?,?,?,?)"""
+    args = [birth_year, birth_month, birth_day, birth_hour, birth_minute,
+            latitude, longitude, tz_str, location_name]
+    if USE_TURSO:
+        _turso_exec(sql, args)
+    else:
+        _sqlite_write(sql, args)
+
 
 def db_insert_user_feedback(
     id_: str, caller: str | None, content: str, user_id: str | None
