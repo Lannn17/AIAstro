@@ -1,5 +1,5 @@
 """
-app/rag/client.py — AI 客户端：Gemini + SiliconFlow fallback + 区域切换
+app/rag/client.py — AI 客户端：Gemini + OpenRouter fallback + 区域切换
 """
 import os
 import time
@@ -20,14 +20,14 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
-SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
-SILICONFLOW_MODEL   = os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen3.5-4B")
-SILICONFLOW_BASE    = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1")  # ★ 默认用 .com
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL   = os.getenv("OPENROUTER_MODEL", "qwen/qwen3-14b-plus:free")
+OPENROUTER_BASE    = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
 # ★ 启动时打印，方便确认环境变量
-print(f"[STARTUP] SILICONFLOW_API_KEY: {'SET (' + SILICONFLOW_API_KEY[:8] + '...)' if SILICONFLOW_API_KEY else 'NOT SET'}", flush=True)
-print(f"[STARTUP] SILICONFLOW_MODEL: {SILICONFLOW_MODEL}", flush=True)
-print(f"[STARTUP] SILICONFLOW_BASE: {SILICONFLOW_BASE}", flush=True)
+print(f"[STARTUP] OPENROUTER_API_KEY: {'SET (' + OPENROUTER_API_KEY[:8] + '...)' if OPENROUTER_API_KEY else 'NOT SET'}", flush=True)
+print(f"[STARTUP] OPENROUTER_MODEL: {OPENROUTER_MODEL}", flush=True)
+print(f"[STARTUP] OPENROUTER_BASE: {OPENROUTER_BASE}", flush=True)
 
 _raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -65,7 +65,7 @@ class _DSCandidate:
 
 
 class _DeepSeekResponse:
-    """Minimal adapter so SiliconFlow responses look like Gemini GenerateContentResponse."""
+    """Minimal adapter so OpenRouter responses look like Gemini GenerateContentResponse."""
     def __init__(self, text: str):
         self.text = text
         self.candidates = [_DSCandidate()]
@@ -176,10 +176,10 @@ class _ModelsWithFallback:
 
         t0 = time.time()
 
-        # ── SiliconFlow path (CN region) ──
-        if get_thread_region() == "CN" and SILICONFLOW_API_KEY:
-            print(f"[SiliconFlow] ✅ Region=CN, calling model={SILICONFLOW_MODEL}", flush=True)
-            print(f"[SiliconFlow] Base URL: {SILICONFLOW_BASE}", flush=True)
+        # ── OpenRouter path (CN region) ──
+        if get_thread_region() == "CN" and OPENROUTER_API_KEY:
+            print(f"[OpenRouter] ✅ Region=CN, calling model={OPENROUTER_MODEL}", flush=True)
+            print(f"[OpenRouter] Base URL: {OPENROUTER_BASE}", flush=True)
             try:
                 from openai import OpenAI as _OpenAI
                 import httpx as _httpx
@@ -187,23 +187,23 @@ class _ModelsWithFallback:
                 # ★ 先快速测试连通性（5秒内知道能不能通）
                 try:
                     _test = _httpx.get(
-                        f"{SILICONFLOW_BASE}/models",
-                        headers={"Authorization": f"Bearer {SILICONFLOW_API_KEY}"},
+                        f"{OPENROUTER_BASE}/models",
+                        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
                         timeout=5.0,
                     )
-                    print(f"[SiliconFlow] Connectivity test: HTTP {_test.status_code}", flush=True)
+                    print(f"[OpenRouter] Connectivity test: HTTP {_test.status_code}", flush=True)
                 except Exception as _ce:
-                    print(f"[SiliconFlow] ❌ Cannot reach {SILICONFLOW_BASE}: {_ce}", flush=True)
-                    entry.model_used = SILICONFLOW_MODEL
-                    entry.response_text = f"ERROR: Cannot reach SiliconFlow: {_ce}"
+                    print(f"[OpenRouter] ❌ Cannot reach {OPENROUTER_BASE}: {_ce}", flush=True)
+                    entry.model_used = OPENROUTER_MODEL
+                    entry.response_text = f"ERROR: Cannot reach OpenRouter: {_ce}"
                     entry.latency_ms = int((time.time() - t0) * 1000)
                     prompt_store.append(entry)
                     _persist_prompt_log(entry)
-                    return _DeepSeekResponse(f"⚠️ 无法连接AI服务({SILICONFLOW_BASE})，请稍后重试。")
+                    return _DeepSeekResponse(f"⚠️ 无法连接AI服务({OPENROUTER_BASE})，请稍后重试。")
 
                 sf = _OpenAI(
-                    api_key=SILICONFLOW_API_KEY,
-                    base_url=SILICONFLOW_BASE,
+                    api_key=OPENROUTER_API_KEY,
+                    base_url=OPENROUTER_BASE,
                     timeout=30.0,  # ★ 30秒超时
                 )
                 msgs = self._to_openai_messages(contents, config)
@@ -211,17 +211,17 @@ class _ModelsWithFallback:
                 wants_json = (
                     config and getattr(config, 'response_mime_type', '') == 'application/json'
                 )
-                create_kwargs = dict(model=SILICONFLOW_MODEL, messages=msgs, temperature=temp)
+                create_kwargs = dict(model=OPENROUTER_MODEL, messages=msgs, temperature=temp)
                 if wants_json:
                     create_kwargs['response_format'] = {"type": "json_object"}
 
-                print(f"[SiliconFlow] Sending request: msgs={len(msgs)}, temp={temp}, json={wants_json}", flush=True)
+                print(f"[OpenRouter] Sending request: msgs={len(msgs)}, temp={temp}, json={wants_json}", flush=True)
                 completion = sf.chat.completions.create(**create_kwargs)
                 text = completion.choices[0].message.content or ""
-                print(f"[SiliconFlow] ✅ Success! Response length={len(text)}", flush=True)
+                print(f"[OpenRouter] ✅ Success! Response length={len(text)}", flush=True)
 
-                _local.model_used = SILICONFLOW_MODEL
-                entry.model_used = SILICONFLOW_MODEL
+                _local.model_used = OPENROUTER_MODEL
+                entry.model_used = OPENROUTER_MODEL
                 entry.response_text = text[:5000]
                 entry.finish_reason = "STOP"
                 entry.response_tokens_est = len(text) // 2
@@ -232,8 +232,8 @@ class _ModelsWithFallback:
 
             except Exception as e:
                 error_msg = f"{type(e).__name__}: {e}"
-                print(f"[SiliconFlow] ❌ FAILED: {error_msg}", flush=True)
-                entry.model_used = SILICONFLOW_MODEL
+                print(f"[OpenRouter] ❌ FAILED: {error_msg}", flush=True)
+                entry.model_used = OPENROUTER_MODEL
                 entry.response_text = f"ERROR: {error_msg}"
                 entry.latency_ms = int((time.time() - t0) * 1000)
                 prompt_store.append(entry)
@@ -242,7 +242,7 @@ class _ModelsWithFallback:
 
         else:
             if get_thread_region() == "CN":
-                print(f"[SiliconFlow] ❌ Region=CN but SILICONFLOW_API_KEY is empty!", flush=True)
+                print(f"[OpenRouter] ❌ Region=CN but OPENROUTER_API_KEY is empty!", flush=True)
 
         # ── Gemini Fallback 调用 (GLOBAL only) ──
         chain = [model] + [m for m in _FALLBACK_MODELS if m != model]
