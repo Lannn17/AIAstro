@@ -14,6 +14,8 @@ import { getTagExplanation } from '../utils/tagExplanations'
 export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, chartData = null }) {
   const wrapperRef = useRef(null)
   const info = getTagExplanation(tag, chartData)
+  // 标签显示时去掉括号内容（行星名仅用于描述生成），保持标签简洁
+  const displayTag = tag.replace(/（[^）]+）$/, '')
 
   // 点击外部关闭
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, ch
           }
         }}
       >
-        {tag}
+        {displayTag}
       </span>
 
       {/* 气泡 */}
@@ -110,7 +112,7 @@ export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, ch
 
           {/* 标题行 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '0.8rem' }}>✦ {tag}</span>
+            <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '0.8rem' }}>✦ {displayTag}</span>
             <span
               onClick={onClose}
               style={{ color: '#5a4a7a', fontSize: '1.1rem', lineHeight: 1, cursor: 'pointer', padding: '0 2px' }}
