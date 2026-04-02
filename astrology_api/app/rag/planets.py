@@ -7,7 +7,7 @@ from .client import client, GENERATE_MODEL, get_last_model_used
 from .retrieval import retrieve, _load, _parse_json
 from .prompts import _clean_source_name, _SYSTEM_PROMPT_UNIFIED
 from .prompt_registry import PROMPTS as _PROMPTS
-from .chart_summary import _SIGN_ELEMENT, _SIGN_MODALITY
+from .chart_summary import _SIGN_ELEMENT, _SIGN_MODALITY, _SIGN_RULER
 from ..interpretations.translations import translate_planet, translate_sign
 
 _SKIP_PLANETS = {'true_node', 'true_lilith', 'true_south_node'}
@@ -24,8 +24,10 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
 
     sign_planets: dict[str, list] = {}
     house_planets: dict[int, list] = {}
-    elem_count = {'火': 0, '土': 0, '风': 0, '水': 0}
-    mode_count = {'开创': 0, '固定': 0, '变动': 0}
+    elem_count: dict[str, int] = {'火': 0, '土': 0, '风': 0, '水': 0}
+    elem_planets: dict[str, list] = {'火': [], '土': [], '风': [], '水': []}
+    mode_count: dict[str, int] = {'开创': 0, '固定': 0, '变动': 0}
+    mode_planets: dict[str, list] = {'开创': [], '固定': [], '变动': []}
     retro_names = []
 
     for key, p in planets.items():
@@ -39,9 +41,13 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
             if house:
                 house_planets.setdefault(house, []).append(name_zh)
             if sign_raw in _SIGN_ELEMENT:
-                elem_count[_SIGN_ELEMENT[sign_raw]] += 1
+                elem = _SIGN_ELEMENT[sign_raw]
+                elem_count[elem] += 1
+                elem_planets[elem].append(name_zh)
             if sign_raw in _SIGN_MODALITY:
-                mode_count[_SIGN_MODALITY[sign_raw]] += 1
+                mode = _SIGN_MODALITY[sign_raw]
+                mode_count[mode] += 1
+                mode_planets[mode].append(name_zh)
         if p.get('retrograde') and key in _CORE_PLANETS:
             retro_names.append(name_zh)
 
@@ -59,19 +65,31 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
             planet_str = '·'.join(planets_list)
             facts.append(f"第{h}宫强势（{planet_str}）")
 
-    # 元素主导
+    # 元素主导（含具体行星名，前端显示时去掉括号）
     dom_elem = max(elem_count, key=elem_count.get)
     if elem_count[dom_elem] >= 4:
-        facts.append(f"多{dom_elem}象行星（{elem_count[dom_elem]}颗）")
+        planet_str = '·'.join(elem_planets[dom_elem])
+        facts.append(f"多{dom_elem}象行星（{elem_count[dom_elem]}颗：{planet_str}）")
 
-    # 模式主导
+    # 模式主导（含具体行星名，前端显示时去掉括号）
     dom_mode = max(mode_count, key=mode_count.get)
     if mode_count[dom_mode] >= 4:
-        facts.append(f"多{dom_mode}星（{mode_count[dom_mode]}颗）")
+        planet_str = '·'.join(mode_planets[dom_mode])
+        facts.append(f"多{dom_mode}星（{mode_count[dom_mode]}颗：{planet_str}）")
 
-    # 逆行
+    # 逆行（含具体行星名，前端显示时去掉括号）
     if retro_names:
-        facts.append(f"逆行行星：{'、'.join(retro_names)}")
+        planet_str = '·'.join(retro_names)
+        facts.append(f"逆行行星（{planet_str}）")
+
+    # 命主星逆行：ASC 守护星若逆行，单独生成标签
+    asc = natal_chart.get('ascendant', {})
+    asc_sign_raw = asc.get('sign_original') or asc.get('sign', '')
+    ruler_en = _SIGN_RULER.get(asc_sign_raw, '')
+    if ruler_en:
+        ruler_zh = translate_planet(ruler_en, 'zh')
+        if ruler_zh and ruler_zh in retro_names:
+            facts.append(f"命主星逆行（{ruler_zh}）")
 
     # 相位格局检测
     trine_pairs: set[tuple] = set()

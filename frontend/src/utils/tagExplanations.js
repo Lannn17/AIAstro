@@ -66,59 +66,6 @@ const PLANET_DOMAINS = {
 const CORE_PLANET_KEYS = new Set(['sun', 'moon', 'mercury', 'venus', 'mars',
   'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
 
-// 模式 → 所属星座（中文，含"座"后缀用于比较）
-const MODE_SIGNS = {
-  固定: new Set(['金牛座', '狮子座', '天蝎座', '水瓶座']),
-  本始: new Set(['白羊座', '巨蟹座', '天秤座', '摩羯座']),
-  变动: new Set(['双子座', '处女座', '射手座', '双鱼座']),
-}
-
-// 元素 → 所属星座
-const ELEMENT_SIGNS = {
-  火: new Set(['白羊座', '狮子座', '射手座']),
-  土: new Set(['金牛座', '处女座', '摩羯座']),
-  风: new Set(['双子座', '天秤座', '水瓶座']),
-  水: new Set(['巨蟹座', '天蝎座', '双鱼座']),
-}
-
-// ASC星座 → 命主星（现代主星）
-const ASC_RULER = {
-  白羊: '火星', 金牛: '金星', 双子: '水星', 巨蟹: '月亮', 狮子: '太阳',
-  处女: '水星', 天秤: '金星', 天蝎: '冥王星', 射手: '木星',
-  摩羯: '土星', 水瓶: '天王星', 双鱼: '海王星',
-}
-
-/** 获取命盘中属于指定模式的核心行星列表 */
-function _getPlanetsInMode(chartData, mode) {
-  if (!chartData?.planets) return null
-  const signSet = MODE_SIGNS[mode]
-  if (!signSet) return null
-  const result = []
-  for (const [key, p] of Object.entries(chartData.planets)) {
-    if (!CORE_PLANET_KEYS.has(key)) continue
-    if (signSet.has(p.sign || '')) result.push(p.name || key)
-  }
-  return result.length >= 4 ? result : null
-}
-
-/** 获取命盘中属于指定元素的核心行星列表 */
-function _getPlanetsInElement(chartData, elem) {
-  if (!chartData?.planets) return null
-  const signSet = ELEMENT_SIGNS[elem]
-  if (!signSet) return null
-  const result = []
-  for (const [key, p] of Object.entries(chartData.planets)) {
-    if (!CORE_PLANET_KEYS.has(key)) continue
-    if (signSet.has(p.sign || '')) result.push(p.name || key)
-  }
-  return result.length >= 4 ? result : null
-}
-
-/** 从 chartData 推算命主星（ASC 星座的现代主星）*/
-function _getChartRuler(chartData) {
-  const ascSign = (chartData?.ascendant?.sign || '').replace(/座$/, '')
-  return ASC_RULER[ascSign] || null
-}
 
 /**
  * 将 "太阳·水星·金星" 格式转为带领域注释的短句。
@@ -292,51 +239,84 @@ export function getTagExplanation(tagText, chartData = null) {
     }
   }
 
-  // 多元素行星（规则生成格式及 AI 简写）
+  // 多元素行星（新格式含行星名：如"多火象行星（4颗：太阳·火星·木星·冥王星）"）
+  m = tagText.match(/^多([火土风水])象行星（(\d+)颗：(.+)）$/)
+  if (m) {
+    const elem = m[1], count = m[2], planetStr = m[3]
+    const meaning = ELEMENT_MEANINGS[elem] || ''
+    const described = _describePlanets(planetStr)
+    return {
+      title: tagText,
+      explanation: `命盘中有 ${count} 颗行星（${described}）位于${elem}象星座，${meaning}。这种元素主导使你的行事风格带有鲜明的${elem}象气质。`,
+    }
+  }
+  // 多元素行星（旧格式/AI简写，向后兼容）
   m = tagText.match(/^多([火土风水])象行星[（(]?(\d+)?颗?[）)]?$/)
   if (m) {
     const elem = m[1], count = m[2] || '多'
     const meaning = ELEMENT_MEANINGS[elem] || ''
-    const fromChart = _getPlanetsInElement(chartData, elem)
-    const planetNote = fromChart ? `（${fromChart.join('、')}）` : ''
     return {
       title: tagText,
-      explanation: `命盘中有 ${count} 颗行星${planetNote}位于${elem}象星座，${meaning}。这种元素主导使你的行事风格带有鲜明的${elem}象气质。`,
+      explanation: `命盘中有 ${count} 颗行星位于${elem}象星座，${meaning}。这种元素主导使你的行事风格带有鲜明的${elem}象气质。`,
     }
   }
 
-  // 多模式行星（规则生成格式及 AI 简写）
+  // 多模式行星（新格式含行星名：如"多固定星（5颗：火星·土星·天王星·海王星·冥王星）"）
+  m = tagText.match(/^多(本始|固定|变动)星（(\d+)颗：(.+)）$/)
+  if (m) {
+    const mode = m[1], count = m[2], planetStr = m[3]
+    const meaning = MODE_MEANINGS[mode] || ''
+    const described = _describePlanets(planetStr)
+    return {
+      title: tagText,
+      explanation: `命盘中有 ${count} 颗行星（${described}）落在${mode}星座，${meaning}。这一模式主导着你面对生活变化时的基本姿态。`,
+    }
+  }
+  // 多模式行星（旧格式/AI简写，向后兼容）
   m = tagText.match(/^多(本始|固定|变动)星[（(]?(\d+)?颗?[）)]?$/)
   if (m) {
     const mode = m[1], count = m[2] || '多'
     const meaning = MODE_MEANINGS[mode] || ''
-    const fromChart = _getPlanetsInMode(chartData, mode)
-    const planetNote = fromChart ? `（${fromChart.join('、')}）` : ''
     return {
       title: tagText,
-      explanation: `命盘中有 ${count} 颗行星${planetNote}落在${mode}星座，${meaning}。这一模式主导着你面对生活变化时的基本姿态。`,
+      explanation: `命盘中有 ${count} 颗行星落在${mode}星座，${meaning}。这一模式主导着你面对生活变化时的基本姿态。`,
     }
   }
 
-  // 逆行行星（规则格式，多颗，如"逆行行星：火星、土星"）
+  // 逆行行星（新格式：如"逆行行星（火星·土星）"，前端已去括号展示）
+  m = tagText.match(/^逆行行星（(.+)）$/)
+  if (m) {
+    const described = _describePlanets(m[1])
+    return {
+      title: tagText,
+      explanation: `${described}在你出生时处于逆行状态。逆行行星的能量趋于内化，相关议题需要更多自我探索与反思，成熟后往往发展出独到的深度。`,
+    }
+  }
+  // 逆行行星（旧格式，向后兼容）
   m = tagText.match(/^逆行行星：(.+)$/)
   if (m) {
-    const planets = m[1]
     return {
       title: tagText,
-      explanation: `${planets} 在你出生时处于逆行状态。逆行行星的能量趋于内化，相关议题需要更多自我探索与反思，成熟后往往发展出独到的深度。`,
+      explanation: `${m[1]}在你出生时处于逆行状态。逆行行星的能量趋于内化，相关议题需要更多自我探索与反思，成熟后往往发展出独到的深度。`,
     }
   }
 
-  // 命主星逆行（AI 生成格式）
-  if (tagText === '命主星逆行') {
-    const ruler = _getChartRuler(chartData)
-    const rulerNote = ruler ? `你的命主星${ruler}` : '命主星'
-    const domain = ruler ? PLANET_DOMAINS[ruler] : null
+  // 命主星逆行（新格式含命主星名：如"命主星逆行（天王星）"）
+  m = tagText.match(/^命主星逆行（(.+)）$/)
+  if (m) {
+    const ruler = m[1]
+    const domain = PLANET_DOMAINS[ruler]
     const domainNote = domain ? `（${domain}）` : ''
     return {
       title: tagText,
-      explanation: `${rulerNote}${domainNote}在你出生时处于逆行状态，其能量趋于内化与深化。你在命主星所代表的领域往往有更多自我审视的倾向，成熟后能发展出超越常规的洞察力与独到深度。`,
+      explanation: `你的命主星${ruler}${domainNote}在你出生时处于逆行状态，其能量趋于内化与深化。你在${ruler}所代表的领域往往有更多自我审视的倾向，成熟后能发展出超越常规的洞察力与独到深度。`,
+    }
+  }
+  // 命主星逆行（无命主星名的 fallback）
+  if (tagText === '命主星逆行') {
+    return {
+      title: tagText,
+      explanation: '命主星在你出生时处于逆行状态，其能量趋于内化与深化。你在命主星所代表的领域往往有更多自我审视的倾向，成熟后能发展出超越常规的洞察力与独到深度。',
     }
   }
 
@@ -352,7 +332,15 @@ export function getTagExplanation(tagText, chartData = null) {
     }
   }
 
-  // 大三角格局
+  // 大三角格局（含行星名：如"大三角格局（火星·土星·天王星）"）
+  m = tagText.match(/^大三角格局（(.+)）$/)
+  if (m) {
+    const described = _describePlanets(m[1])
+    return {
+      title: tagText,
+      explanation: `${described}形成等边三角形（互差约 120°），能量流动顺畅，是命盘中天赋才能的标志。虽然轻松，但也可能因过于舒适而缺乏主动挑战的动力。`,
+    }
+  }
   if (tagText.startsWith('大三角格局')) {
     return {
       title: tagText,
@@ -360,7 +348,17 @@ export function getTagExplanation(tagText, chartData = null) {
     }
   }
 
-  // T三角格局
+  // T三角格局（含行星名：如"T三角格局（顶点：火星，对冲：太阳·月亮）"）
+  m = tagText.match(/^T三角格局（顶点：(.+?)，对冲：(.+)）$/)
+  if (m) {
+    const apex = m[1], oppStr = m[2]
+    const domain = PLANET_DOMAINS[apex]
+    const domainNote = domain ? `（${domain}）` : ''
+    return {
+      title: tagText,
+      explanation: `${oppStr}形成对冲，各自与顶点${apex}${domainNote}形成四分相，构成紧张的 T 形。${apex}所在宫位是你人生的挑战中心，也是成长的关键出口。`,
+    }
+  }
   if (tagText.startsWith('T三角格局')) {
     return {
       title: tagText,
