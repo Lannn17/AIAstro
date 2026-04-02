@@ -150,13 +150,13 @@ def _compute_sr_theme_scores(
 
     # ── Layer 2: SR Sun house ──
     sun = sr_planets.get("sun", {})
-    sun_house = str(sun.get("house", "")) if sun.get("house") else ""
+    sun_house = str(sun.get("house", 0)) if sun.get("house", 0) > 0 else ""
     if sun_house in _SR_SUN_HOUSE_WEIGHTS:
         add(_SR_SUN_HOUSE_WEIGHTS[sun_house], f"SR太阳落第{sun_house}宫")
 
     # ── Layer 3: SR Moon house ──
     moon = sr_planets.get("moon", {})
-    moon_house = str(moon.get("house", "")) if moon.get("house") else ""
+    moon_house = str(moon.get("house", 0)) if moon.get("house", 0) > 0 else ""
     if moon_house in _SR_MOON_HOUSE_WEIGHTS:
         add(_SR_MOON_HOUSE_WEIGHTS[moon_house], f"SR月亮落第{moon_house}宫")
 

@@ -106,6 +106,13 @@ def get_planet_data(subject: AstrologicalSubject, language: LanguageType = "pt")
         name = planet.name
         sign_full = SIGN_ABBR_TO_FULL.get(planet.sign, planet.sign)
         house_num = HOUSE_NAME_TO_NUM.get(str(planet.house), 0)
+        if house_num == 0:
+            try:
+                h = int(planet.house)
+                if 1 <= h <= 12:
+                    house_num = h
+            except (ValueError, TypeError):
+                pass
 
         planets_data[name.lower()] = PlanetData(
             name=name,
