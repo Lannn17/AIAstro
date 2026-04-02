@@ -1,11 +1,10 @@
 """
-region_router.py — GET /api/region  +  GET /api/geocode  +  GET /_AMapService/{path}
+region_router.py — GET /api/region  +  GET /api/geocode
 
 IP 地理位置检测，返回 CN 或 GLOBAL。
 地理编码代理：
-  CN  → 前端使用高德 JS SDK，通过 /_AMapService 代理注入 jscode（安全密钥不暴露前端）
+  CN     → 后端调用高德 REST API（Web服务 Key），自动转换 GCJ-02 → WGS-84
   GLOBAL → Nominatim（原生 WGS-84）
-/_AMapService: 高德 JS API 安全代理，将 jscode 拼入后转发到 restapi.amap.com。
 """
 import os
 import math
@@ -15,6 +14,9 @@ from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
+
+# ── 环境变量 ─────────────────────────────────────────────────────────────────
+AMAP_KEY = os.environ.get("AMAP_KEY", "")
 
 _region_cache: dict[str, tuple[str, float]] = {}
 _CACHE_TTL = 86400  # 24 hours
@@ -82,28 +84,6 @@ async def get_region(request: Request):
     return {"region": region}
 
 
-# ── 高德 JS API 安全代理 ──────────────────────────────────────────────────────
-
-@router.get("/_AMapService/{path:path}")
-async def amap_service_proxy(path: str, request: Request):
-    """将高德 JS SDK 请求代理到 restapi.amap.com，注入 jscode（安全密钥）。"""
-    security_key = os.getenv("AMAP_SECURITY_KEY", "")
-    params = dict(request.query_params)
-    if security_key:
-        params["jscode"] = security_key
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"https://restapi.amap.com/{path}",
-                params=params,
-                headers={"User-Agent": "AIAstro/1.0"},
-                timeout=5.0,
-            )
-        return JSONResponse(content=resp.json())
-    except Exception as e:
-        return JSONResponse(content={"status": "0", "info": str(e)}, status_code=502)
-
-
 # ── 地理编码代理 ─────────────────────────────────────────────────────────────
 
 @router.get("/api/geocode")
@@ -111,15 +91,83 @@ async def geocode(
     q: str = Query(..., min_length=1),
     region: str = Query("GLOBAL"),
 ):
-    """地理编码代理。GLOBAL → Nominatim。CN 由前端 JS SDK + /_AMapService 直接处理。"""
+    """
+    地理编码代理。
+    CN     → 高德 REST API（后端代理，无 CORS 问题）
+    GLOBAL → Nominatim
+    返回统一格式: { results: [{ display_name, lat, lon, address: {...} }] }
+    坐标系: 统一返回 WGS-84（高德 GCJ-02 会自动转换）
+    """
     try:
         async with httpx.AsyncClient() as client:
+
+            # ── CN 走高德 REST API ──
+            if region == "CN" and AMAP_KEY:
+                resp = await client.get(
+                    "https://restapi.amap.com/v3/geocode/geo",
+                    params={
+                        "address": q,
+                        "key": AMAP_KEY,
+                    },
+                    timeout=5.0,
+                )
+                data = resp.json()
+
+                print(f"[AMAP] query={q}, status={data.get('status')}, "
+                      f"info={data.get('info')}, count={data.get('count')}",
+                      flush=True)
+
+                # 高德返回失败时打印详细信息
+                if data.get("status") != "1":
+                    print(f"[AMAP] ❌ Error response: {data}", flush=True)
+                    return {"results": [], "error": data.get("info", "高德请求失败")}
+
+                results = []
+                for geo in data.get("geocodes", []):
+                    loc = geo.get("location", "")
+                    if not loc or "," not in loc:
+                        continue
+                    gcj_lng, gcj_lat = map(float, loc.split(","))
+                    # 高德返回 GCJ-02，转为 WGS-84（占星需要真实经纬度）
+                    wgs_lng, wgs_lat = gcj02_to_wgs84(gcj_lng, gcj_lat)
+                    results.append({
+                        "display_name": geo.get("formatted_address", q),
+                        "lat": str(round(wgs_lat, 6)),
+                        "lon": str(round(wgs_lng, 6)),
+                        "address": {
+                            "country": geo.get("country", ""),
+                            "state": geo.get("province", ""),
+                            "city": geo.get("city", "") if isinstance(geo.get("city"), str) else "",
+                            "county": geo.get("district", ""),
+                        },
+                    })
+
+                print(f"[AMAP] ✅ Returned {len(results)} results for '{q}'", flush=True)
+                return {"results": results}
+
+            # ── CN 但没有 AMAP_KEY，给出提示 ──
+            elif region == "CN" and not AMAP_KEY:
+                print("[AMAP] ❌ AMAP_KEY not set!", flush=True)
+                # 降级到 Nominatim
+                pass
+
+            # ── GLOBAL 走 Nominatim ──
             resp = await client.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": q, "format": "json", "limit": 6, "addressdetails": 1},
-                headers={"Accept-Language": "zh-CN,zh,en", "User-Agent": "AIAstro/1.0"},
+                params={
+                    "q": q,
+                    "format": "json",
+                    "limit": 6,
+                    "addressdetails": 1,
+                },
+                headers={
+                    "Accept-Language": "zh-CN,zh,en",
+                    "User-Agent": "AIAstro/1.0",
+                },
                 timeout=5.0,
             )
-        return {"results": resp.json()}
+            return {"results": resp.json()}
+
     except Exception as e:
+        print(f"[GEOCODE] ❌ Error: {e}", flush=True)
         return {"results": [], "error": str(e)}
