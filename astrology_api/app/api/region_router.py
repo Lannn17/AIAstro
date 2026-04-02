@@ -101,6 +101,7 @@ async def geocode(
                     timeout=5.0,
                 )
             data = resp.json()
+            print(f"[geocode/CN] q={q!r} status={data.get('status')} info={data.get('info')} infocode={data.get('infocode')} count={data.get('count')} raw={data}", flush=True)
             if data.get("status") != "1":
                 return {"results": [], "error": data.get("info", "Amap error")}
             geocodes = data.get("geocodes") or []

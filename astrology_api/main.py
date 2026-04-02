@@ -5,7 +5,8 @@ Este arquivo é o ponto de entrada para a aplicação FastAPI e configura
 os routers, middleware, e outras configurações globais.
 """
 from dotenv import load_dotenv
-load_dotenv()  # Must be first — app.db reads env vars at import time
+from pathlib import Path as _Path
+load_dotenv(_Path(__file__).parent / ".env", override=True)  # Must be first — app.db reads env vars at import time
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
