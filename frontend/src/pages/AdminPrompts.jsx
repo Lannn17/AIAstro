@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { apiFetch } from '../utils/apiFetch'
+import Analytics from './Analytics'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -31,6 +32,7 @@ const STATUS_BADGE = {
 export default function AdminPrompts() {
   const { authHeaders, isAuthenticated, isAdmin } = useAuth()
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('prompts')
   const [caller, setCaller] = useState(Object.keys(CALLER_LABELS)[0])
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(false)
@@ -75,8 +77,28 @@ export default function AdminPrompts() {
     return <p style={{ color: '#8888aa', padding: '24px' }}>无权限访问</p>
   }
 
+  const tabStyle = (tab) => ({
+    padding: '8px 20px',
+    border: 'none',
+    borderBottom: activeTab === tab ? '2px solid #c9a84c' : '2px solid transparent',
+    background: 'transparent',
+    color: activeTab === tab ? '#c9a84c' : '#8888aa',
+    fontWeight: activeTab === tab ? 600 : 400,
+    fontSize: '0.95rem',
+    cursor: 'pointer',
+  })
+
   return (
-    <div style={{ padding: '24px', maxWidth: '860px', margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
+      {/* Tab header */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid #2a2a5a' }}>
+        <button style={tabStyle('prompts')} onClick={() => setActiveTab('prompts')}>Prompt 管理</button>
+        <button style={tabStyle('analytics')} onClick={() => setActiveTab('analytics')}>RAG 分析</button>
+      </div>
+
+      {activeTab === 'analytics' && <Analytics />}
+
+      {activeTab === 'prompts' && <>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
         <h2 style={{ color: '#c9c9e0', margin: 0 }}>Prompt 版本管理</h2>
         <select
@@ -162,6 +184,7 @@ export default function AdminPrompts() {
           )}
         </div>
       )}
+      </>}
     </div>
   )
 }

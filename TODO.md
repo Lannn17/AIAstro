@@ -596,7 +596,7 @@ class QualityGuard:
 - ✅ ~~18. 行运优先显示最新发生的,并以标签形式突出展现.(生成行运时读取缓存,缓存中没有的条目打上最新的标签.)另外确认行运缓存逻辑,该轮行运结束后清空缓存.~~
 - ✅ ~~19. 现在任何人都可以/admin访问rag分析报告,加一个权限,仅限管理员访问.~~
 - ✅ ~~20. 完全去掉访客入口,所有用户必须注册才能使用~~
-- 21. Prompt管理界面问题 --checking
+- 21. Prompt管理界面问题 --checking1
     - 存在显示限制无法完全显示prompt全文
     - 当前每生成一次就记录为一版新的草稿,prompt本身根本没有任何变化.逻辑错误.
     - generate的prompt似乎无法测试,只能测试各个具体业务的prompt.优化对比逻辑
@@ -641,7 +641,98 @@ class QualityGuard:
 - test_api.py是否还在使用
 - 多个目录下都存在.env的问题
 
-- embedding逻辑完善(rag chunking etc.)
+- embedding逻辑完善(rag chunking etc.) --排期4.3 flag
+参考prompt:
+# Task: Build an intelligent RAG chunking pipeline for astrology reference books
+
+## Context
+
+I have a collection of astrology reference books as `.txt` files in `data/processed_texts/`. 
+These are primarily in **English and Portuguese**. I need you to build a robust chunking 
+and indexing pipeline that maximizes RAG retrieval quality.
+
+## Step 1: Analyze Every Text File's Structure
+
+Before writing ANY chunking code, read every `.txt` file in `data/processed_texts/` 
+(skip `exemplo_interpretacoes.txt`) and analyze each one's structure. For each file, identify:
+
+1. **Language** (English or Portuguese)
+2. **Heading/chapter patterns** — how does this specific file mark sections? Examples:
+   - `Chapter 1: ...`, `CHAPTER ONE`, `Part II`
+   - `Capítulo 3`, `CAPÍTULO III`, `Seção 2`
+   - Markdown `## Heading`, numbered `1.2.3`, ALL CAPS lines
+   - Zodiac sign names as headers (`ARIES`, `Áries`, `Touro`)
+   - Planet names as headers (`The Sun`, `O Sol`)
+   - House numbers (`First House`, `Casa 1`)
+3. **Paragraph separation** — double newlines? Single newlines? Indentation?
+4. **Special structures** — bullet lists, tables, numbered lists, aspect descriptions,
+   degree meanings, delineation blocks (e.g., "Sun in Aries: ...")
+5. **Abbreviations used** — e.g., `Asc.`, `Desc.`, `conj.`, `opp.`, `sq.`, `p.`, `vol.`
+6. **Average paragraph length and density**
+
+Output your analysis as a structured summary for each file before proceeding.
+
+## Step 2: Design Per-File or Per-Pattern Chunking Strategies
+
+Based on your analysis, design chunking rules. Key principles:
+
+- **Never cut mid-sentence.** Always break at sentence boundaries.
+- **Never cut across section/chapter headings.** A chunk must belong to one section.
+- **Preserve paragraph integrity** when possible — prefer breaking between paragraphs.
+- **Handle abbreviations correctly** — `Dr.`, `Sr.`, `e.g.`, `i.e.`, `p.ex.`, `p.` (page), 
+  astrological abbreviations like `Asc.` should NOT be treated as sentence endings.
+- **Detect and preserve structured blocks** — if a file has delineation entries like 
+  "Sun in Aries: [interpretation text]", each entry should ideally be one chunk or stay intact.
+- **Prepend section context** — each chunk should carry its section/chapter title as metadata,
+  AND optionally prepend a brief context header to the chunk text itself, e.g.:
+  `[Source: western_astrology.txt | Chapter: The Twelve Houses | Section: Fifth House]`
+
+## Step 3: Implement Parent-Child Chunking Architecture
+
+Build a two-tier chunking system:
+
+- **Parent chunks** (~1500-2000 chars): larger context blocks, returned to the LLM
+- **Child chunks** (~400-600 chars): smaller retrieval units, used for vector search
+- Each child records its `parent_id`
+- At retrieval time: search children → return their parent texts to LLM
+
+## Step 4: Build the Index
+
+Using model `intfloat/multilingual-e5-small`:
+- Encode all **child chunks** with `"passage: "` prefix
+- Build a FAISS `IndexFlatIP` index (vectors are normalized → cosine similarity)
+- Also tokenize all child chunks for **BM25** (use nltk stopwords for en/pt, 
+  preserve astrology terms as a whitelist — generate this whitelist by extracting 
+  domain terms you find in the actual texts)
+
+## Step 5: Output Files
+
+Save to `data/enhanced_index/`:
+- `parents.json` — all parent chunks with metadata
+- `children.json` — all child chunks with `parent_id` and metadata
+- `children.faiss` — FAISS index of child embeddings
+- `bm25_tokens.json` — tokenized corpus for BM25
+- `model_info.json` — model name, dim, counts, prefixes
+- `chunking_report.json` — your analysis from Step 1 + stats per file 
+  (number of sections detected, parents, children, avg chunk sizes)
+
+## Constraints
+
+- Python 3.11+
+- Dependencies available: `sentence-transformers`, `faiss-cpu`, `numpy`, `nltk`, `rank_bm25`
+- The pipeline must be runnable as: `cd astrology_api && python build_enhanced_index.py`
+- All code in a single file is fine, but separate a `chunking.py` module if it exceeds 300 lines
+- Add detailed logging so I can verify the chunking quality
+- If any file has a structure you can't confidently parse, log a warning and fall back 
+  to conservative paragraph-based chunking
+
+## Quality Checks
+
+After building, run a self-test:
+- Print 3 random parent chunks and their children for manual inspection
+- Print chunk size distribution (min, max, mean, median, p95) for both parents and children
+- Flag any chunks that are suspiciously short (<50 chars) or long (>3000 chars)
+- Verify every child has a valid parent_id that exists in parents
 🔴 严重问题
 1. 文本分块按固定字符数切割，会截断词语和句子
 python

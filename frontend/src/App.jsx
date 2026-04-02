@@ -11,7 +11,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ChartSessionProvider, useChartSession } from './contexts/ChartSessionContext'
 import { RegionProvider, useRegion } from './contexts/RegionContext'
 import WelcomeModal from "./components/WelcomeModal"
-import Analytics from './pages/Analytics'
 import LoginModal from './components/LoginModal'
 import { PromptRatingProvider } from './contexts/PromptRatingContext'
 import PromptRatingModal from './components/PromptRatingModal'
@@ -227,7 +226,7 @@ function AppInner() {
             <Route path="/progressions"  element={<Progressions />} />
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
-            <Route path="/admin"         element={isAdmin ? <Analytics /> : <Navigate to="/" replace />} />
+            <Route path="/admin"         element={<Navigate to="/admin/prompts" replace />} />
             <Route path="/admin/prompts"  element={isAdmin ? <AdminPrompts /> : <Navigate to="/" replace />} />
             <Route path="/admin/prompts/:id" element={isAdmin ? <AdminPromptDetail /> : <Navigate to="/" replace />} />
           </Routes>
