@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getTagExplanation } from '../utils/tagExplanations'
 
 /**
@@ -13,9 +13,24 @@ import { getTagExplanation } from '../utils/tagExplanations'
  */
 export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, chartData = null }) {
   const wrapperRef = useRef(null)
+  const [popupPos, setPopupPos] = useState({ left: 0, top: 0, width: 300 })
   const info = getTagExplanation(tag, chartData)
   // 标签显示时去掉括号内容（行星名仅用于描述生成），保持标签简洁
   const displayTag = tag.replace(/（[^）]+）$/, '')
+
+  // 打开时计算 fixed 定位坐标，确保气泡在视口内
+  useEffect(() => {
+    if (!isOpen || !wrapperRef.current) return
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const MARGIN = 12
+    const popupW = Math.min(300, window.innerWidth - MARGIN * 2)
+    let left = rect.left
+    if (left + popupW > window.innerWidth - MARGIN) {
+      left = window.innerWidth - popupW - MARGIN
+    }
+    if (left < MARGIN) left = MARGIN
+    setPopupPos({ left, top: rect.bottom + 8, width: popupW })
+  }, [isOpen])
 
   // 点击外部关闭
   useEffect(() => {
@@ -40,7 +55,7 @@ export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, ch
   }, [isOpen, onClose])
 
   return (
-    <span ref={wrapperRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <span ref={wrapperRef} style={{ display: 'inline-block' }}>
       {/* 标签本体 */}
       <span
         onClick={onToggle}
@@ -74,26 +89,20 @@ export default function TagTooltip({ tag, isOpen, onToggle, onClose, onAskAI, ch
         {displayTag}
       </span>
 
-      {/* 气泡 */}
+      {/* 气泡：position:fixed 相对视口定位，避免移动端溢出 */}
       {isOpen && (
         <div
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            left: 0,
-            zIndex: 100,
-            width: '300px',
-            maxWidth: 'calc(100vw - 32px)',
+            position: 'fixed',
+            top: popupPos.top,
+            left: popupPos.left,
+            width: popupPos.width,
+            zIndex: 9999,
             background: '#1d1640',
             border: '1px solid #7a6aaa',
             borderRadius: '10px',
             padding: '14px 16px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-            // 若接近右边缘则改为右对齐
-            ...(typeof window !== 'undefined' && wrapperRef.current &&
-              window.innerWidth - wrapperRef.current.getBoundingClientRect().left < 320
-                ? { left: 'auto', right: 0 }
-                : {}),
           }}
         >
           {/* 小箭头 */}
