@@ -66,6 +66,60 @@ const PLANET_DOMAINS = {
 const CORE_PLANET_KEYS = new Set(['sun', 'moon', 'mercury', 'venus', 'mars',
   'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
 
+// 模式 → 所属星座（中文，含"座"后缀用于比较）
+const MODE_SIGNS = {
+  固定: new Set(['金牛座', '狮子座', '天蝎座', '水瓶座']),
+  本始: new Set(['白羊座', '巨蟹座', '天秤座', '摩羯座']),
+  变动: new Set(['双子座', '处女座', '射手座', '双鱼座']),
+}
+
+// 元素 → 所属星座
+const ELEMENT_SIGNS = {
+  火: new Set(['白羊座', '狮子座', '射手座']),
+  土: new Set(['金牛座', '处女座', '摩羯座']),
+  风: new Set(['双子座', '天秤座', '水瓶座']),
+  水: new Set(['巨蟹座', '天蝎座', '双鱼座']),
+}
+
+// ASC星座 → 命主星（现代主星）
+const ASC_RULER = {
+  白羊: '火星', 金牛: '金星', 双子: '水星', 巨蟹: '月亮', 狮子: '太阳',
+  处女: '水星', 天秤: '金星', 天蝎: '冥王星', 射手: '木星',
+  摩羯: '土星', 水瓶: '天王星', 双鱼: '海王星',
+}
+
+/** 获取命盘中属于指定模式的核心行星列表 */
+function _getPlanetsInMode(chartData, mode) {
+  if (!chartData?.planets) return null
+  const signSet = MODE_SIGNS[mode]
+  if (!signSet) return null
+  const result = []
+  for (const [key, p] of Object.entries(chartData.planets)) {
+    if (!CORE_PLANET_KEYS.has(key)) continue
+    if (signSet.has(p.sign || '')) result.push(p.name || key)
+  }
+  return result.length >= 4 ? result : null
+}
+
+/** 获取命盘中属于指定元素的核心行星列表 */
+function _getPlanetsInElement(chartData, elem) {
+  if (!chartData?.planets) return null
+  const signSet = ELEMENT_SIGNS[elem]
+  if (!signSet) return null
+  const result = []
+  for (const [key, p] of Object.entries(chartData.planets)) {
+    if (!CORE_PLANET_KEYS.has(key)) continue
+    if (signSet.has(p.sign || '')) result.push(p.name || key)
+  }
+  return result.length >= 4 ? result : null
+}
+
+/** 从 chartData 推算命主星（ASC 星座的现代主星）*/
+function _getChartRuler(chartData) {
+  const ascSign = (chartData?.ascendant?.sign || '').replace(/座$/, '')
+  return ASC_RULER[ascSign] || null
+}
+
 /**
  * 将 "太阳·水星·金星" 格式转为带领域注释的短句。
  * 例如 → "太阳（自我认同）、水星（思维沟通）与金星（审美关系）"
@@ -243,9 +297,11 @@ export function getTagExplanation(tagText, chartData = null) {
   if (m) {
     const elem = m[1], count = m[2] || '多'
     const meaning = ELEMENT_MEANINGS[elem] || ''
+    const fromChart = _getPlanetsInElement(chartData, elem)
+    const planetNote = fromChart ? `（${fromChart.join('、')}）` : ''
     return {
       title: tagText,
-      explanation: `命盘中有 ${count} 颗行星位于${elem}象星座，${meaning}。这种元素主导使你的行事风格带有鲜明的${elem}象气质。`,
+      explanation: `命盘中有 ${count} 颗行星${planetNote}位于${elem}象星座，${meaning}。这种元素主导使你的行事风格带有鲜明的${elem}象气质。`,
     }
   }
 
@@ -254,9 +310,11 @@ export function getTagExplanation(tagText, chartData = null) {
   if (m) {
     const mode = m[1], count = m[2] || '多'
     const meaning = MODE_MEANINGS[mode] || ''
+    const fromChart = _getPlanetsInMode(chartData, mode)
+    const planetNote = fromChart ? `（${fromChart.join('、')}）` : ''
     return {
       title: tagText,
-      explanation: `命盘中有 ${count} 颗行星落在${mode}星座，${meaning}。这一模式主导着你面对生活变化时的基本姿态。`,
+      explanation: `命盘中有 ${count} 颗行星${planetNote}落在${mode}星座，${meaning}。这一模式主导着你面对生活变化时的基本姿态。`,
     }
   }
 
@@ -267,6 +325,18 @@ export function getTagExplanation(tagText, chartData = null) {
     return {
       title: tagText,
       explanation: `${planets} 在你出生时处于逆行状态。逆行行星的能量趋于内化，相关议题需要更多自我探索与反思，成熟后往往发展出独到的深度。`,
+    }
+  }
+
+  // 命主星逆行（AI 生成格式）
+  if (tagText === '命主星逆行') {
+    const ruler = _getChartRuler(chartData)
+    const rulerNote = ruler ? `你的命主星${ruler}` : '命主星'
+    const domain = ruler ? PLANET_DOMAINS[ruler] : null
+    const domainNote = domain ? `（${domain}）` : ''
+    return {
+      title: tagText,
+      explanation: `${rulerNote}${domainNote}在你出生时处于逆行状态，其能量趋于内化与深化。你在命主星所代表的领域往往有更多自我审视的倾向，成熟后能发展出超越常规的洞察力与独到深度。`,
     }
   }
 

@@ -47,17 +47,15 @@ def _compute_chart_facts(natal_chart: dict) -> list[str]:
 
     facts = []
 
-    # 星座群星（含具体行星名）
+    # 星座群星（标签简洁，具体行星名由前端从 chartData 读取）
     for s, planets_list in sign_planets.items():
         if len(planets_list) >= 3:
-            planet_str = '·'.join(planets_list)
-            facts.append(f"群星{s}（{planet_str}）")
+            facts.append(f"群星{s}座")
 
-    # 宫位强势（含具体行星名）
+    # 宫位强势（标签简洁，具体行星名由前端从 chartData 读取）
     for h, planets_list in house_planets.items():
         if len(planets_list) >= 3:
-            planet_str = '·'.join(planets_list)
-            facts.append(f"第{h}宫强势（{planet_str}）")
+            facts.append(f"第{h}宫强势")
 
     # 元素主导
     dom_elem = max(elem_count, key=elem_count.get)
