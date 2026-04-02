@@ -191,6 +191,7 @@ export default function SolarReturn() {
           sr_houses: srHouses,
           sr_asc_degree: srAscDegree,
           return_year: selectedYear,
+          active_year: activeYear || 0,
           location_lat: parseFloat(location.latitude),
           location_lon: parseFloat(location.longitude),
           language: 'zh',

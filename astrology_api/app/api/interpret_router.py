@@ -273,6 +273,7 @@ class SolarReturnInterpretRequest(BaseModel):
     sr_houses: Dict[str, Any]
     sr_asc_degree: float
     return_year: int
+    active_year: int = 0
     location_lat: float
     location_lon: float
     language: str = "zh"
@@ -294,11 +295,14 @@ async def interpret_solar_return(body: SolarReturnInterpretRequest):
     if body.chart_id <= 0:
         raise HTTPException(status_code=400, detail="chart_id must be > 0 (guest mode not supported)")
 
+    # 仅缓存当前生效盘及往前一年，更早的历史盘不写缓存
+    cacheable = (body.active_year == 0) or (body.return_year >= body.active_year - 1)
+
     location_hash = hashlib.md5(
         f"{body.location_lat:.4f},{body.location_lon:.4f}".encode()
     ).hexdigest()[:12]
 
-    if not body.force_refresh:
+    if cacheable and not body.force_refresh:
         cached = db_get_sr_cache(body.chart_id, body.return_year, location_hash)
         if cached:
             cached["model_used"] = "cached"
@@ -321,8 +325,9 @@ async def interpret_solar_return(body: SolarReturnInterpretRequest):
         print(f"[SR INTERPRET ERROR]\n{traceback.format_exc()}", flush=True)
         raise HTTPException(status_code=500, detail=f"Solar return interpretation error: {e}")
 
-    db_save_sr_cache(body.chart_id, body.return_year, location_hash,
-                     json.dumps(result, ensure_ascii=False))
+    if cacheable:
+        db_save_sr_cache(body.chart_id, body.return_year, location_hash,
+                         json.dumps(result, ensure_ascii=False))
 
     top_themes = result.get("theme_scores", {})
     top3 = sorted(top_themes.items(), key=lambda x: -x[1])[:3]

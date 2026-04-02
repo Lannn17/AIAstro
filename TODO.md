@@ -272,6 +272,7 @@ def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
     - 存在显示限制无法完全显示prompt全文
     - 当前每生成一次就记录为一版新的草稿,prompt本身根本没有任何变化.逻辑错误.
     - generate的prompt似乎无法测试,只能测试各个具体业务的prompt.优化对比逻辑
+- 22. 校正逻辑:用户确认的时间范围内如果本身就没有出现配置的变化,弹出提示
 
 
 ## 非重要待优化项
