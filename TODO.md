@@ -162,15 +162,16 @@ class QualityGuard:
 
 - 1. 推盘逻辑优化: 增加星盘计算层,差异化确定事件权重赋值 - checking
 - 3. ✅ ~~Mainland China地区端口设置配相应的国内版软件 - 3.31排期~~ 代码已完成，待配置 API key：
-  - [ ] `astrology_api/.env` 添加 `DEEPSEEK_API_KEY=...`（本地）
+  - [ ] `astrology_api/.env` 添加 `SILICONFLOW_API_KEY=...`（本地）
   - [ ] `frontend/.env` 创建并添加 `VITE_AMAP_KEY=...`（本地）
-  - [ ] HuggingFace Spaces → Settings → **Secrets** 添加 `DEEPSEEK_API_KEY`（生产）
+  - [ ] HuggingFace Spaces → Settings → **Secrets** 添加 `SILICONFLOW_API_KEY`（生产）
   - [ ] HuggingFace Spaces → Settings → **Variables** 添加 `VITE_AMAP_KEY`（生产，构建时注入）
+  -- debug: [SiliconFlow] failed, falling back to Gemini: No module named 'openai'
 - 4. 不确定分钟(但确定小时)的情况,调盘界面里不好选择.是否可以在校正之前先告诉用户在不确定的时间范围之内其本命盘配置变动的可能范围 
 - 6. 合盘列表关系维度全部显示并打分,将得分按从高到低排序并生成相应分析,解释得分高的关系为什么更可能形成以及为什么更难形成得分低的关系.合盘tag一并加入自由向AI提问对话的入口.
 - 7. 合盘界面前端UI升级,双人行星相位列表分类描述,不要以长文字列表形式呈现,增强用户可读性和可理解性.(当前显示的原始数据列表可以折叠做成一个按钮,用户点击后可展开具体查看)
 - 8. 同理本命盘界面关于人生主题的部分也应该显示全部领域并给出比例参考
-- 10. 设计用户留言反馈窗口,用户可提出意见,在TURSO中增加一张收集建议的表单（`user_feedback` 表已建好 v0.8.1，待实现 API endpoint + 前端入口）
+- 10. 设计用户留言反馈窗口,用户可提出意见,在TURSO中增加一张收集建议的表单（`user_feedback` 表已建好 v0.8.1，待实现 API endpoint + 前端入口）--debug 当前提交后一直显示提交中,可能未接到数据库表单里
 - 11. 增加用户使用引导和每个功能的用处等介绍
 - 12. 每日运势?占星骰子?新的每日小功能开发.
 
@@ -204,7 +205,7 @@ class QualityGuard:
 
 ## 已知问题
 - ✅ ~~1. 校对分析RAG分析遗留问题(引用未拆分,未出现RAG引用分析模块) -- 所有设置AI分析的端口服务都必须接入rag的分析接口~~
-- 2. 本命盘四交点无分析 --二次测试失败 --flag --排期4.1
+- 2. 本命盘四交点无分析 --二次测试失败 --flag --排期4.1 --延期4.2
 - ✅ ~~缓存标签出现后就无法再知道这段分析的生成模型了 需要将缓存标签和模型标签修复为不互斥 即可以共同显示两个标签~~
 '''
 // 前端：标签不应互斥，改为数组
@@ -304,6 +305,7 @@ def generate_tag(tag_type: str, tag_data: dict, chart_data: dict) -> dict:
 - 17. 太阳回归当前生效盘+可选年份 -- flag
 - ✅ ~~18. 行运优先显示最新发生的,并以标签形式突出展现.(生成行运时读取缓存,缓存中没有的条目打上最新的标签.)另外确认行运缓存逻辑,该轮行运结束后清空缓存.~~
 - 19. 现在任何人都可以/admin访问rag分析报告,加一个权限,仅限管理员访问. -- flag
+- 20. 完全去掉访客入口,所有用户必须注册才能使用 --flag
 
 
 ## 非重要待优化项
