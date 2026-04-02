@@ -23,7 +23,9 @@ const labelStyle = {
 }
 
 /**
- * Reusable location search input backed by Nominatim.
+ * Reusable location search input backed by Nominatim (via backend proxy).
+ * CN region: restricted to China (countrycodes=cn), no fallback on failure.
+ * GLOBAL region: worldwide search.
  *
  * Props:
  *   initialValue  – location name to pre-fill on mount
@@ -118,7 +120,9 @@ export default function LocationSearch({ initialValue = '', latitude, longitude,
 
       {searchFailed && !confirmed && (
         <div style={{ color: '#8a4a4a', fontSize: '0.7rem', marginTop: '4px' }}>
-          未找到地点，请尝试其他关键词
+          {region === 'CN'
+            ? '未找到地点（国内模式，仅搜索中国地区）'
+            : '未找到地点，请尝试其他关键词'}
         </div>
       )}
 

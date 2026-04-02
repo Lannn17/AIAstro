@@ -1,14 +1,11 @@
 """
 region_router.py — GET /api/region  +  GET /api/geocode
 IP 地理位置检测，返回 CN 或 GLOBAL。
-地理编码代理：CN 调高德，GLOBAL 调 Nominatim（key 放后端 env，不暴露前端）。
+地理编码代理：统一使用 Nominatim，无需 key。
 """
-import os
 import time
 import httpx
 from fastapi import APIRouter, Request, Query
-
-AMAP_KEY = os.getenv("AMAP_KEY", "")
 
 router = APIRouter()
 
@@ -48,40 +45,28 @@ async def geocode(
     q: str = Query(..., min_length=1),
     region: str = Query("GLOBAL"),
 ):
-    """地理编码代理：CN → 高德，GLOBAL → Nominatim。"""
+    """地理编码代理：Nominatim 服务端代理，环境严格隔离。
+    CN：限定 countrycodes=cn，优先中文结果，失败直接报错不 fallback。
+    GLOBAL：全球搜索，中英文结果。
+    """
+    params = {"q": q, "format": "json", "limit": 6, "addressdetails": 1}
     if region == "CN":
-        if not AMAP_KEY:
-            return {"results": [], "error": "AMAP_KEY not configured"}
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://restapi.amap.com/v3/geocode/geo",
-                    params={"address": q, "key": AMAP_KEY, "output": "json"},
-                    timeout=5.0,
-                )
-            data = resp.json()
-            geocodes = data.get("geocodes") or []
-            results = [
-                {
-                    "place_id": f"amap_{i}",
-                    "display_name": g["formatted_address"],
-                    "lat": g["location"].split(",")[1],
-                    "lon": g["location"].split(",")[0],
-                }
-                for i, g in enumerate(geocodes)
-            ]
-            return {"results": results}
-        except Exception as e:
-            return {"results": [], "error": str(e)}
+        params["countrycodes"] = "cn"
+        params["accept-language"] = "zh-CN,zh"
     else:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={"q": q, "format": "json", "limit": 6, "addressdetails": 1},
-                    headers={"Accept-Language": "zh-CN,zh,en", "User-Agent": "AIAstro/1.0"},
-                    timeout=5.0,
-                )
-            return {"results": resp.json()}
-        except Exception as e:
-            return {"results": [], "error": str(e)}
+        params["accept-language"] = "zh-CN,zh,en"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+                headers={"Accept-Language": "zh-CN,zh" if region == "CN" else "zh-CN,zh,en",
+                         "User-Agent": "AIAstro/1.0"},
+                timeout=5.0,
+            )
+        results = resp.json()
+        return {"results": results, "region": region}
+    except Exception as e:
+        # 严格隔离：不 fallback，直接返回错误
+        return {"results": [], "error": str(e), "region": region}
