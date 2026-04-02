@@ -21,7 +21,7 @@ if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL   = os.getenv("OPENROUTER_MODEL", "qwen/qwen3-14b-plus:free")
+OPENROUTER_MODEL   = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.6-plus-preview:free")
 OPENROUTER_BASE    = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
 # ★ 启动时打印，方便确认环境变量
