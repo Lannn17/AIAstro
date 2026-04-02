@@ -21,7 +21,7 @@ if not GOOGLE_API_KEY:
     raise RuntimeError("请在 .env 中设置 GOOGLE_API_KEY")
 
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
-SILICONFLOW_MODEL   = "deepseek-ai/DeepSeek-V3"
+SILICONFLOW_MODEL   = "Qwen/Qwen3.5-4B"
 
 _raw_client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -187,11 +187,13 @@ class _ModelsWithFallback:
                 sf = _OpenAI(api_key=SILICONFLOW_API_KEY, base_url="https://api.siliconflow.cn/v1")
                 msgs = self._to_openai_messages(contents, config)
                 temp = getattr(config, 'temperature', 0.5) if config else 0.5
-                completion = sf.chat.completions.create(
-                    model=SILICONFLOW_MODEL,
-                    messages=msgs,
-                    temperature=temp,
+                wants_json = (
+                    config and getattr(config, 'response_mime_type', '') == 'application/json'
                 )
+                create_kwargs = dict(model=SILICONFLOW_MODEL, messages=msgs, temperature=temp)
+                if wants_json:
+                    create_kwargs['response_format'] = {"type": "json_object"}
+                completion = sf.chat.completions.create(**create_kwargs)
                 text = completion.choices[0].message.content or ""
                 _local.model_used = SILICONFLOW_MODEL
                 entry.model_used = SILICONFLOW_MODEL
