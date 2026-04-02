@@ -237,6 +237,23 @@ def _compute_sr_theme_scores(
     }
 
 
+_THEORETICAL_MAX = 14  # 单主题理论最高原始分（ASC3+Sun3+Moon2+Ruler2+Angular2+Planet2）
+
+
+def _normalize_to_100(theme_scores: dict, top_n: int = 3) -> list:
+    """原始累加分 → 百分制，确定性代码，不依赖 AI。"""
+    sorted_themes = sorted(theme_scores.items(), key=lambda x: -x[1])
+    result = []
+    for theme, raw in sorted_themes[:top_n]:
+        pct = min(round(raw / _THEORETICAL_MAX * 100), 100)
+        result.append({
+            "theme": theme,
+            "score": max(pct, 5),  # 最低 5，避免出现 0
+            "name_zh": _SR_THEME_NAMES_ZH.get(theme, theme),
+        })
+    return result
+
+
 def analyze_solar_return(
     sr_planets: dict,
     sr_houses: dict,
@@ -261,13 +278,19 @@ def analyze_solar_return(
         sr_asc_degree=sr_asc_degree,
     )
 
-    top3 = analysis["top_themes"][:3]
-    top3_zh = "、".join(_SR_THEME_NAMES_ZH.get(t["theme"], t["theme"]) for t in top3)
+    # 确定性归一化：规则引擎层完成，不依赖 AI
+    normalized_top3 = _normalize_to_100(analysis["theme_scores"], top_n=3)
+    normalized_all = {
+        k: min(round(v / _THEORETICAL_MAX * 100), 100)
+        for k, v in analysis["theme_scores"].items()
+    }
+
+    top3_zh = "、".join(t["name_zh"] for t in normalized_top3)
     modifiers_zh = "、".join(analysis["modifiers"]) if analysis["modifiers"] else "无特别修正"
     facts_text = "\n".join(f"- {f}" for f in analysis["core_facts"])
     scores_text = "\n".join(
         f"  {_SR_THEME_NAMES_ZH.get(k, k)}: {v}"
-        for k, v in sorted(analysis["theme_scores"].items(), key=lambda x: -x[1])
+        for k, v in sorted(normalized_all.items(), key=lambda x: -x[1])
     )
 
     rag_query = (
@@ -334,24 +357,9 @@ def analyze_solar_return(
 
     themes_out = parsed.get("themes", [])
 
-    # 兜底归一化：若 Gemini 仍输出了原始小分（最高值 < 20），换算为百分制
-    if themes_out:
-        max_t = max((t.get("score", 0) for t in themes_out), default=0)
-        if 0 < max_t < 20:
-            for t in themes_out:
-                t["score"] = round(t.get("score", 0) / max_t * 100)
-
     if not themes_out:
-        themes_out = [
-            {
-                "theme": t["theme"],
-                "score": t["score"],
-                "name_zh": _SR_THEME_NAMES_ZH.get(t["theme"], t["theme"]),
-                "analysis": "",
-                "evidence": [],
-            }
-            for t in top3
-        ]
+        # Fallback：AI 解析失败，使用确定性归一化结果
+        themes_out = [{**t, "analysis": "", "evidence": []} for t in normalized_top3]
 
     return {
         "keywords":     parsed.get("keywords", []),
@@ -361,5 +369,5 @@ def analyze_solar_return(
         "suggestions":  parsed.get("suggestions", []),
         "sources":      sources,
         "model_used":   model_used,
-        "theme_scores": analysis["theme_scores"],
+        "theme_scores": normalized_all,
     }
