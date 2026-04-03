@@ -1,0 +1,160 @@
+"""
+占星骰子 API
+POST /api/dice/roll     — 掷三骰 + 主解读
+POST /api/dice/reroll   — 再掷（追问模式 / 补充能量模式）
+"""
+import asyncio
+import hashlib
+from datetime import date as date_type
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+
+from app.security import require_auth, UserInfo
+from app.db import db_log_query_analytics
+
+router = APIRouter(prefix="/api/dice", tags=["Dice"])
+
+
+# ── Schemas ────────────────────────────────────────────────────────
+
+class DiceRollRequest(BaseModel):
+    question: str
+    category: str = "其他"
+
+
+class DiceRerollRequest(BaseModel):
+    original_planet: str
+    original_sign: str
+    original_house: str
+    original_question: str
+    category: str = "其他"
+    mode: str  # "followup" | "supplement"
+    followup_question: Optional[str] = None  # mode=followup 时必填
+
+
+# ── 每日限制检查 ────────────────────────────────────────────────────
+
+def _check_daily_limit(user: UserInfo):
+    """同一用户同一天只能发起一次主掷骰（reroll 不限）"""
+    from app.db import _turso_exec
+    today = date_type.today().isoformat()
+    user_id = user.get("user_id")
+    username = user.get("username", "")
+
+    # 用 username 匹配，因为 admin 没有 user_id
+    sql = """
+        SELECT COUNT(*) as cnt FROM query_analytics
+        WHERE label = 'astro_dice'
+          AND created_at >= ?
+          AND query_hash LIKE ?
+    """
+    # query_hash 前缀存 username，便于按用户查询
+    prefix = hashlib.sha256(f"dice:{username}:{today}".encode()).hexdigest()[:16]
+    rows = _turso_exec(sql, [f"{today}T00:00:00", f"{prefix}%"])
+    cnt = rows[0]["cnt"] if rows else 0
+    if cnt >= 1:
+        raise HTTPException(
+            status_code=429,
+            detail="今日已完成一次占星骰子占卜。占星能量不宜滥用，明日再来。"
+        )
+    return prefix
+
+
+# ── 端点 ───────────────────────────────────────────────────────────
+
+@router.post("/roll")
+async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth)):
+    """掷三颗骰子并生成主解读"""
+    from app.rag.dice import roll_dice, interpret_dice
+
+    prefix = _check_daily_limit(user)
+
+    try:
+        dice = roll_dice()
+        result = interpret_dice(
+            planet=dice["planet"],
+            sign=dice["sign"],
+            house=dice["house"],
+            question=body.question,
+            category=body.category,
+        )
+        asyncio.create_task(_log_dice_analytics(body.question, result, prefix))
+        return result
+    except Exception as e:
+        import traceback
+        print(f"[DICE ERROR]\n{traceback.format_exc()}", flush=True)
+        raise HTTPException(status_code=500, detail=f"占星骰子解读失败: {e}")
+
+
+@router.post("/reroll")
+async def dice_reroll(body: DiceRerollRequest, user: UserInfo = Depends(require_auth)):
+    """再掷：追问模式（2骰）或补充能量模式（1骰）"""
+    from app.rag.dice import (
+        roll_two_dice, roll_one_planet,
+        interpret_followup, interpret_supplement,
+    )
+
+    try:
+        if body.mode == "followup":
+            if not body.followup_question:
+                raise HTTPException(status_code=422, detail="追问模式需要提供 followup_question")
+            new_dice = roll_two_dice()
+            result = interpret_followup(
+                original_planet=body.original_planet,
+                original_sign=body.original_sign,
+                original_house=body.original_house,
+                original_question=body.original_question,
+                new_planet=new_dice["planet"],
+                new_house=new_dice["house"],
+                followup_question=body.followup_question,
+                category=body.category,
+            )
+        elif body.mode == "supplement":
+            new_dice = roll_one_planet()
+            result = interpret_supplement(
+                original_planet=body.original_planet,
+                original_sign=body.original_sign,
+                original_house=body.original_house,
+                original_question=body.original_question,
+                supplement_planet=new_dice["planet"],
+            )
+        else:
+            raise HTTPException(status_code=422, detail="mode 必须为 followup 或 supplement")
+
+        asyncio.create_task(_log_reroll_analytics(body.original_question, result, body.mode))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[DICE REROLL ERROR]\n{traceback.format_exc()}", flush=True)
+        raise HTTPException(status_code=500, detail=f"再掷解读失败: {e}")
+
+
+# ── Analytics ──────────────────────────────────────────────────────
+
+async def _log_dice_analytics(query: str, result: dict, prefix: str):
+    try:
+        from app.rag import classify_query
+        query_hash = prefix + hashlib.sha256(query.encode()).hexdigest()[16:]
+        label = "astro_dice"
+        sources = result.get("sources", [])
+        max_score = max((s.get("score", 0.0) for s in sources), default=0.0)
+        any_cited = any(s.get("cited", False) for s in sources)
+        db_log_query_analytics(query_hash, label, max_score, any_cited)
+        print(f"[Dice Analytics] score={max_score:.3f} cited={any_cited}", flush=True)
+    except Exception as e:
+        print(f"[Dice Analytics] log failed (non-fatal): {e}", flush=True)
+
+
+async def _log_reroll_analytics(query: str, result: dict, mode: str):
+    try:
+        query_hash = hashlib.sha256(f"dice_reroll:{mode}:{query}".encode()).hexdigest()
+        label = f"astro_dice_{mode}"
+        sources = result.get("sources", [])
+        max_score = max((s.get("score", 0.0) for s in sources), default=0.0)
+        any_cited = any(s.get("cited", False) for s in sources)
+        db_log_query_analytics(query_hash, label, max_score, any_cited)
+    except Exception as e:
+        print(f"[Dice Reroll Analytics] log failed (non-fatal): {e}", flush=True)

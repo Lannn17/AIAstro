@@ -1,0 +1,531 @@
+// frontend/src/pages/AstroDice.jsx
+import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { apiFetch } from '../utils/apiFetch'
+import { SourcesSection } from '../components/AIPanel'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
+const CATEGORIES = [
+  { key: '事业', icon: '💼' },
+  { key: '感情', icon: '❤️' },
+  { key: '财务', icon: '💰' },
+  { key: '家庭', icon: '🏠' },
+  { key: '学习', icon: '📚' },
+  { key: '其他', icon: '🔮' },
+]
+
+const PLANET_ICONS = {
+  sun: '☀️', moon: '🌙', mercury: '☿', venus: '♀', mars: '♂',
+  jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
+  north_node: '☊', chiron: '⚷',
+}
+
+// ── 功能说明卡片 ────────────────────────────────────────────────────
+function GuideCard({ collapsed, onToggle }) {
+  return (
+    <div style={{
+      background: '#0d0d22',
+      border: '1px solid #2a2a5a',
+      borderRadius: '12px',
+      marginBottom: '28px',
+      overflow: 'hidden',
+    }}>
+      <button
+        onClick={onToggle}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 20px', background: 'transparent',
+          border: 'none', cursor: 'pointer',
+          color: '#c9a84c', fontSize: '0.95rem', fontWeight: 600,
+        }}
+      >
+        <span>✦ 什么是占星骰子？</span>
+        <span style={{ fontSize: '0.8rem', color: '#8888aa' }}>{collapsed ? '展开 ▾' : '收起 ▴'}</span>
+      </button>
+
+      {!collapsed && (
+        <div style={{ padding: '0 20px 20px', color: '#c8c8e8', fontSize: '0.9rem', lineHeight: 1.8 }}>
+          <p style={{ marginTop: 0 }}>
+            占星骰子源自传统卜卦占星，通过掷出三颗骰子获得宇宙的随机指引。
+            每颗骰子各司其职，三者组合构成一个完整的占星信息。
+          </p>
+
+          {/* 三骰说明 */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            {[
+              { emoji: '🎲', label: '行星骰', sub: '什么能量？', color: '#c9a84c', desc: '代表本次议题的核心驱动力与主题' },
+              { emoji: '🎲', label: '星座骰', sub: '什么方式？', color: '#88aaff', desc: '代表能量的运作风格与处理方式' },
+              { emoji: '🎲', label: '宫位骰', sub: '什么领域？', color: '#88cc88', desc: '代表这股能量落在你生活的哪个区域' },
+            ].map(d => (
+              <div key={d.label} style={{
+                flex: '1 1 160px',
+                background: '#12122a', borderRadius: '8px',
+                padding: '12px 14px', border: '1px solid #2a2a4a',
+              }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>{d.emoji}</div>
+                <div style={{ color: d.color, fontWeight: 600, fontSize: '0.88rem' }}>{d.label}</div>
+                <div style={{ color: '#8888aa', fontSize: '0.8rem', marginBottom: '6px' }}>{d.sub}</div>
+                <div style={{ color: '#a0a0c0', fontSize: '0.82rem' }}>{d.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 示例 */}
+          <div style={{
+            background: '#12122a', borderRadius: '8px',
+            padding: '12px 16px', marginBottom: '14px',
+            borderLeft: '3px solid #c9a84c',
+          }}>
+            <div style={{ color: '#c9a84c', fontSize: '0.82rem', marginBottom: '6px', fontWeight: 600 }}>
+              示例：金星 ＋ 天蝎座 ＋ 第7宫
+            </div>
+            <div style={{ color: '#a0a0c0', fontSize: '0.85rem' }}>
+              在【一对一关系】领域，以【深入执着、洞察本质】的方式，处理与【价值观与关系】相关的议题。
+            </div>
+          </div>
+
+          {/* 注意事项 */}
+          <div style={{ color: '#8888aa', fontSize: '0.82rem', display: 'flex', gap: '8px' }}>
+            <span>⚠️</span>
+            <span>
+              占星能量不应滥用——请在心中想好一个<strong style={{ color: '#c9c9e0' }}>具体且诚恳的问题</strong>再掷骰子。
+              每天只能就一件事进行占卜。
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 骰子展示格 ──────────────────────────────────────────────────────
+function DiceCard({ dice, label, color, inherited }) {
+  if (!dice) return null
+  const icon = dice.key ? (PLANET_ICONS[dice.key] || '🎲') : '🎲'
+  const title = dice.name
+  const sub = dice.core || dice.style || dice.domain
+  return (
+    <div style={{
+      flex: '1 1 140px',
+      background: '#0d0d22',
+      border: `1px solid ${color}44`,
+      borderRadius: '10px',
+      padding: '14px',
+      textAlign: 'center',
+      position: 'relative',
+    }}>
+      {inherited && (
+        <div style={{
+          position: 'absolute', top: '6px', right: '8px',
+          fontSize: '0.7rem', color: '#5a5a8a',
+          background: '#1a1a3a', padding: '1px 6px', borderRadius: '8px',
+        }}>沿用</div>
+      )}
+      <div style={{ fontSize: '2rem', marginBottom: '6px' }}>{icon}</div>
+      <div style={{ color, fontWeight: 700, fontSize: '0.9rem', marginBottom: '2px' }}>{title}</div>
+      <div style={{ color: '#8888aa', fontSize: '0.75rem', marginBottom: '4px' }}>{label}</div>
+      <div style={{ color: '#a0a0c0', fontSize: '0.8rem' }}>{sub}</div>
+    </div>
+  )
+}
+
+// ── 主组件 ──────────────────────────────────────────────────────────
+export default function AstroDice() {
+  const { authHeaders, isAuthenticated } = useAuth()
+
+  const [guideCollapsed, setGuideCollapsed] = useState(false)
+  const [question, setQuestion] = useState('')
+  const [category, setCategory] = useState('其他')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // 主结果
+  const [result, setResult] = useState(null)
+
+  // 追问/补充状态
+  const [rerollMode, setRerollMode] = useState(null)   // null | 'followup' | 'supplement'
+  const [followupQ, setFollowupQ] = useState('')
+  const [rerolling, setRerolling] = useState(false)
+  const [rerollResult, setRerollResult] = useState(null)
+  const [supplementResult, setSupplementResult] = useState(null)
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{ color: '#8888aa', padding: '40px', textAlign: 'center' }}>
+        请先登录
+      </div>
+    )
+  }
+
+  // ── 主掷骰 ──
+  async function handleRoll() {
+    if (!question.trim()) { setError('请先输入你想询问的问题'); return }
+    setError('')
+    setLoading(true)
+    setResult(null)
+    setRerollResult(null)
+    setSupplementResult(null)
+    setRerollMode(null)
+    try {
+      const res = await apiFetch(`${API_BASE}/api/dice/roll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ question: question.trim(), category }),
+      })
+      if (res.status === 429) {
+        const d = await res.json()
+        setError(d.detail)
+        return
+      }
+      if (!res.ok) throw new Error(res.status)
+      const data = await res.json()
+      setResult(data)
+      setGuideCollapsed(true)
+    } catch (e) {
+      setError(`解读失败，请稍后重试（${e.message}）`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── 再掷 ──
+  async function handleReroll() {
+    if (rerollMode === 'followup' && !followupQ.trim()) {
+      setError('请输入追问方向'); return
+    }
+    setError('')
+    setRerolling(true)
+    setRerollResult(null)
+    setSupplementResult(null)
+    try {
+      const dice = result.dice_display
+      const res = await apiFetch(`${API_BASE}/api/dice/reroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          original_planet: dice.planet.key,
+          original_sign:   dice.sign.key,
+          original_house:  dice.house.number,
+          original_question: question,
+          category,
+          mode: rerollMode,
+          followup_question: rerollMode === 'followup' ? followupQ.trim() : undefined,
+        }),
+      })
+      if (!res.ok) throw new Error(res.status)
+      const data = await res.json()
+      if (rerollMode === 'supplement') setSupplementResult(data)
+      else setRerollResult(data)
+      setRerollMode(null)
+      setFollowupQ('')
+    } catch (e) {
+      setError(`再掷失败，请稍后重试（${e.message}）`)
+    } finally {
+      setRerolling(false)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: '720px', margin: '0 auto', padding: '28px 16px', color: '#c8c8e8' }}>
+
+      <h1 style={{ color: '#c9a84c', fontSize: '1.3rem', marginBottom: '24px' }}>
+        🎲 占星骰子
+      </h1>
+
+      <GuideCard collapsed={guideCollapsed} onToggle={() => setGuideCollapsed(v => !v)} />
+
+      {/* ── Step 1：输入问题 ── */}
+      {!result && (
+        <div style={{
+          background: '#0d0d22', border: '1px solid #2a2a5a',
+          borderRadius: '12px', padding: '24px',
+        }}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', color: '#8888aa', fontSize: '0.85rem', marginBottom: '8px' }}>
+              在心中想好一个具体问题，然后写下来：
+            </label>
+            <textarea
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              placeholder="例如：我该不该接受这份工作邀请？"
+              rows={3}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#12122a', border: '1px solid #3a3a6a',
+                borderRadius: '8px', color: '#c9c9e0',
+                padding: '10px 14px', fontSize: '0.95rem',
+                resize: 'vertical', outline: 'none',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ color: '#8888aa', fontSize: '0.82rem', marginBottom: '10px' }}>
+              选择问题类别（帮助 AI 更精准解读）：
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {CATEGORIES.map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => setCategory(c.key)}
+                  style={{
+                    padding: '6px 14px', borderRadius: '20px', cursor: 'pointer',
+                    fontSize: '0.85rem', fontWeight: category === c.key ? 600 : 400,
+                    background: category === c.key ? '#1a1a3a' : 'transparent',
+                    border: `1px solid ${category === c.key ? '#c9a84c' : '#3a3a6a'}`,
+                    color: category === c.key ? '#c9a84c' : '#8888aa',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {c.icon} {c.key}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <div style={{ color: '#ff8866', fontSize: '0.88rem', marginBottom: '12px' }}>{error}</div>}
+
+          <button
+            onClick={handleRoll}
+            disabled={loading}
+            style={{
+              width: '100%', padding: '12px',
+              background: loading ? '#2a2a4a' : '#c9a84c',
+              color: loading ? '#8888aa' : '#0a0a1a',
+              border: 'none', borderRadius: '8px',
+              fontWeight: 700, fontSize: '1rem', cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {loading ? '正在解读…' : '🎲 掷骰子'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Step 2：结果展示 ── */}
+      {result && (
+        <div>
+          {/* 问题回显 */}
+          <div style={{
+            background: '#12122a', borderRadius: '8px', padding: '10px 16px',
+            marginBottom: '20px', color: '#8888aa', fontSize: '0.88rem',
+            borderLeft: '3px solid #c9a84c',
+          }}>
+            <span style={{ color: '#c9a84c' }}>问题：</span>{question}
+            <span style={{ marginLeft: '12px', color: '#5a5a8a' }}>（{category}）</span>
+          </div>
+
+          {/* 三骰展示 */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <DiceCard dice={result.dice_display.planet} label="能量" color="#c9a84c" />
+            <DiceCard dice={result.dice_display.sign}   label="方式" color="#88aaff" />
+            <DiceCard dice={result.dice_display.house}  label="领域" color="#88cc88" />
+          </div>
+
+          {/* 核心句 */}
+          <div style={{
+            background: '#0d0d22', border: '1px solid #2a2a5a',
+            borderRadius: '8px', padding: '12px 16px', marginBottom: '16px',
+            color: '#c9c9e0', fontSize: '0.9rem', lineHeight: 1.7,
+            borderLeft: '3px solid #c9a84c',
+          }}>
+            {result.core_sentence}
+          </div>
+
+          {/* AI 解读 */}
+          <div style={{
+            background: '#0d0d22', border: '1px solid #2a2a5a',
+            borderRadius: '10px', padding: '18px 20px', marginBottom: '16px',
+          }}>
+            <div style={{ color: '#8888aa', fontSize: '0.8rem', marginBottom: '10px', letterSpacing: '0.08em' }}>
+              AI 解读
+            </div>
+            <div style={{ lineHeight: 1.85, fontSize: '0.95rem', whiteSpace: 'pre-wrap' }}>
+              {result.interpretation}
+            </div>
+          </div>
+
+          <SourcesSection sources={result.sources} />
+
+          {/* 补充能量结果 */}
+          {supplementResult && (
+            <div style={{
+              background: '#0d1a0d', border: '1px solid #2a4a2a',
+              borderRadius: '10px', padding: '16px 20px', marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '1.4rem' }}>{PLANET_ICONS[supplementResult.supplement_planet.key] || '🎲'}</span>
+                <div>
+                  <span style={{ color: '#88cc88', fontWeight: 600 }}>
+                    辅助能量：{supplementResult.supplement_planet.name}
+                  </span>
+                  <span style={{ color: '#5a5a8a', fontSize: '0.82rem', marginLeft: '8px' }}>
+                    {supplementResult.supplement_planet.core}
+                  </span>
+                </div>
+              </div>
+              <div style={{ lineHeight: 1.8, fontSize: '0.92rem', whiteSpace: 'pre-wrap', color: '#b0b0d0' }}>
+                {supplementResult.interpretation}
+              </div>
+              <SourcesSection sources={supplementResult.sources} />
+            </div>
+          )}
+
+          {/* 追问结果 */}
+          {rerollResult && (
+            <div style={{
+              background: '#0d0d22', border: '1px solid #3a3a7a',
+              borderRadius: '10px', padding: '16px 20px', marginBottom: '16px',
+            }}>
+              <div style={{ color: '#88aaff', fontSize: '0.82rem', marginBottom: '12px', fontWeight: 600 }}>
+                追问解读
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <DiceCard dice={rerollResult.dice_display.planet} label="新能量" color="#c9a84c" />
+                <DiceCard dice={rerollResult.dice_display.sign}   label="方式（沿用）" color="#88aaff" inherited />
+                <DiceCard dice={rerollResult.dice_display.house}  label="新领域" color="#88cc88" />
+              </div>
+              <div style={{
+                borderLeft: '3px solid #88aaff',
+                paddingLeft: '12px', marginBottom: '12px',
+                color: '#c9c9e0', fontSize: '0.88rem',
+              }}>
+                {rerollResult.core_sentence}
+              </div>
+              <div style={{ lineHeight: 1.85, fontSize: '0.92rem', whiteSpace: 'pre-wrap' }}>
+                {rerollResult.interpretation}
+              </div>
+              <SourcesSection sources={rerollResult.sources} />
+            </div>
+          )}
+
+          {/* 再掷操作区 */}
+          {!rerollMode && (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <button
+                onClick={() => setRerollMode('followup')}
+                disabled={rerolling}
+                style={{
+                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  background: '#12122a', border: '1px solid #88aaff',
+                  color: '#88aaff', fontSize: '0.88rem', fontWeight: 600,
+                }}
+              >
+                🔍 追问（掷行星+宫位）
+              </button>
+              <button
+                onClick={() => setRerollMode('supplement')}
+                disabled={rerolling}
+                style={{
+                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  background: '#12122a', border: '1px solid #88cc88',
+                  color: '#88cc88', fontSize: '0.88rem', fontWeight: 600,
+                }}
+              >
+                ✨ 补充能量（掷行星）
+              </button>
+              <button
+                onClick={() => { setResult(null); setRerollResult(null); setSupplementResult(null); setGuideCollapsed(false) }}
+                style={{
+                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  background: 'transparent', border: '1px solid #3a3a6a',
+                  color: '#8888aa', fontSize: '0.88rem', marginLeft: 'auto',
+                }}
+              >
+                🔄 新问题
+              </button>
+            </div>
+          )}
+
+          {/* 追问输入框 */}
+          {rerollMode === 'followup' && (
+            <div style={{
+              background: '#0d0d22', border: '1px solid #3a3a7a',
+              borderRadius: '10px', padding: '16px 20px', marginBottom: '12px',
+            }}>
+              <div style={{ color: '#88aaff', fontSize: '0.85rem', marginBottom: '10px' }}>
+                追问方向（保留原问题背景，掷出新的行星+宫位）：
+              </div>
+              <textarea
+                value={followupQ}
+                onChange={e => setFollowupQ(e.target.value)}
+                placeholder="例如：具体来说，合作方的真实意图如何判断？"
+                rows={2}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: '#12122a', border: '1px solid #3a3a7a',
+                  borderRadius: '8px', color: '#c9c9e0',
+                  padding: '8px 12px', fontSize: '0.9rem',
+                  resize: 'vertical', outline: 'none',
+                  marginBottom: '12px',
+                }}
+              />
+              {error && <div style={{ color: '#ff8866', fontSize: '0.85rem', marginBottom: '8px' }}>{error}</div>}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={handleReroll}
+                  disabled={rerolling}
+                  style={{
+                    padding: '8px 20px', background: rerolling ? '#2a2a4a' : '#88aaff',
+                    color: rerolling ? '#8888aa' : '#0a0a1a',
+                    border: 'none', borderRadius: '8px',
+                    fontWeight: 600, cursor: rerolling ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {rerolling ? '解读中…' : '🎲 掷出追问'}
+                </button>
+                <button
+                  onClick={() => { setRerollMode(null); setFollowupQ(''); setError('') }}
+                  style={{
+                    padding: '8px 16px', background: 'transparent',
+                    border: '1px solid #3a3a6a', color: '#8888aa',
+                    borderRadius: '8px', cursor: 'pointer',
+                  }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 补充能量确认 */}
+          {rerollMode === 'supplement' && (
+            <div style={{
+              background: '#0d1a0d', border: '1px solid #2a4a2a',
+              borderRadius: '10px', padding: '14px 20px', marginBottom: '12px',
+              display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+            }}>
+              <span style={{ color: '#88cc88', fontSize: '0.88rem' }}>
+                将掷出一颗行星骰作为辅助能量，为当前解读补充视角
+              </span>
+              <button
+                onClick={handleReroll}
+                disabled={rerolling}
+                style={{
+                  padding: '7px 18px', background: rerolling ? '#2a2a4a' : '#88cc88',
+                  color: rerolling ? '#8888aa' : '#0a0a1a',
+                  border: 'none', borderRadius: '8px',
+                  fontWeight: 600, cursor: rerolling ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {rerolling ? '解读中…' : '✨ 确认掷出'}
+              </button>
+              <button
+                onClick={() => setRerollMode(null)}
+                style={{
+                  padding: '7px 14px', background: 'transparent',
+                  border: '1px solid #3a3a6a', color: '#8888aa',
+                  borderRadius: '8px', cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

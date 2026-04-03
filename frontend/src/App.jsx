@@ -18,6 +18,7 @@ import { usePromptRating } from './contexts/PromptRatingContext'
 import FeedbackButton from './components/FeedbackButton'
 import AdminPrompts from './pages/AdminPrompts'
 import AdminPromptDetail from './pages/AdminPromptDetail'
+import AstroDice from './pages/AstroDice'
 
 const NAV_ITEMS = [
   { path: '/',              label: '星盘' },
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { path: '/solar-return', label: '太阳回归' },
   { path: '/progressions', label: '月亮推运' },
   { path: '/synastry',     label: '合盘' },
+  { path: '/dice',         label: '🎲 骰子' },
 ]
 
 const navLinkStyle = ({ isActive }) => ({
@@ -226,6 +228,7 @@ function AppInner() {
             <Route path="/progressions"  element={<Progressions />} />
             <Route path="/solar-return"  element={<SolarReturn />} />
             <Route path="/directions"    element={<Directions />} />
+            <Route path="/dice"          element={<AstroDice />} />
             <Route path="/admin"         element={<Navigate to="/admin/prompts" replace />} />
             <Route path="/admin/prompts"  element={isAdmin ? <AdminPrompts /> : <Navigate to="/" replace />} />
             <Route path="/admin/prompts/:id" element={isAdmin ? <AdminPromptDetail /> : <Navigate to="/" replace />} />

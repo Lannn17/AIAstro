@@ -265,6 +265,55 @@ PROMPTS: dict[str, dict] = {
         ),
     },
 
+    # ── 占星骰子：主解读 ────────────────────────────────────────────
+    "astro_dice": {
+        "system_instruction": _SYSTEM_PROMPT_UNIFIED,
+        "temperature": 0.6,
+        "description": "占星骰子主解读（三骰 + 用户问题 → 个性化指引）",
+        # Placeholders: {question} {category} {planet_name} {sign_name}
+        #               {house_number} {core_sentence} {keywords}
+        # Caller appends rag_context via rag_generate()
+        "prompt_template": (
+            "用户问题：{question}\n"
+            "问题类别：{category}\n\n"
+            "骰子结果：{planet_name} ＋ {sign_name} ＋ 第{house_number}宫\n"
+            "核心含义：{core_sentence}\n"
+            "关键词：{keywords}\n\n"
+            "请根据以上占星骰子结果，针对用户问题给出解读。\n"
+            "要求：\n"
+            "- 核心解读 100-150 字，结合骰子三要素（能量/方式/领域）与问题本身\n"
+            "- 给出一条具体可执行的行动建议（以"建议："开头）\n"
+            "- 语气温和、使用概率性表达（"可能"、"倾向于"等），避免绝对断言\n"
+            "- 严禁脱离骰子结果泛泛而谈"
+        ),
+    },
+
+    # ── 占星骰子：追问解读 ──────────────────────────────────────────
+    "astro_dice_followup": {
+        "system_instruction": _SYSTEM_PROMPT_UNIFIED,
+        "temperature": 0.6,
+        "description": "占星骰子追问解读（新行星+宫位，原星座作背景，结合原始问题）",
+        # Placeholders: {original_question} {followup_question} {category}
+        #               {original_core} {original_planet} {original_sign}
+        #               {new_planet} {new_house} {new_core} {keywords}
+        "prompt_template": (
+            "原始问题：{original_question}\n"
+            "追问方向：{followup_question}\n"
+            "问题类别：{category}\n\n"
+            "原始骰子背景：{original_core}\n"
+            "（原始能量：{original_planet} ＋ {original_sign}）\n\n"
+            "追问新骰子：{new_planet} ＋ 第{new_house}宫（星座风格沿用原始）\n"
+            "新核心含义：{new_core}\n"
+            "关键词：{keywords}\n\n"
+            "请在原始解读背景下，针对追问方向给出进一步解读。\n"
+            "要求：\n"
+            "- 明确呼应追问方向，不重复原始解读\n"
+            "- 核心解读 80-120 字\n"
+            "- 给出一条针对追问的具体建议（以"进一步建议："开头）\n"
+            "- 语气温和，使用概率性表达"
+        ),
+    },
+
     # ── 出生时间置信度 ──────────────────────────────────────────────
     "calc_confidence": {
         "system_instruction": None,
