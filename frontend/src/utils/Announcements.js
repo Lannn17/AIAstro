@@ -50,10 +50,10 @@ export const ALL_FEATURES = [
   { label: "行运解读", description: "实时行运 AI 四维分析" },
   { label: "太阳回归盘", description: "年度运势 RAG + Gemini 解读" },
   { label: "合盘分析", description: "双人 SVG 盘图 + AI 多维度解读" },
+  { label: "占星骰子", description: "针对用户具体提问进行占星推运" },
 ];
 
 export const UPCOMING = [
   { label: "月亮推运 Progressions", description: "锚定月亮反映的内心情绪" },
   { label: "每日卡片", description: "当天星运信息即时反馈" },
-  { label: "占星骰子", description: "针对具体事件进行占星推运" },
 ];

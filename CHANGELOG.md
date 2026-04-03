@@ -12,6 +12,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] - 2026-04-03
+
+### Added
+- **占星骰子** — 新功能：三骰（行星/星座/宫位）RAG 解读，含每日限额、本命盘上下文注入、24h 本地历史
+- **骰子 3D 动画** — 十二面体物理动画，弹窗覆盖层展示，支持移动端适配
+- **骰子管理员特权** — Admin 用户跳过每日限额限制
+- **RAG Analytics Tab** — 管理员 prompts 页面集成 RAG 查询分析标签
+
+### Fixed
+- **骰子 429 阻断** — 超限时在动画前直接返回错误，不播放动画
+- **骰子结果滚动** — 动画关闭后自动滚动到结果顶部
+- **TagTooltip** — 移动端使用 position:fixed 防止 viewport 溢出
+
+---
+
 ## [0.8.2] - 2026-04-02
 
 ### Fixed

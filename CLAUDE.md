@@ -8,7 +8,6 @@
 
 - **绝对不能自行修改 `GENERATE_MODEL`**（当前值：`gemini-3.1-flash-lite-preview`）。用户已明确指定此模型，任何情况下不得擅自更改。
 - **每次代码改动后立即 commit**，不主动 push。Push 两端（`git push origin main && git push hf main`）、版本号更新、CHANGELOG 更新，三者同步，只在用户明确要求时一起完成。
-- **每次代码改动后自动检查 `TODO.md`**：对照本次改动判断 TODO 中哪些条目需要新增、修改状态或删除，列出建议变更内容并等待用户确认后再修改 TODO.md。
 - **后端需要重启时自动执行**：凡后端代码有改动、或用户提到后端无响应/需要重启，自动运行 kill+restart 命令并通知用户"后端已重启"。Kill 命令：`for /f "tokens=5" %a in ('netstat -ano ^| findstr :8001') do taskkill /F /PID %a`，然后在 `astrology_api/` 目录启动 uvicorn。
 - **架构变更时同步更新 `ARCHITECTURE.md`**：新增模块、端点、数据库表、外部服务、缓存策略、模块标准等任何架构层面的改动，必须在同一个 commit 中更新 `ARCHITECTURE.md` 对应章节。
 - 不要自行修改代码中的格式问题
@@ -124,7 +123,7 @@ RAG 知识增强：调用 Qdrant 检索相关书籍片段，拼入 prompt 作为
  sources 数据已从 API 响应中正确传递到组件 props
 
 ## Current version / 当前版本
-v0.8.2 — Tag 标签优化 + admin-prompts 修复 + debug UI 清理。
+v0.9.0 — 占星骰子功能（3D动画 + RAG解读 + 每日限额 + 本命盘上下文）。
 See CHANGELOG.md for full history.
 
 ## Commands / 命令
