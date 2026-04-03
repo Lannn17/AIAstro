@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>占星骰子 3D</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0b0b1e; overflow:hidden; font-family:'Segoe UI',sans-serif; }
+canvas { display:block; }
+
+#ui {
+  position:fixed; bottom:28px; left:50%;
+  transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  z-index:10;
+}
+
+#results {
+  display:flex; gap:18px; opacity:0; transform:translateY(8px);
+  transition:opacity .5s,transform .5s; pointer-events:none;
+}
+#results.show { opacity:1; transform:translateY(0); }
+
+.chip {
+  background:rgba(8,7,24,.92);
+  border:1px solid #c9a84c55;
+  border-radius:10px;
+  padding:8px 18px;
+  text-align:center;
+  backdrop-filter:blur(8px);
+}
+.chip-label { font-size:9px; color:#c9a84c; letter-spacing:2px; text-transform:uppercase; }
+.chip-value { font-size:13px; color:#e8e0ff; font-weight:600; margin-top:4px; white-space:nowrap; }
+
+#status {
+  font-size:11px; color:#c9a84c88; letter-spacing:2px; min-height:16px;
+  text-shadow:0 0 10px #c9a84c44;
+}
+
+#btn {
+  background:linear-gradient(135deg,#c9a84c,#ddb84a);
+  color:#0d0d22;
+  border:none; border-radius:10px; padding:11px 36px;
+  font-size:14px; font-weight:bold; cursor:pointer; letter-spacing:1px;
+  box-shadow:0 4px 20px #c9a84c44;
+  transition:opacity .2s,transform .1s;
+}
+#btn:hover { opacity:.85; transform:translateY(-1px); }
+#btn:disabled { opacity:.3; cursor:not-allowed; transform:none; }
+
+@keyframes glowPulse {
+  0%,100% { box-shadow:0 0 8px #c9a84c33; }
+  50% { box-shadow:0 0 20px #c9a84c66,0 0 40px #c9a84c22; }
+}
+#results.show .chip { animation:glowPulse 2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="results">
+    <div class="chip"><div class="chip-label">行星</div><div class="chip-value" id="r0">—</div></div>
+    <div class="chip"><div class="chip-label">星座</div><div class="chip-value" id="r1">—</div></div>
+    <div class="chip"><div class="chip-label">宫位</div><div class="chip-value" id="r2">—</div></div>
+  </div>
+  <div id="status"></div>
+  <button id="btn" disabled>🎲 掷骰子</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+
+<script>
+(function() {
+  if (typeof THREE === 'undefined') return;
+
+  // ══════════════════════════════════════════════════════════
+  //  数据
+  // ══════════════════════════════════════════════════════════
+  var FACE_DATA = [
+    [['☉','太阳'],['☽','月亮'],['☿','水星'],['♀','金星'],['♂','火星'],['♃','木星'],
+     ['♄','土星'],['♅','天王'],['♆','海王'],['♇','冥王'],['⊗','上升'],['☊','北交']],
+    [['♈','白羊'],['♉','金牛'],['♊','双子'],['♋','巨蟹'],['♌','狮子'],['♍','处女'],
+     ['♎','天秤'],['♏','天蝎'],['♐','射手'],['♑','摩羯'],['♒','水瓶'],['♓','双鱼']],
+    [['Ⅰ','一宫'],['Ⅱ','二宫'],['Ⅲ','三宫'],['Ⅳ','四宫'],['Ⅴ','五宫'],['Ⅵ','六宫'],
+     ['Ⅶ','七宫'],['Ⅷ','八宫'],['Ⅸ','九宫'],['Ⅹ','十宫'],['Ⅺ','十一宫'],['Ⅻ','十二宫']],
+  ];
+
+  var RESULT_DATA = [
+    ['☉ 太阳','☽ 月亮','☿ 水星','♀ 金星','♂ 火星','♃ 木星','♄ 土星','♅ 天王','♆ 海王','♇ 冥王','⊗ 上升','☊ 北交'],
+    ['♈ 白羊','♉ 金牛','♊ 双子','♋ 巨蟹','♌ 狮子','♍ 处女','♎ 天秤','♏ 天蝎','♐ 射手','♑ 摩羯','♒ 水瓶','♓ 双鱼'],
+    ['第一宫','第二宫','第三宫','第四宫','第五宫','第六宫','第七宫','第八宫','第九宫','第十宫','第十一宫','第十二宫'],
+  ];
+
+  // 12面法线
+  var PHI = (1 + Math.sqrt(5)) / 2;
+  var NM = Math.sqrt(1 + PHI * PHI);
+  var NA = 1 / NM, NB = PHI / NM;
+  var FACE_NORMALS = [
+    [0,NA,NB],[0,NA,-NB],[0,-NA,NB],[0,-NA,-NB],
+    [NA,NB,0],[NA,-NB,0],[-NA,NB,0],[-NA,-NB,0],
+    [NB,0,NA],[-NB,0,NA],[NB,0,-NA],[-NB,0,-NA],
+  ].map(function(v){ return new THREE.Vector3(v[0],v[1],v[2]); });
+
+  // ══════════════════════════════════════════════════════════
+  //  渲染器
+  // ══════════════════════════════════════════════════════════
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x080816);
+  scene.fog = new THREE.FogExp2(0x080816, 0.028);
+
+  var camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.set(0, 10, 9);
+  camera.lookAt(0, 0, 0);
+
+  function resize() {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ══════════════════════════════════════════════════════════
+  //  环境贴图
+  // ══════════════════════════════════════════════════════════
+  function generateEnvMap() {
+    var pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    var envCanvas = document.createElement('canvas');
+    envCanvas.width = 512; envCanvas.height = 256;
+    var ectx = envCanvas.getContext('2d');
+    var grad = ectx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#1a1a3e');
+    grad.addColorStop(0.3, '#0d0d2a');
+    grad.addColorStop(0.5, '#2a1a0a');
+    grad.addColorStop(0.7, '#0a0a1e');
+    grad.addColorStop(1, '#050510');
+    ectx.fillStyle = grad;
+    ectx.fillRect(0, 0, 512, 256);
+    ectx.fillStyle = 'rgba(255,220,160,0.4)';
+    ectx.beginPath(); ectx.arc(256, 50, 80, 0, Math.PI * 2); ectx.fill();
+    ectx.fillStyle = 'rgba(180,160,255,0.2)';
+    ectx.beginPath(); ectx.arc(100, 80, 50, 0, Math.PI * 2); ectx.fill();
+    var envTex = new THREE.CanvasTexture(envCanvas);
+    envTex.mapping = THREE.EquirectangularReflectionMapping;
+    var envMap = pmrem.fromEquirectangular(envTex).texture;
+    envTex.dispose(); pmrem.dispose();
+    return envMap;
+  }
+  var envMap = generateEnvMap();
+  scene.environment = envMap;
+
+  // ══════════════════════════════════════════════════════════
+  //  灯光
+  // ══════════════════════════════════════════════════════════
+  scene.add(new THREE.AmbientLight(0x445577, 0.8));
+
+  var keyLight = new THREE.DirectionalLight(0xffeedd, 2.5);
+  keyLight.position.set(5, 12, 6);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(2048, 2048);
+  keyLight.shadow.camera.left = -8;
+  keyLight.shadow.camera.right = 8;
+  keyLight.shadow.camera.top = 8;
+  keyLight.shadow.camera.bottom = -8;
+  keyLight.shadow.bias = -0.001;
+  keyLight.shadow.radius = 4;
+  scene.add(keyLight);
+
+  var fillLight = new THREE.DirectionalLight(0x8888cc, 0.9);
+  fillLight.position.set(-6, 5, -3);
+  scene.add(fillLight);
+
+  var topLight = new THREE.PointLight(0xffffff, 0.8, 20);
+  topLight.position.set(0, 8, 0);
+  scene.add(topLight);
+
+  var spotLight = new THREE.SpotLight(0xffeedd, 0, 15, Math.PI / 6, 0.5, 1);
+  spotLight.position.set(0, 10, 2);
+  scene.add(spotLight);
+  scene.add(spotLight.target);
+
+    // ══════════════════════════════════════════════════════════
+  //  桌面 — 星盘桌布 + 水晶元素
+  // ══════════════════════════════════════════════════════════
+
+  // 生成星盘纹理
+    function makeAstroTableTexture(size) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    var ctx = cv.getContext('2d');
+    var cx = size / 2, cy = size / 2, maxR = size / 2;
+
+    // 深色背景
+    var bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    bgGrad.addColorStop(0, '#111838');
+    bgGrad.addColorStop(0.4, '#0c1030');
+    bgGrad.addColorStop(0.75, '#080c22');
+    bgGrad.addColorStop(1, '#040614');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, size, size);
+
+    // 星尘
+    for (var si = 0; si < 600; si++) {
+      var sx = Math.random() * size, sy = Math.random() * size;
+      var sdx = sx - cx, sdy = sy - cy;
+      if (Math.sqrt(sdx*sdx + sdy*sdy) > maxR * 0.93) continue;
+      ctx.fillStyle = 'rgba(200,190,240,' + (Math.random() * 0.12) + ')';
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.random() * 1.2 + 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // ══ 西方魔法阵 ══
+
+    // ── 最外圈 ──
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.92, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(190, 165, 90, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.88, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(190, 165, 90, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // ── 12星座符号环（外圈，大而清晰）──
+    var zodiacSymbols = ['♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓'];
+    ctx.font = 'bold ' + Math.round(size * 0.055) + 'px "Segoe UI Symbol","Apple Symbols",serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    zodiacSymbols.forEach(function(sym, idx) {
+      var angle = (idx * Math.PI * 2 / 12) + Math.PI / 12 - Math.PI / 2;
+      var r = maxR * 0.82;
+      var tx = Math.cos(angle) * r;
+      var ty = Math.sin(angle) * r;
+
+      // 发光效果
+      ctx.save();
+      ctx.shadowColor = 'rgba(210, 180, 90, 0.6)';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = 'rgba(210, 185, 100, 0.5)';
+      ctx.fillText(sym, tx, ty);
+      ctx.restore();
+
+      // 再画一遍增强
+      ctx.fillStyle = 'rgba(210, 185, 100, 0.35)';
+      ctx.fillText(sym, tx, ty);
+    });
+
+    // ── 12宫分割线（从内到外）──
+    for (var li = 0; li < 12; li++) {
+      var angle = (li * Math.PI * 2 / 12) - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * maxR * 0.35, Math.sin(angle) * maxR * 0.35);
+      ctx.lineTo(Math.cos(angle) * maxR * 0.72, Math.sin(angle) * maxR * 0.72);
+      ctx.strokeStyle = 'rgba(180, 160, 90, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // ── 内圈 ──
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.72, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(190, 165, 90, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.35, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(190, 165, 90, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // ── 宫位数字（中圈）──
+    var houseNums = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ','Ⅸ','Ⅹ','Ⅺ','Ⅻ'];
+    ctx.font = 'bold ' + Math.round(size * 0.028) + 'px serif';
+
+    houseNums.forEach(function(num, idx) {
+      var angle = (idx * Math.PI * 2 / 12) + Math.PI / 12 - Math.PI / 2;
+      var r = maxR * 0.54;
+      var tx = Math.cos(angle) * r;
+      var ty = Math.sin(angle) * r;
+      ctx.fillStyle = 'rgba(190, 170, 110, 0.3)';
+      ctx.fillText(num, tx, ty);
+    });
+
+    // ── 六芒星（所罗门之星）──
+    function drawTriangle(r, offsetAngle, style, width) {
+      ctx.beginPath();
+      for (var t = 0; t < 3; t++) {
+        var a = (t * Math.PI * 2 / 3) + offsetAngle;
+        var px = Math.cos(a) * r, py = Math.sin(a) * r;
+        if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = style;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+
+    var hexR = maxR * 0.32;
+    drawTriangle(hexR, -Math.PI / 2, 'rgba(190, 165, 90, 0.25)', 1.5);
+    drawTriangle(hexR, Math.PI / 2, 'rgba(190, 165, 90, 0.25)', 1.5);
+
+    // 六芒星内的小六边形
+    ctx.beginPath();
+    for (var hi = 0; hi < 6; hi++) {
+      var ha = hi * Math.PI / 3 - Math.PI / 6;
+      var hx = Math.cos(ha) * hexR * 0.5, hy = Math.sin(ha) * hexR * 0.5;
+      if (hi === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(190, 165, 90, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // ── 五芒星（外圈装饰）──
+    function drawPentagram(r, offsetAngle, style, width) {
+      var pts = [];
+      for (var p = 0; p < 5; p++) {
+        var a = (p * Math.PI * 2 / 5) + offsetAngle;
+        pts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+      }
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[2].x, pts[2].y);
+      ctx.lineTo(pts[4].x, pts[4].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.lineTo(pts[3].x, pts[3].y);
+      ctx.closePath();
+      ctx.strokeStyle = style;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+
+    drawPentagram(maxR * 0.2, -Math.PI / 2, 'rgba(190, 165, 90, 0.18)', 1);
+
+    // ── 中心太阳符号 ──
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.05, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(210, 185, 100, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.015, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(210, 185, 100, 0.25)';
+    ctx.fill();
+
+    // 中心射线
+    for (var ri = 0; ri < 8; ri++) {
+      var ra = ri * Math.PI / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ra) * maxR * 0.06, Math.sin(ra) * maxR * 0.06);
+      ctx.lineTo(Math.cos(ra) * maxR * 0.09, Math.sin(ra) * maxR * 0.09);
+      ctx.strokeStyle = 'rgba(210, 185, 100, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // ── 行星符号（内圈装饰）──
+    var planetSymbols = ['☉','☽','☿','♀','♂','♃','♄','♅','♆','♇'];
+    ctx.font = Math.round(size * 0.022) + 'px "Segoe UI Symbol",serif';
+    planetSymbols.forEach(function(sym, idx) {
+      var angle = (idx * Math.PI * 2 / 10) - Math.PI / 2;
+      var r = maxR * 0.42;
+      ctx.fillStyle = 'rgba(180, 165, 110, 0.2)';
+      ctx.fillText(sym, Math.cos(angle) * r, Math.sin(angle) * r);
+    });
+
+    // ── 四元素符号在对角位置 ──
+    var elemData = [
+      { sym: '△', angle: -Math.PI/2 },      // 火 — 上
+      { sym: '▽', angle: Math.PI/2 },        // 水 — 下
+      { sym: '△', angle: 0 },                // 风 — 右（带横线，简化用△）
+      { sym: '▽', angle: Math.PI },           // 土 — 左
+    ];
+    ctx.font = Math.round(size * 0.035) + 'px serif';
+    elemData.forEach(function(e) {
+      var r = maxR * 0.62;
+      ctx.fillStyle = 'rgba(180, 160, 100, 0.15)';
+      ctx.fillText(e.sym, Math.cos(e.angle) * r, Math.sin(e.angle) * r);
+    });
+
+    // ── 装饰性的弧线花纹 ──
+    for (var ai = 0; ai < 12; ai++) {
+      var aStart = (ai * Math.PI * 2 / 12) + 0.05;
+      var aEnd = aStart + Math.PI * 2 / 12 - 0.1;
+      ctx.beginPath();
+      ctx.arc(0, 0, maxR * 0.68, aStart, aEnd);
+      ctx.strokeStyle = 'rgba(170, 150, 90, 0.08)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // ── 最外层的小刻度线（360度）──
+    for (var di = 0; di < 72; di++) {
+      var da = di * Math.PI * 2 / 72;
+      var innerR = (di % 6 === 0) ? maxR * 0.89 : maxR * 0.905;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(da) * innerR, Math.sin(da) * innerR);
+      ctx.lineTo(Math.cos(da) * maxR * 0.92, Math.sin(da) * maxR * 0.92);
+      ctx.strokeStyle = 'rgba(180, 160, 90, ' + ((di % 6 === 0) ? '0.2' : '0.08') + ')';
+      ctx.lineWidth = (di % 6 === 0) ? 1.2 : 0.6;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // 边缘暗角
+    var vigGrad = ctx.createRadialGradient(cx, cy, maxR * 0.5, cx, cy, maxR);
+    vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    vigGrad.addColorStop(0.75, 'rgba(0,0,0,0.15)');
+    vigGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = vigGrad;
+    ctx.fillRect(0, 0, size, size);
+
+    var tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+    var astroTableTex = makeAstroTableTexture(2048);
+
+  var tableMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(6.0, 6.0, 0.15, 80),
+    new THREE.MeshStandardMaterial({
+      map: astroTableTex,
+      roughness: 0.85,
+      metalness: 0.05,
+      envMap: envMap,
+      envMapIntensity: 0.08,
+      color: 0xffffff,
+    })
+  );
+  tableMesh.position.y = -0.075;
+  tableMesh.receiveShadow = true;
+  scene.add(tableMesh);
+
+    // ── 边框 — 极简双细线 + 微光点 ──
+  var rimGroup = new THREE.Group();
+
+  // 外侧金色细线
+  var rimLine1 = new THREE.Mesh(
+    new THREE.TorusGeometry(6.0, 0.018, 8, 150),
+    new THREE.MeshStandardMaterial({
+      color: 0xd4a840,
+      metalness: 0.95,
+      roughness: 0.15,
+      envMap: envMap,
+      envMapIntensity: 1.5,
+      emissive: 0xd4a840,
+      emissiveIntensity: 0.15,
+    })
+  );
+  rimLine1.rotation.x = Math.PI / 2;
+  rimGroup.add(rimLine1);
+
+  // 内侧金色细线
+  var rimLine2 = new THREE.Mesh(
+    new THREE.TorusGeometry(5.88, 0.01, 8, 150),
+    new THREE.MeshStandardMaterial({
+      color: 0xc9a84c,
+      metalness: 0.9,
+      roughness: 0.2,
+      envMap: envMap,
+      envMapIntensity: 1.0,
+      transparent: true,
+      opacity: 0.5,
+      emissive: 0xc9a84c,
+      emissiveIntensity: 0.1,
+    })
+  );
+  rimLine2.rotation.x = Math.PI / 2;
+  rimLine2.position.y = 0.01;
+  rimGroup.add(rimLine2);
+
+  // 12个微光点 — 对应12星座位置
+  var glowDotMat = new THREE.MeshBasicMaterial({
+    color: 0xd4a840,
+    transparent: true,
+    opacity: 0.4,
+  });
+  var glowDotOuterMat = new THREE.MeshBasicMaterial({
+    color: 0xd4a840,
+    transparent: true,
+    opacity: 0.1,
+  });
+
+  for (var ci = 0; ci < 12; ci++) {
+    var cAngle = (ci * Math.PI * 2 / 12);
+    var cRadius = 6.0;
+
+    // 小光点
+    var dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 8, 8),
+      glowDotMat
+    );
+    dot.position.set(
+      Math.cos(cAngle) * cRadius,
+      0.02,
+      Math.sin(cAngle) * cRadius
+    );
+    rimGroup.add(dot);
+
+    // 外层光晕
+    var dotGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 8, 8),
+      glowDotOuterMat.clone()
+    );
+    dotGlow.position.copy(dot.position);
+    rimGroup.add(dotGlow);
+  }
+
+  scene.add(rimGroup);
+
+  // ── 桌面上的星光粒子 — 更密集更美 ──
+  var starPos = [];
+  var starColors = [];
+  for (var si = 0; si < 500; si++) {
+    var sr = Math.random() * 5.6, sa = Math.random() * Math.PI * 2;
+    starPos.push(sr * Math.cos(sa), 0.005 + Math.random() * 0.01, sr * Math.sin(sa));
+    // 随机暖色/冷色星光
+    var isWarm = Math.random() > 0.5;
+    if (isWarm) {
+      starColors.push(0.8 + Math.random()*0.2, 0.7 + Math.random()*0.15, 0.3 + Math.random()*0.2);
+    } else {
+      starColors.push(0.5 + Math.random()*0.2, 0.5 + Math.random()*0.2, 0.8 + Math.random()*0.2);
+    }
+  }
+  var starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  starGeo.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
+    size: 0.02,
+    transparent: true,
+    opacity: 0.3,
+    vertexColors: true,
+    sizeAttenuation: true,
+  })));
+
+  // ══════════════════════════════════════════════════════════
+  //  核心：自定义带UV的十二面体 + 每面独立纹理
+  // ══════════════════════════════════════════════════════════
+
+  /**
+   * 创建一个十二面体，但拆分成12个面（每面一个material），
+   * 每个面有正确的UV映射，使符号居中显示在五边形面上。
+   */
+  function createDodecahedronWithUV(radius) {
+    // 先获取原始DodecahedronGeometry的顶点和面信息
+    var baseGeo = new THREE.DodecahedronGeometry(radius, 0);
+    var posAttr = baseGeo.getAttribute('position');
+    var normalAttr = baseGeo.getAttribute('normal');
+
+    // DodecahedronGeometry(r, 0) 产生 12面 × 3三角形/面 = 36三角形 = 108顶点
+    var triCount = posAttr.count / 3;  // 应该是 36
+
+    // 按法线分组三角形到12个面
+    var faces = []; // faces[i] = { normal, triangles:[[v0,v1,v2],...] }
+    var eps = 0.01;
+
+    for (var t = 0; t < triCount; t++) {
+      var i0 = t * 3, i1 = t * 3 + 1, i2 = t * 3 + 2;
+      // 取第一个顶点的法线作为面法线（flatShading下同一三角形法线相同）
+      var nx = normalAttr.getX(i0);
+      var ny = normalAttr.getY(i0);
+      var nz = normalAttr.getZ(i0);
+
+      // 找到匹配的面组
+      var found = false;
+      for (var fi = 0; fi < faces.length; fi++) {
+        var fn = faces[fi].normal;
+        if (Math.abs(fn.x - nx) < eps && Math.abs(fn.y - ny) < eps && Math.abs(fn.z - nz) < eps) {
+          faces[fi].triangles.push(t);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        faces.push({
+          normal: new THREE.Vector3(nx, ny, nz),
+          triangles: [t]
+        });
+      }
+    }
+
+    // 现在faces有12个元素，每个有3个三角形
+
+    // 创建新的BufferGeometry，使用groups来分配材质
+    var vertices = [];
+    var normals = [];
+    var uvs = [];
+    var groups = [];
+    var vertexOffset = 0;
+
+    faces.forEach(function(face, faceIndex) {
+      var faceNormal = face.normal;
+
+      // 计算面的中心和局部坐标系
+      var center = new THREE.Vector3(0, 0, 0);
+      var allVerts = [];
+
+      face.triangles.forEach(function(triIdx) {
+        for (var v = 0; v < 3; v++) {
+          var vi = triIdx * 3 + v;
+          var vx = posAttr.getX(vi);
+          var vy = posAttr.getY(vi);
+          var vz = posAttr.getZ(vi);
+          allVerts.push(new THREE.Vector3(vx, vy, vz));
+          center.add(new THREE.Vector3(vx, vy, vz));
+        }
+      });
+      center.divideScalar(allVerts.length);
+
+      // 建立面的局部2D坐标系
+      // U轴：取第一个顶点到中心的方向，投影到面平面上
+      var uAxis = new THREE.Vector3().subVectors(allVerts[0], center);
+      uAxis.sub(faceNormal.clone().multiplyScalar(uAxis.dot(faceNormal)));
+      uAxis.normalize();
+      var vAxis = new THREE.Vector3().crossVectors(faceNormal, uAxis).normalize();
+
+      // 计算所有顶点的2D坐标，找到范围
+      var coords2d = allVerts.map(function(v) {
+        var rel = new THREE.Vector3().subVectors(v, center);
+        return { u: rel.dot(uAxis), v: rel.dot(vAxis) };
+      });
+
+      var maxR = 0;
+      coords2d.forEach(function(c) {
+        var r = Math.sqrt(c.u * c.u + c.v * c.v);
+        if (r > maxR) maxR = r;
+      });
+
+      // 映射到UV: 中心是(0.5, 0.5)，归一化到[0,1]
+      var scale = 0.45 / maxR; // 留一点边距
+
+      var triVertCount = face.triangles.length * 3;
+      var groupStart = vertexOffset;
+
+      face.triangles.forEach(function(triIdx) {
+        for (var v = 0; v < 3; v++) {
+          var vi = triIdx * 3 + v;
+          var vx = posAttr.getX(vi);
+          var vy = posAttr.getY(vi);
+          var vz = posAttr.getZ(vi);
+          vertices.push(vx, vy, vz);
+          normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+
+          // 计算UV
+          var rel = new THREE.Vector3(vx - center.x, vy - center.y, vz - center.z);
+          var u2d = rel.dot(uAxis) * scale + 0.5;
+          var v2d = rel.dot(vAxis) * scale + 0.5;
+          uvs.push(u2d, v2d);
+
+          vertexOffset++;
+        }
+      });
+
+      groups.push({
+        start: groupStart,
+        count: triVertCount,
+        materialIndex: faceIndex
+      });
+    });
+
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+    groups.forEach(function(g) {
+      geo.addGroup(g.start, g.count, g.materialIndex);
+    });
+
+    return { geometry: geo, faceNormals: faces.map(function(f) { return f.normal; }) };
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  生成每面的纹理贴图 — 五边形面 + 金色符号
+  // ══════════════════════════════════════════════════════════
+  function makeFaceTexture(symbol, label, baseColor, glowColor) {
+    var size = 512;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    var ctx = cv.getContext('2d');
+    var cx = size / 2, cy = size / 2;
+
+    // 背景色 — 骰子面的基色
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, size, size);
+
+    // 画一个正五边形区域，内部稍亮
+    ctx.beginPath();
+    for (var pi = 0; pi < 5; pi++) {
+      var angle = (pi * 2 * Math.PI / 5) - Math.PI / 2;
+      var px = cx + Math.cos(angle) * size * 0.42;
+      var py = cy + Math.sin(angle) * size * 0.42;
+      if (pi === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    // 五边形内部渐变
+    var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.4);
+    grad.addColorStop(0, glowColor);
+    grad.addColorStop(1, baseColor);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 五边形边框 — 金色
+    ctx.strokeStyle = 'rgba(201, 168, 76, 0.5)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 符号 — 金色，带发光
+    ctx.save();
+    ctx.shadowColor = '#d4a840';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#f0d870';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold ' + Math.round(size * 0.32) + 'px "Segoe UI Symbol","Apple Color Emoji","Noto Sans Symbols",serif';
+    ctx.fillText(symbol, cx, cy - size * 0.06);
+    // 画两遍增强发光
+    ctx.fillText(symbol, cx, cy - size * 0.06);
+    ctx.restore();
+
+    // 标签文字
+    ctx.fillStyle = 'rgba(220,200,140,0.9)';
+    ctx.font = '600 ' + Math.round(size * 0.1) + 'px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + size * 0.18);
+
+    var tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  骰子配置
+  // ══════════════════════════════════════════════════════════
+  var R = 0.45;
+
+  var DICE_CONFIG = [
+    { // 行星骰 — 深紫
+      baseColor: '#1e0e35',
+      glowColor: 'rgba(80,40,120,0.5)',
+      matColor: 0x2a1545,
+      emissive: 0x1a0a30,
+      edgeColor: 0xd4a840,
+      glowLight: 0x8855cc,
+    },
+    { // 星座骰 — 深蓝
+      baseColor: '#0a1535',
+      glowColor: 'rgba(30,60,120,0.5)',
+      matColor: 0x0f2040,
+      emissive: 0x0a1530,
+      edgeColor: 0xd4a840,
+      glowLight: 0x4488cc,
+    },
+    { // 宫位骰 — 深翠
+      baseColor: '#0a2518',
+      glowColor: 'rgba(30,100,60,0.5)',
+      matColor: 0x0d2a1a,
+      emissive: 0x0a200f,
+      edgeColor: 0xd4a840,
+      glowLight: 0x44aa66,
+    }
+  ];
+
+  // ══════════════════════════════════════════════════════════
+  //  构建骰子
+  // ══════════════════════════════════════════════════════════
+  var dodecResult = createDodecahedronWithUV(R);
+  var diceGeo = dodecResult.geometry;
+  var actualFaceNormals = dodecResult.faceNormals;
+
+  var meshes = [];
+  var diceGroups = [];
+
+  DICE_CONFIG.forEach(function(config, dieIdx) {
+    var group = new THREE.Group();
+
+    // 为12个面创建12个材质
+    var materials = [];
+    for (var fi = 0; fi < 12; fi++) {
+      var fd = FACE_DATA[dieIdx][fi];
+      var tex = makeFaceTexture(fd[0], fd[1], config.baseColor, config.glowColor);
+
+      materials.push(new THREE.MeshPhysicalMaterial({
+        map: tex,
+        roughness: 0.25,
+        metalness: 0.08,
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.2,
+        reflectivity: 0.5,
+        emissive: config.emissive,
+        emissiveIntensity: 0.15,
+        envMap: envMap,
+        envMapIntensity: 1.2,
+        flatShading: true,
+      }));
+    }
+
+    var bodyMesh = new THREE.Mesh(diceGeo.clone(), materials);
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    group.add(bodyMesh);
+
+    // 金属边缘线
+    var edgesGeo = new THREE.EdgesGeometry(new THREE.DodecahedronGeometry(R * 1.001, 0), 8);
+    var edgeMesh = new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({
+      color: config.edgeColor, transparent: true, opacity: 0.8
+    }));
+    group.add(edgeMesh);
+
+    scene.add(group);
+    meshes.push(group);
+    diceGroups.push(group);
+
+    group.userData = {
+      bodyMesh: bodyMesh,
+      materials: materials,
+      edgeMesh: edgeMesh,
+      config: config,
+      glowIntensity: 0,
+      targetGlow: 0,
+    };
+  });
+
+    // ══════════════════════════════════════════════════════════
+  //  物理
+  // ══════════════════════════════════════════════════════════
+  var GRAVITY = 22, FLOOR = R, WALL = 5.2;
+  var BOUNCE = 0.38;           // 提高弹性 — 弹更多次
+  var FRICTION = 0.82;         // 降低摩擦 — 滑得更远
+  var LDAMP = 0.994;           // 降低线性阻尼 — 滚更久
+  var ADAMP = 0.992;           // 降低角阻尼 — 转更久
+  var SETTLE_DAMP = 0.97;      // 接近停止时也别太快
+  var ROLL_FRICTION = 0.0012;  // 滚动摩擦力（面切换的阻力）
+  var SPIN_TRANSFER = 0.6;     // 碰撞时线速度转角速度的比例
+
+  var phys = meshes.map(function() {
+    return {
+      pos: new THREE.Vector3(0, R, 0),
+      vel: new THREE.Vector3(),
+      angVel: new THREE.Vector3(),
+      quat: new THREE.Quaternion(),
+      onFloor: false, settled: false, bounceCount: 0,
+    };
+  });
+
+    // 初始位置 — 三颗整齐排成一排，居中
+  var initPositions = [
+    new THREE.Vector3(-1.6, R, 0),
+    new THREE.Vector3(0, R, 0),
+    new THREE.Vector3(1.6, R, 0),
+  ];
+  // 初始朝向 — 让每颗骰子展示一个好看的面
+  var initRotations = [
+    new THREE.Euler(0.3, 0.5, 0.1),
+    new THREE.Euler(0.2, -0.3, 0.15),
+    new THREE.Euler(-0.1, 0.4, -0.2),
+  ];
+  phys.forEach(function(p, i) {
+    p.pos.copy(initPositions[i]);
+    p.quat.setFromEuler(initRotations[i]);
+  });
+
+  // ══════════════════════════════════════════════════════════
+  //  读取朝上面
+  // ══════════════════════════════════════════════════════════
+  function getTopFaceIndex(dieIndex) {
+    var q = phys[dieIndex].quat;
+    var up = new THREE.Vector3(0, 1, 0);
+    var bestDot = -Infinity, bestIdx = 0;
+    for (var fi = 0; fi < actualFaceNormals.length; fi++) {
+      var n = actualFaceNormals[fi].clone().applyQuaternion(q);
+      var d = n.dot(up);
+      if (d > bestDot) { bestDot = d; bestIdx = fi; }
+    }
+    return bestIdx;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  UI 控制
+  // ══════════════════════════════════════════════════════════
+  var btn = document.getElementById('btn');
+  var statusEl = document.getElementById('status');
+  var resDiv = document.getElementById('results');
+  var rolling = false, checkT = null, throwTime = 0;
+  var cameraShake = 0;
+
+  btn.disabled = false;
+  statusEl.textContent = '✦ 轻触命运之轮 ✦';
+
+    btn.addEventListener('click', function() {
+    if (rolling) return;
+    rolling = true;
+    btn.disabled = true;
+    resDiv.classList.remove('show');
+    statusEl.textContent = '✦ 命运之轮转动中… ✦';
+    throwTime = performance.now();
+    cameraShake = 0.3;
+    spotLight.intensity = 0;
+
+    diceGroups.forEach(function(g) {
+      g.userData.targetGlow = 0;
+    });
+
+    var startX = [-1.0, 0.5, 1.8];
+    phys.forEach(function(p, i) {
+      p.settled = false;
+      p.bounceCount = 0;
+      p.onFloor = false;
+
+      // 从更高、偏后方掷出 — 有水平速度制造滚动
+      p.pos.set(
+        startX[i] + (Math.random() - 0.5) * 0.8,
+        4.0 + Math.random() * 2.5,
+        -3.0 + (Math.random() - 0.5) * 1.0
+      );
+
+      // 关键：给强水平速度 + 适当垂直速度 — 落地后会滚
+      p.vel.set(
+        (Math.random() - 0.5) * 6,        // 左右随机
+        0.5 + Math.random() * 1.5,         // 微微向上
+        3.0 + Math.random() * 4.0          // 向前甩出
+      );
+
+      // 强旋转 — 带自旋落地
+      p.angVel.set(
+        (Math.random() - 0.5) * 40,
+        (Math.random() - 0.5) * 40,
+        (Math.random() - 0.5) * 40
+      );
+      p.quat.set(
+        Math.random() - 0.5, Math.random() - 0.5,
+        Math.random() - 0.5, Math.random() - 0.5
+      ).normalize();
+    });
+
+    clearInterval(checkT);
+    checkT = setInterval(checkSettled, 200);
+  });
+
+    function checkSettled() {
+    // 至少等2秒再检测 — 给足滚动时间
+    if (performance.now() - throwTime < 2200) return;
+    var done = phys.every(function(p) {
+      return p.vel.lengthSq() < 0.01 && p.angVel.lengthSq() < 0.01 && p.pos.y <= FLOOR + 0.05;
+    });
+    if (!done) return;
+    clearInterval(checkT);
+
+    for (var i = 0; i < 3; i++) {
+      var faceIdx = getTopFaceIndex(i);
+      document.getElementById('r' + i).textContent = RESULT_DATA[i][faceIdx];
+    }
+
+    diceGroups.forEach(function(g) { g.userData.targetGlow = 1; });
+    spotLight.intensity = 3;
+
+    statusEl.textContent = '✨ 命运已定 ✨';
+    setTimeout(function() {
+      resDiv.classList.add('show');
+      rolling = false;
+      setTimeout(function() {
+        btn.disabled = false;
+        statusEl.textContent = '✦ 再次咨询命运 ✦';
+      }, 600);
+    }, 500);
+  }
+
+    // ══════════════════════════════════════════════════════════
+  //  物理步进 — 真实滚动模拟
+  // ══════════════════════════════════════════════════════════
+  var _ax = new THREE.Vector3(), _dq = new THREE.Quaternion();
+  var _cross = new THREE.Vector3();
+
+  function step(dt) {
+    var dtc = Math.min(dt, 0.033);
+    if (dtc <= 0) return;
+    var subSteps = 3, subDt = dtc / subSteps;  // 3子步进更精确
+
+    for (var s = 0; s < subSteps; s++) {
+      phys.forEach(function(p, i) {
+        if (p.settled) return;
+
+        // 重力
+        p.vel.y -= GRAVITY * subDt;
+        p.pos.addScaledVector(p.vel, subDt);
+
+        // ── 地面碰撞 + 滚动 ──
+        if (p.pos.y <= FLOOR) {
+          p.pos.y = FLOOR;
+
+          if (p.vel.y < -0.4) {
+            // === 弹跳 ===
+            p.vel.y *= -BOUNCE;
+            p.bounceCount++;
+
+            // 弹跳时将部分垂直能量转为水平 + 旋转
+            var impactSpeed = Math.abs(p.vel.y);
+            p.vel.x += (Math.random() - 0.5) * impactSpeed * 0.5;
+            p.vel.z += (Math.random() - 0.5) * impactSpeed * 0.5;
+
+            // 关键：碰撞产生滚动角速度
+            // 滚动方向 = 地面法线 × 水平速度方向
+            var hSpeed = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+            if (hSpeed > 0.1) {
+              _cross.set(-p.vel.z, 0, p.vel.x).normalize();
+              p.angVel.x += _cross.x * hSpeed * SPIN_TRANSFER * (3 + Math.random() * 4);
+              p.angVel.y += (Math.random() - 0.5) * hSpeed * 2;
+              p.angVel.z += _cross.z * hSpeed * SPIN_TRANSFER * (3 + Math.random() * 4);
+            }
+
+            // 随弹跳次数递减
+            var decay = Math.max(0.2, 1 - p.bounceCount * 0.12);
+            p.vel.x *= FRICTION * decay;
+            p.vel.z *= FRICTION * decay;
+            p.angVel.multiplyScalar(0.85 * decay);
+
+            if (p.bounceCount <= 3) cameraShake = Math.max(cameraShake, 0.08 / p.bounceCount);
+
+          } else if (p.vel.y < 0) {
+            // === 在地面上滚动 ===
+            p.vel.y = 0;
+            p.onFloor = true;
+
+            var groundSpeed = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+
+            if (groundSpeed > 0.05) {
+              // 滚动时：线速度和角速度耦合
+              // 角速度方向 = 地面法线 × 移动方向 × (speed / radius)
+              var rollAngSpeed = groundSpeed / R;
+              var moveDir = new THREE.Vector3(p.vel.x, 0, p.vel.z).normalize();
+              _cross.set(-moveDir.z, 0, moveDir.x);
+
+              // 将角速度逐渐对齐到滚动方向（模拟面在切换）
+              p.angVel.lerp(
+                new THREE.Vector3(
+                  _cross.x * rollAngSpeed,
+                  p.angVel.y * 0.95,  // y轴自旋慢慢衰减
+                  _cross.z * rollAngSpeed
+                ),
+                subDt * 3.0  // 过渡速度
+              );
+
+              // 滚动摩擦 — 很轻微，让骰子滚很远
+              p.vel.x *= (1 - ROLL_FRICTION);
+              p.vel.z *= (1 - ROLL_FRICTION);
+
+            } else {
+              // 速度很低 — 开始减速停止
+              p.vel.x *= SETTLE_DAMP;
+              p.vel.z *= SETTLE_DAMP;
+              p.angVel.multiplyScalar(SETTLE_DAMP);
+
+              // 最后的"摇摆"效果 — 骰子在一个面上晃几下
+              if (groundSpeed < 0.02 && p.angVel.length() > 0.1 && p.angVel.length() < 2.0) {
+                // 找到当前最接近朝下的面法线
+                var downVec = new THREE.Vector3(0, -1, 0);
+                var bestDot = -Infinity, bestNormal = null;
+                for (var fi = 0; fi < actualFaceNormals.length; fi++) {
+                  var n = actualFaceNormals[fi].clone().applyQuaternion(p.quat);
+                  var d = n.dot(downVec);
+                  if (d > bestDot) { bestDot = d; bestNormal = n; }
+                }
+                // 施加扭矩让骰子稳稳落在一个面上
+                if (bestNormal && bestDot > 0.8) {
+                  var correction = new THREE.Vector3().crossVectors(bestNormal, downVec);
+                  p.angVel.addScaledVector(correction, subDt * 8);
+                  p.angVel.multiplyScalar(0.92);
+                }
+              }
+            }
+          }
+        }
+
+        // ── 圆形墙壁碰撞 ──
+        var hr = Math.sqrt(p.pos.x * p.pos.x + p.pos.z * p.pos.z);
+        if (hr > WALL) {
+          var wnx = p.pos.x / hr, wnz = p.pos.z / hr;
+          p.pos.x = wnx * WALL; p.pos.z = wnz * WALL;
+          var vdot = p.vel.x * wnx + p.vel.z * wnz;
+          if (vdot > 0) {
+            p.vel.x -= (1 + BOUNCE) * vdot * wnx;
+            p.vel.z -= (1 + BOUNCE) * vdot * wnz;
+            // 撞墙也产生旋转
+            p.angVel.y += vdot * 3 * (Math.random() > 0.5 ? 1 : -1);
+          }
+        }
+
+        // ── 骰子互碰 ──
+        for (var j = i + 1; j < phys.length; j++) {
+          var q = phys[j];
+          if (q.settled) continue;
+          var dx = p.pos.x - q.pos.x, dy = p.pos.y - q.pos.y, dz = p.pos.z - q.pos.z;
+          var d = Math.sqrt(dx*dx + dy*dy + dz*dz), mn = R * 2.15;
+          if (d < mn && d > 0.001) {
+            var cnx = dx/d, cny = dy/d, cnz = dz/d, ov = (mn-d)*0.52;
+            p.pos.x += cnx*ov; p.pos.y += cny*ov; p.pos.z += cnz*ov;
+            q.pos.x -= cnx*ov; q.pos.y -= cny*ov; q.pos.z -= cnz*ov;
+            var rv = (p.vel.x-q.vel.x)*cnx + (p.vel.y-q.vel.y)*cny + (p.vel.z-q.vel.z)*cnz;
+            if (rv < 0) {
+              var imp = rv * 0.9;
+              p.vel.x -= imp*cnx; p.vel.y -= imp*cny; p.vel.z -= imp*cnz;
+              q.vel.x += imp*cnx; q.vel.y += imp*cny; q.vel.z += imp*cnz;
+              // 互碰产生旋转
+              p.angVel.x += (Math.random()-0.5) * 5;
+              p.angVel.z += (Math.random()-0.5) * 5;
+              q.angVel.x += (Math.random()-0.5) * 5;
+              q.angVel.z += (Math.random()-0.5) * 5;
+            }
+          }
+        }
+
+        // ── 全局阻尼 ──
+        p.vel.multiplyScalar(LDAMP);
+        p.angVel.multiplyScalar(ADAMP);
+
+        // ── 完全停止 ──
+        if (p.onFloor && p.vel.lengthSq() < 0.0003 && p.angVel.lengthSq() < 0.003) {
+          p.vel.set(0, 0, 0);
+          p.angVel.set(0, 0, 0);
+          p.settled = true;
+        }
+
+        // ── 旋转更新 ──
+        var spd = p.angVel.length();
+        if (spd > 0.0001) {
+          _ax.copy(p.angVel).divideScalar(spd);
+          _dq.setFromAxisAngle(_ax, spd * subDt);
+          p.quat.premultiply(_dq).normalize();
+        }
+      });
+    }
+
+    phys.forEach(function(p, i) {
+      meshes[i].position.copy(p.pos);
+      meshes[i].quaternion.copy(p.quat);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  相机 & 视觉动画
+  // ══════════════════════════════════════════════════════════
+  var baseCamPos = new THREE.Vector3(0, 10, 9);
+
+  function updateCamera() {
+    if (cameraShake > 0.001) {
+      cameraShake *= 0.92;
+      camera.position.set(
+        baseCamPos.x + (Math.random()-0.5)*cameraShake,
+        baseCamPos.y + (Math.random()-0.5)*cameraShake,
+        baseCamPos.z
+      );
+    } else {
+      camera.position.lerp(baseCamPos, 0.05);
+    }
+    camera.lookAt(0, 0, 0);
+  }
+
+  function updateDiceVisuals(time, dt) {
+    diceGroups.forEach(function(g, i) {
+      var ud = g.userData;
+      ud.glowIntensity += (ud.targetGlow - ud.glowIntensity) * dt * 3;
+      if (ud.glowIntensity > 0.01) {
+        var pulse = 0.5 + 0.5 * Math.sin(time * 2 + i * 2.1);
+        ud.materials.forEach(function(mat) {
+          mat.emissiveIntensity = 0.15 + ud.glowIntensity * (0.4 + pulse * 0.3);
+        });
+        ud.edgeMesh.material.opacity = 0.8 + ud.glowIntensity * 0.2 * pulse;
+      }
+    });
+  }
+
+    function idleAnimation(time) {
+    if (rolling) return;
+    phys.forEach(function(p, i) {
+      // 缓缓飘回初始位置（如果掷完骰子散开了，慢慢归位）
+      var targetX = initPositions[i].x;
+      var targetZ = initPositions[i].z;
+
+      // 只在非rolling且settled之后才归位
+      if (p.settled || !p.onFloor) {
+        // 轻微悬浮
+        meshes[i].position.y = p.pos.y + Math.sin(time * 1.2 + i * 2.0) * 0.018;
+        // 轻微左右晃动
+        meshes[i].position.x = p.pos.x + Math.sin(time * 0.8 + i * 1.5) * 0.008;
+      } else {
+        meshes[i].position.y = p.pos.y + Math.sin(time * 1.2 + i * 2.0) * 0.018;
+      }
+
+      // 缓慢自转 — 展示各面
+      meshes[i].rotation.y += 0.003;
+    });
+  }
+
+    // 水晶球脉动动画
+    function updateCrystalGlow(time) {
+    rimGroup.children.forEach(function(child, idx) {
+      if (child.material && child.material.transparent && child.geometry &&
+          child.geometry.type === 'SphereGeometry') {
+        // 微光点呼吸效果
+        var phase = time * 1.5 + idx * 0.52;
+        var baseOpacity = child.geometry.parameters.radius > 0.04 ? 0.06 : 0.3;
+        var range = child.geometry.parameters.radius > 0.04 ? 0.08 : 0.15;
+        child.material.opacity = baseOpacity + range * Math.sin(phase);
+        if (child.geometry.parameters.radius > 0.04) {
+          child.scale.setScalar(1 + 0.2 * Math.sin(phase));
+        }
+      }
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  主循环
+  // ══════════════════════════════════════════════════════════
+  var last = performance.now();
+
+  (function loop() {
+    requestAnimationFrame(loop);
+    var now = performance.now();
+    var dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.1) dt = 0.033;
+    var time = now / 1000;
+
+    if (rolling) step(dt);
+    idleAnimation(time);
+    updateCamera();
+    updateDiceVisuals(time, dt);
+    updateCrystalGlow(time);  
+    renderer.render(scene, camera);
+  })();
+})();
+</script>
+</body>
+</html>
