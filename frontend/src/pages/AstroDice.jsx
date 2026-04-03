@@ -1,5 +1,5 @@
 // frontend/src/pages/AstroDice.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { apiFetch } from '../utils/apiFetch'
 import { SourcesSection } from '../components/AIPanel'
@@ -141,6 +141,10 @@ export default function AstroDice() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 星盘选择
+  const [charts, setCharts] = useState([])
+  const [selectedChartId, setSelectedChartId] = useState(null)
+
   // 主结果
   const [result, setResult] = useState(null)
 
@@ -150,6 +154,15 @@ export default function AstroDice() {
   const [rerolling, setRerolling] = useState(false)
   const [rerollResult, setRerollResult] = useState(null)
   const [supplementResult, setSupplementResult] = useState(null)
+
+  // 拉取已保存星盘列表
+  useEffect(() => {
+    if (!isAuthenticated) return
+    apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setCharts(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isAuthenticated) {
     return (
@@ -172,7 +185,11 @@ export default function AstroDice() {
       const res = await apiFetch(`${API_BASE}/api/dice/roll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ question: question.trim(), category }),
+        body: JSON.stringify({
+          question: question.trim(),
+          category,
+          chart_id: selectedChartId || undefined,
+        }),
       })
       if (res.status === 429) {
         const d = await res.json()
@@ -284,6 +301,49 @@ export default function AstroDice() {
               ))}
             </div>
           </div>
+
+          {/* 可选：结合本命盘 */}
+          {charts.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ color: '#8888aa', fontSize: '0.82rem', marginBottom: '8px' }}>
+                结合本命盘解读（可选）：
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <button
+                  onClick={() => setSelectedChartId(null)}
+                  style={{
+                    padding: '6px 14px', borderRadius: '20px', cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    background: selectedChartId === null ? '#1a1a3a' : 'transparent',
+                    border: `1px solid ${selectedChartId === null ? '#c9a84c' : '#3a3a6a'}`,
+                    color: selectedChartId === null ? '#c9a84c' : '#8888aa',
+                  }}
+                >
+                  不使用
+                </button>
+                {charts.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedChartId(c.id)}
+                    style={{
+                      padding: '6px 14px', borderRadius: '20px', cursor: 'pointer',
+                      fontSize: '0.82rem',
+                      background: selectedChartId === c.id ? '#1a1a3a' : 'transparent',
+                      border: `1px solid ${selectedChartId === c.id ? '#88aaff' : '#3a3a6a'}`,
+                      color: selectedChartId === c.id ? '#88aaff' : '#8888aa',
+                    }}
+                  >
+                    {c.label || c.name}
+                  </button>
+                ))}
+              </div>
+              {selectedChartId && (
+                <div style={{ color: '#5a5a8a', fontSize: '0.78rem', marginTop: '6px' }}>
+                  ✦ 解读将结合该星盘的上升、日月及与骰子相关的宫位信息
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <div style={{ color: '#ff8866', fontSize: '0.88rem', marginBottom: '12px' }}>{error}</div>}
 

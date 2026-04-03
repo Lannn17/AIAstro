@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/dice", tags=["Dice"])
 class DiceRollRequest(BaseModel):
     question: str
     category: str = "其他"
+    chart_id: Optional[int] = None   # 可选：结合指定本命盘解读
 
 
 class DiceRerollRequest(BaseModel):
@@ -70,12 +71,28 @@ async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth
 
     try:
         dice = roll_dice()
+
+        # 可选：提取本命盘上下文
+        natal_context = ""
+        if body.chart_id:
+            from app.db import db_get_chart
+            import json as _json
+            chart_row = db_get_chart(body.chart_id)
+            if chart_row:
+                raw = chart_row.get("chart_data") or "{}"
+                chart_data = _json.loads(raw) if isinstance(raw, str) else raw
+                from app.rag.dice import extract_natal_context
+                natal_context = extract_natal_context(
+                    chart_data, dice["planet"], dice["sign"], dice["house"]
+                )
+
         result = interpret_dice(
             planet=dice["planet"],
             sign=dice["sign"],
             house=dice["house"],
             question=body.question,
             category=body.category,
+            natal_context=natal_context,
         )
         asyncio.create_task(_log_dice_analytics(body.question, result, prefix))
         return result

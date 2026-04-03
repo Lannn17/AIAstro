@@ -275,13 +275,15 @@ PROMPTS: dict[str, dict] = {
         # Caller appends rag_context via rag_generate()
         "prompt_template": (
             "用户问题：{question}\n"
-            "问题类别：{category}\n\n"
+            "问题类别：{category}\n"
+            "{natal_section}\n\n"
             "骰子结果：{planet_name} ＋ {sign_name} ＋ 第{house_number}宫\n"
             "核心含义：{core_sentence}\n"
             "关键词：{keywords}\n\n"
             "请根据以上占星骰子结果，针对用户问题给出解读。\n"
             "要求：\n"
             "- 核心解读 100-150 字，结合骰子三要素（能量/方式/领域）与问题本身\n"
+            "- 若有本命盘参考，请结合其中与骰子结果最相关的1-2个信息做个性化说明\n"
             "- 给出一条具体可执行的行动建议（以【建议：】开头）\n"
             "- 语气温和、使用概率性表达（如：可能、倾向于），避免绝对断言\n"
             "- 严禁脱离骰子结果泛泛而谈"

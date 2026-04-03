@@ -5,6 +5,24 @@ import random
 from .chat import rag_generate
 from .prompt_registry import PROMPTS
 
+# 行星英文名（name_original）→ 中文
+_PLANET_EN_TO_CN: dict[str, str] = {
+    "Sun": "太阳", "Moon": "月亮", "Mercury": "水星", "Venus": "金星",
+    "Mars": "火星", "Jupiter": "木星", "Saturn": "土星", "Uranus": "天王星",
+    "Neptune": "海王星", "Pluto": "冥王星", "Chiron": "凯龙",
+    "True_Node": "北交点", "True Node": "北交点",
+    "North Node": "北交点", "Mean_Node": "北交点",
+    "Lilith": "莉莉丝",
+}
+
+# 骰子行星 key → chart name_original（首字母大写）
+_DICE_TO_CHART_PLANET: dict[str, str] = {
+    "sun": "Sun", "moon": "Moon", "mercury": "Mercury",
+    "venus": "Venus", "mars": "Mars", "jupiter": "Jupiter",
+    "saturn": "Saturn", "uranus": "Uranus", "neptune": "Neptune",
+    "pluto": "Pluto", "north_node": "True_Node", "chiron": "Chiron",
+}
+
 # ── 行星：能量/主题 ────────────────────────────────────────────────
 _PLANET_MEANINGS = {
     "sun":        {"name": "太阳",   "core": "核心自我与目标",   "keywords": ["自我实现", "方向感", "生命力"]},
@@ -103,12 +121,90 @@ def build_core_sentence(planet: str, sign: str, house: str) -> str:
     )
 
 
+def extract_natal_context(chart_data: dict, planet: str, sign: str, house: str) -> str:
+    """
+    从本命盘数据提取与骰子结果直接相关的6个字段，返回可注入 prompt 的中文文本。
+    ① 上升 ② 太阳 ③ 月亮（固定基础）
+    ④ 骰子行星在本命盘的位置 ⑤ 骰子星座内有哪些行星 ⑥ 骰子宫位宫首+宫内行星
+    """
+    if not chart_data:
+        return ""
+
+    # 建立 planet_info: name_original → {sign, house, retrograde}
+    planet_info: dict[str, dict] = {}
+    for _, p in chart_data.get("planets", {}).items():
+        pname = p.get("name_original") or p.get("name", "")
+        psign = p.get("sign_original") or p.get("sign", "")
+        planet_info[pname] = {
+            "sign": psign,
+            "house": p.get("house"),
+            "retrograde": p.get("retrograde", False),
+        }
+
+    # 建立 house_info: str(number) → sign_original
+    house_info: dict[str, str] = {}
+    for _, h in chart_data.get("houses", {}).items():
+        if isinstance(h, dict):
+            hnum = str(h.get("number", ""))
+            hsign = h.get("sign_original") or h.get("sign", "")
+            house_info[hnum] = hsign
+
+    def _cn(pname: str) -> str:
+        return _PLANET_EN_TO_CN.get(pname, pname)
+
+    def _pi_str(pi: dict, label: str) -> str:
+        retro = "（逆）" if pi.get("retrograde") else ""
+        return f"{label}{pi['sign']}{pi['house']}宫{retro}"
+
+    parts: list[str] = []
+
+    # ① 上升
+    asc = chart_data.get("ascendant", {})
+    asc_sign = asc.get("sign_original") or asc.get("sign", "")
+    if asc_sign:
+        parts.append(f"上升{asc_sign}")
+
+    # ② 太阳  ③ 月亮
+    for en_name, label in [("Sun", "太阳"), ("Moon", "月亮")]:
+        pi = planet_info.get(en_name)
+        if pi:
+            parts.append(_pi_str(pi, label))
+
+    # ④ 骰子行星在本命盘的位置
+    chart_pname = _DICE_TO_CHART_PLANET.get(planet)
+    if chart_pname and chart_pname not in planet_info and planet == "north_node":
+        for alt in ["True Node", "North Node", "Mean_Node"]:
+            if alt in planet_info:
+                chart_pname = alt
+                break
+    if chart_pname:
+        pi = planet_info.get(chart_pname)
+        if pi:
+            pname_cn = _PLANET_MEANINGS[planet]["name"]
+            parts.append(_pi_str(pi, f"本命{pname_cn}在"))
+
+    # ⑤ 骰子星座内的行星
+    in_sign = [_cn(pn) for pn, pi in planet_info.items() if pi["sign"] == sign]
+    sign_cn = _SIGN_MEANINGS[sign]["name"]
+    parts.append(f"本命{sign_cn}内{'有' + '/'.join(in_sign) if in_sign else '无行星'}")
+
+    # ⑥ 骰子宫位的宫首星座 + 宫内行星
+    h_sign = house_info.get(house, "")
+    in_house = [_cn(pn) for pn, pi in planet_info.items() if str(pi.get("house", "")) == house]
+    h_line = f"第{house}宫宫首{h_sign}" if h_sign else f"第{house}宫"
+    h_line += f"，宫内{'有' + '/'.join(in_house) if in_house else '无行星'}"
+    parts.append(h_line)
+
+    return "；".join(parts)
+
+
 def interpret_dice(
     planet: str,
     sign: str,
     house: str,
     question: str,
     category: str,
+    natal_context: str = "",
 ) -> dict:
     """
     主解读：三颗骰子 + 用户问题 → RAG + LLM 生成个性化解读
@@ -123,6 +219,10 @@ def interpret_dice(
 
     tmpl = PROMPTS["astro_dice"]["prompt_template"]
     temperature = PROMPTS["astro_dice"]["temperature"]
+    natal_section = (
+        f"\n用户本命盘参考（结合以下信息个性化解读）：{natal_context}"
+        if natal_context else ""
+    )
     prompt = tmpl.format(
         question=question,
         category=category,
@@ -131,6 +231,7 @@ def interpret_dice(
         house_number=house,
         core_sentence=core_sentence,
         keywords=", ".join(keywords),
+        natal_section=natal_section,
     )
 
     rag_query = f"{planet} {sign} house {house} divination question"
@@ -223,7 +324,7 @@ def interpret_supplement(
         f"现在出现了辅助能量：【{sp['name']}】（{sp['core']}）\n"
         f"关键词：{', '.join(sp['keywords'])}\n\n"
         "请用 60-80 字说明这股辅助能量为原解读补充了什么视角或提示，"
-        "语气简洁，以"另有一股……能量在侧"开头。"
+        "语气简洁，以【另有一股……能量在侧】开头。"
     )
 
     rag_query = f"{supplement_planet} auxiliary energy astrology"
