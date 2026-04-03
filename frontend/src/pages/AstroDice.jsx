@@ -171,6 +171,7 @@ export default function AstroDice() {
 
   // 骰子动画弹窗
   const [showDiceModal, setShowDiceModal] = useState(false)
+    const diceSettledResolve = useRef(null)
 
   // localStorage 历史（24h）
   const [localHistory, setLocalHistory] = useState([])

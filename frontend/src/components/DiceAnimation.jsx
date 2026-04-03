@@ -136,8 +136,13 @@ function initScene(THREE, canvas, stateRef, onSettled) {
   keyLight.shadow.camera.right = keyLight.shadow.camera.top = 8
   keyLight.shadow.bias = -0.001
   scene.add(keyLight)
-  scene.add(Object.assign(new THREE.DirectionalLight(0x8888cc, 0.9), { position: new THREE.Vector3(-6, 5, -3) }))
-  scene.add(Object.assign(new THREE.PointLight(0xffffff, 0.8, 20), { position: new THREE.Vector3(0, 8, 0) }))
+  const fillLight = new THREE.DirectionalLight(0x8888cc, 0.9)
+  fillLight.position.set(-6, 5, -3)
+  scene.add(fillLight)
+  
+  const topLight = new THREE.PointLight(0xffffff, 0.8, 20)
+  topLight.position.set(0, 8, 0)
+  scene.add(topLight)
   const spotLight = new THREE.SpotLight(0xffeedd, 0, 15, Math.PI / 6, 0.5, 1)
   spotLight.position.set(0, 10, 2); scene.add(spotLight); scene.add(spotLight.target)
 
