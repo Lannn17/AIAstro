@@ -1,8 +1,20 @@
 // frontend/src/pages/AstroDice.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { apiFetch } from '../utils/apiFetch'
 import { SourcesSection } from '../components/AIPanel'
+import DiceAnimation from '../components/DiceAnimation'
+
+// 响应式断点 hook
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640)
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
+  return isMobile
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -53,7 +65,7 @@ function GuideCard({ collapsed, onToggle }) {
           </p>
 
           {/* 三骰说明 */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
             {[
               { emoji: '🎲', label: '行星骰', sub: '什么能量？', color: '#c9a84c', desc: '代表本次议题的核心驱动力与主题' },
               { emoji: '🎲', label: '星座骰', sub: '什么方式？', color: '#88aaff', desc: '代表能量的运作风格与处理方式' },
@@ -134,6 +146,8 @@ function DiceCard({ dice, label, color, inherited }) {
 // ── 主组件 ──────────────────────────────────────────────────────────
 export default function AstroDice() {
   const { authHeaders, isAuthenticated } = useAuth()
+  const isMobile = useIsMobile()
+  const diceRef = useRef(null)
 
   const [guideCollapsed, setGuideCollapsed] = useState(false)
   const [question, setQuestion] = useState('')
@@ -205,6 +219,8 @@ export default function AstroDice() {
     setError('')
     setLoading(true)
     setResult(null)
+    // 触发 3D 骰子动画
+    diceRef.current?.throwDice()
     setRerollResult(null)
     setSupplementResult(null)
     setRerollMode(null)
@@ -273,11 +289,26 @@ export default function AstroDice() {
   }
 
   return (
-    <div style={{ maxWidth: '720px', margin: '0 auto', padding: '28px 16px', color: '#c8c8e8' }}>
+    <div style={{ maxWidth: '720px', margin: '0 auto', padding: isMobile ? '16px 12px' : '28px 16px', color: '#c8c8e8' }}>
 
-      <h1 style={{ color: '#c9a84c', fontSize: '1.3rem', marginBottom: '24px' }}>
+      <h1 style={{ color: '#c9a84c', fontSize: isMobile ? '1.1rem' : '1.3rem', marginBottom: isMobile ? '14px' : '24px' }}>
         🎲 占星骰子
       </h1>
+
+      {/* ── 3D 骰子动画（常驻，掷骰时触发）── */}
+      <div style={{ marginBottom: isMobile ? '16px' : '20px', borderRadius: '12px', overflow: 'hidden',
+        border: '1px solid #2a2a4a', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+        <DiceAnimation ref={diceRef} height={isMobile ? 220 : 320} />
+        {loading && (
+          <div style={{
+            textAlign: 'center', padding: '8px 0 10px',
+            background: '#080816', color: '#c9a84c88',
+            fontSize: '0.75rem', letterSpacing: '2px',
+          }}>
+            ✦ 命运之轮转动中… ✦
+          </div>
+        )}
+      </div>
 
       <GuideCard collapsed={guideCollapsed} onToggle={() => setGuideCollapsed(v => !v)} />
 
@@ -317,43 +348,46 @@ export default function AstroDice() {
       {!result && (
         <div style={{
           background: '#0d0d22', border: '1px solid #2a2a5a',
-          borderRadius: '12px', padding: '24px',
+          borderRadius: '12px', padding: isMobile ? '16px' : '24px',
         }}>
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', color: '#8888aa', fontSize: '0.85rem', marginBottom: '8px' }}>
+            <label style={{ display: 'block', color: '#8888aa', fontSize: isMobile ? '0.8rem' : '0.85rem', marginBottom: '8px' }}>
               在心中想好一个具体问题，然后写下来：
             </label>
             <textarea
               value={question}
               onChange={e => setQuestion(e.target.value)}
               placeholder="例如：我该不该接受这份工作邀请？"
-              rows={3}
+              rows={isMobile ? 2 : 3}
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: '#12122a', border: '1px solid #3a3a6a',
                 borderRadius: '8px', color: '#c9c9e0',
-                padding: '10px 14px', fontSize: '0.95rem',
+                padding: isMobile ? '8px 12px' : '10px 14px',
+                fontSize: isMobile ? '0.9rem' : '0.95rem',
                 resize: 'vertical', outline: 'none',
               }}
             />
           </div>
 
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ color: '#8888aa', fontSize: '0.82rem', marginBottom: '10px' }}>
-              选择问题类别（帮助 AI 更精准解读）：
+          <div style={{ marginBottom: isMobile ? '14px' : '20px' }}>
+            <div style={{ color: '#8888aa', fontSize: '0.82rem', marginBottom: '8px' }}>
+              选择问题类别：
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? '6px' : '8px' }}>
               {CATEGORIES.map(c => (
                 <button
                   key={c.key}
                   onClick={() => setCategory(c.key)}
                   style={{
-                    padding: '6px 14px', borderRadius: '20px', cursor: 'pointer',
-                    fontSize: '0.85rem', fontWeight: category === c.key ? 600 : 400,
+                    padding: isMobile ? '7px 12px' : '6px 14px',
+                    borderRadius: '20px', cursor: 'pointer',
+                    fontSize: isMobile ? '0.8rem' : '0.85rem',
+                    fontWeight: category === c.key ? 600 : 400,
                     background: category === c.key ? '#1a1a3a' : 'transparent',
                     border: `1px solid ${category === c.key ? '#c9a84c' : '#3a3a6a'}`,
                     color: category === c.key ? '#c9a84c' : '#8888aa',
-                    transition: 'all 0.15s',
+                    transition: 'all 0.15s', minHeight: '36px',
                   }}
                 >
                   {c.icon} {c.key}
@@ -411,12 +445,13 @@ export default function AstroDice() {
             onClick={handleRoll}
             disabled={loading}
             style={{
-              width: '100%', padding: '12px',
+              width: '100%', padding: isMobile ? '14px' : '12px',
               background: loading ? '#2a2a4a' : '#c9a84c',
               color: loading ? '#8888aa' : '#0a0a1a',
               border: 'none', borderRadius: '8px',
-              fontWeight: 700, fontSize: '1rem', cursor: loading ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.05em',
+              fontWeight: 700, fontSize: isMobile ? '1rem' : '1rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.05em', minHeight: '48px',
             }}
           >
             {loading ? '正在解读…' : '🎲 掷骰子'}
@@ -438,7 +473,7 @@ export default function AstroDice() {
           </div>
 
           {/* 三骰展示 */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: isMobile ? '8px' : '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <DiceCard dice={result.dice_display.planet} label="能量" color="#c9a84c" />
             <DiceCard dice={result.dice_display.sign}   label="方式" color="#88aaff" />
             <DiceCard dice={result.dice_display.house}  label="领域" color="#88cc88" />
@@ -523,35 +558,45 @@ export default function AstroDice() {
 
           {/* 再掷操作区 */}
           {!rerollMode && (
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
               <button
                 onClick={() => setRerollMode('followup')}
                 disabled={rerolling}
                 style={{
-                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  padding: isMobile ? '10px 14px' : '9px 18px',
+                  flex: isMobile ? '1 1 auto' : 'none',
+                  borderRadius: '8px', cursor: 'pointer',
                   background: '#12122a', border: '1px solid #88aaff',
-                  color: '#88aaff', fontSize: '0.88rem', fontWeight: 600,
+                  color: '#88aaff', fontSize: isMobile ? '0.82rem' : '0.88rem', fontWeight: 600,
+                  minHeight: '42px',
                 }}
               >
-                🔍 追问（掷行星+宫位）
+                🔍 追问
               </button>
               <button
                 onClick={() => setRerollMode('supplement')}
                 disabled={rerolling}
                 style={{
-                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  padding: isMobile ? '10px 14px' : '9px 18px',
+                  flex: isMobile ? '1 1 auto' : 'none',
+                  borderRadius: '8px', cursor: 'pointer',
                   background: '#12122a', border: '1px solid #88cc88',
-                  color: '#88cc88', fontSize: '0.88rem', fontWeight: 600,
+                  color: '#88cc88', fontSize: isMobile ? '0.82rem' : '0.88rem', fontWeight: 600,
+                  minHeight: '42px',
                 }}
               >
-                ✨ 补充能量（掷行星）
+                ✨ 补充能量
               </button>
               <button
                 onClick={() => { setResult(null); setRerollResult(null); setSupplementResult(null); setGuideCollapsed(false) }}
                 style={{
-                  padding: '9px 18px', borderRadius: '8px', cursor: 'pointer',
+                  padding: isMobile ? '10px 14px' : '9px 18px',
+                  flex: isMobile ? '1 1 100%' : 'none',
+                  borderRadius: '8px', cursor: 'pointer',
                   background: 'transparent', border: '1px solid #3a3a6a',
-                  color: '#8888aa', fontSize: '0.88rem', marginLeft: 'auto',
+                  color: '#8888aa', fontSize: isMobile ? '0.82rem' : '0.88rem',
+                  minHeight: '42px',
+                  marginLeft: isMobile ? 0 : 'auto',
                 }}
               >
                 🔄 新问题
