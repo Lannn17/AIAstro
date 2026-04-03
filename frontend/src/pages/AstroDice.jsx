@@ -169,6 +169,9 @@ export default function AstroDice() {
   const [rerollResult, setRerollResult] = useState(null)
   const [supplementResult, setSupplementResult] = useState(null)
 
+  // 骰子动画弹窗
+  const [showDiceModal, setShowDiceModal] = useState(false)
+
   // localStorage 历史（24h）
   const [localHistory, setLocalHistory] = useState([])
 
@@ -219,9 +222,10 @@ export default function AstroDice() {
     setError('')
     setLoading(true)
     setResult(null)
-    // 触发 3D 骰子动画
-    diceRef.current?.throwDice()
     setRerollResult(null)
+    // 显示骰子弹窗，Three.js 初始化后触发动画
+    setShowDiceModal(true)
+    setTimeout(() => { diceRef.current?.throwDice() }, 150)
     setSupplementResult(null)
     setRerollMode(null)
     try {
@@ -237,6 +241,8 @@ export default function AstroDice() {
       if (res.status === 429) {
         const d = await res.json()
         setError(d.detail)
+        setLoading(false)
+        setShowDiceModal(false)
         return
       }
       if (!res.ok) throw new Error(res.status)
@@ -248,6 +254,8 @@ export default function AstroDice() {
       setError(`解读失败，请稍后重试（${e.message}）`)
     } finally {
       setLoading(false)
+      // API 完成后短暂保留动画再关闭弹窗
+      setTimeout(() => setShowDiceModal(false), 600)
     }
   }
 
@@ -295,20 +303,31 @@ export default function AstroDice() {
         🎲 占星骰子
       </h1>
 
-      {/* ── 3D 骰子动画（常驻，掷骰时触发）── */}
-      <div style={{ marginBottom: isMobile ? '16px' : '20px', borderRadius: '12px', overflow: 'hidden',
-        border: '1px solid #2a2a4a', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
-        <DiceAnimation ref={diceRef} height={isMobile ? 220 : 320} />
-        {loading && (
+      {/* ── 3D 骰子动画弹窗 ── */}
+      {showDiceModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(4,4,18,0.88)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
           <div style={{
-            textAlign: 'center', padding: '8px 0 10px',
-            background: '#080816', color: '#c9a84c88',
-            fontSize: '0.75rem', letterSpacing: '2px',
+            width: isMobile ? '92vw' : '560px',
+            borderRadius: '16px', overflow: 'hidden',
+            border: '1px solid #2a2a4a',
+            boxShadow: '0 12px 60px rgba(0,0,0,0.8)',
           }}>
-            ✦ 命运之轮转动中… ✦
+            <DiceAnimation ref={diceRef} height={isMobile ? 260 : 380} />
+            <div style={{
+              textAlign: 'center', padding: '10px 0 14px',
+              background: '#080816', color: '#c9a84c',
+              fontSize: '0.78rem', letterSpacing: '2px',
+            }}>
+              ✦ 命运之轮转动中… ✦
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <GuideCard collapsed={guideCollapsed} onToggle={() => setGuideCollapsed(v => !v)} />
 
