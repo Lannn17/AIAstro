@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.security import require_auth, UserInfo
-from app.db import db_log_query_analytics
+from app.db import db_log_query_analytics, db_save_dice_roll
 
 router = APIRouter(prefix="/api/dice", tags=["Dice"])
 
@@ -95,6 +95,7 @@ async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth
             natal_context=natal_context,
         )
         asyncio.create_task(_log_dice_analytics(body.question, result, prefix))
+        asyncio.create_task(_save_dice_roll(user, body, dice, result))
         return result
     except Exception as e:
         import traceback
@@ -161,6 +162,23 @@ async def _log_dice_analytics(query: str, result: dict, prefix: str):
         print(f"[Dice Analytics] score={max_score:.3f} cited={any_cited}", flush=True)
     except Exception as e:
         print(f"[Dice Analytics] log failed (non-fatal): {e}", flush=True)
+
+
+async def _save_dice_roll(user: UserInfo, body: DiceRollRequest, dice: dict, result: dict):
+    try:
+        interp = result.get("interpretation", "")
+        db_save_dice_roll(
+            username=user.get("username", ""),
+            question=body.question,
+            category=body.category,
+            planet=dice["planet"],
+            sign=dice["sign"],
+            house=dice["house"],
+            chart_id=body.chart_id,
+            interp_summary=interp[:200],
+        )
+    except Exception as e:
+        print(f"[DiceRoll] save failed (non-fatal): {e}", flush=True)
 
 
 async def _log_reroll_analytics(query: str, result: dict, mode: str):

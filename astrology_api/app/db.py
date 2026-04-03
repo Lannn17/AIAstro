@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS solar_return_cache (
 )
 """
 
+_CREATE_DICE_ROLLS = """
+CREATE TABLE IF NOT EXISTS dice_rolls (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    username     TEXT    NOT NULL,
+    question     TEXT    NOT NULL,
+    category     TEXT    NOT NULL DEFAULT '其他',
+    planet       TEXT    NOT NULL,
+    sign         TEXT    NOT NULL,
+    house        TEXT    NOT NULL,
+    chart_id     INTEGER,
+    interp_summary TEXT,
+    created_at   TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+"""
+
 _CREATE_PROMPT_VERSIONS = """
 CREATE TABLE IF NOT EXISTS prompt_versions (
     id TEXT PRIMARY KEY,
@@ -308,7 +323,7 @@ def create_tables():
                 _CREATE_LIFE_EVENTS, _CREATE_SR_CACHE,
                 _CREATE_PROMPT_VERSIONS, _CREATE_PROMPT_LOGS,
                 _CREATE_PROMPT_EVALUATIONS, _CREATE_USER_FEEDBACK,
-                _CREATE_CONFIRMED_BIRTH_TIMES]:
+                _CREATE_CONFIRMED_BIRTH_TIMES, _CREATE_DICE_ROLLS]:
         if USE_TURSO:
             _turso_exec(ddl)
         else:
@@ -933,3 +948,52 @@ def db_insert_user_feedback(
     sql = "INSERT INTO user_feedback (id, caller, content, user_id, created_at) VALUES (?,?,?,?,?)"
     if USE_TURSO:
         _turso_exec(sql, [id_, caller, content, user_id, now])
+
+
+# ── 占星骰子记录 ──────────────────────────────────────────────────
+
+def db_save_dice_roll(
+    username: str,
+    question: str,
+    category: str,
+    planet: str,
+    sign: str,
+    house: str,
+    chart_id: int | None,
+    interp_summary: str,
+) -> None:
+    """保存一次骰子掷出记录，同时清理该用户90天前的旧记录。"""
+    insert_sql = """
+        INSERT INTO dice_rolls (username, question, category, planet, sign, house, chart_id, interp_summary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """
+    cleanup_sql = """
+        DELETE FROM dice_rolls
+        WHERE username = ?
+          AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-90 days')
+    """
+    params = [username, question, category, planet, sign, house, chart_id, interp_summary]
+    try:
+        if USE_TURSO:
+            _turso_exec(insert_sql, params)
+            _turso_exec(cleanup_sql, [username])
+        else:
+            _sqlite_write(insert_sql, params)
+            _sqlite_write(cleanup_sql, [username])
+    except Exception as e:
+        print(f"[DiceRoll] save failed (non-fatal): {e}", flush=True)
+
+
+def db_get_user_dice_rolls(username: str, days: int = 90) -> list[dict]:
+    """返回用户最近 N 天的骰子记录，按时间倒序。"""
+    sql = """
+        SELECT id, question, category, planet, sign, house, chart_id, interp_summary, created_at
+        FROM dice_rolls
+        WHERE username = ?
+          AND created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ? )
+        ORDER BY created_at DESC
+    """
+    offset_str = f"-{days} days"
+    if USE_TURSO:
+        return _to_dicts(_turso_exec(sql, [username, offset_str]))
+    return _sqlite_fetchall(sql, [username, offset_str])

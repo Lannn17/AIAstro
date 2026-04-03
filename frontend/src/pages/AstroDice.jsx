@@ -155,14 +155,41 @@ export default function AstroDice() {
   const [rerollResult, setRerollResult] = useState(null)
   const [supplementResult, setSupplementResult] = useState(null)
 
-  // 拉取已保存星盘列表
+  // localStorage 历史（24h）
+  const [localHistory, setLocalHistory] = useState([])
+
+  // 拉取已保存星盘列表 + 加载本地历史
   useEffect(() => {
     if (!isAuthenticated) return
     apiFetch(`${API_BASE}/api/charts`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(data => setCharts(Array.isArray(data) ? data : []))
       .catch(() => {})
+
+    // 读取并清理过期本地记录
+    try {
+      const raw = localStorage.getItem('dice_history')
+      const all = raw ? JSON.parse(raw) : []
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000
+      const fresh = all.filter(r => r.ts > cutoff)
+      setLocalHistory(fresh)
+      localStorage.setItem('dice_history', JSON.stringify(fresh))
+    } catch {}
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function _pushLocalHistory(dice, question, category, core_sentence) {
+    try {
+      const raw = localStorage.getItem('dice_history')
+      const all = raw ? JSON.parse(raw) : []
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000
+      const fresh = all.filter(r => r.ts > cutoff)
+      const entry = { ts: Date.now(), question, category, core_sentence,
+                      planet: dice.planet.name, sign: dice.sign.name, house: dice.house.number }
+      const updated = [entry, ...fresh]
+      localStorage.setItem('dice_history', JSON.stringify(updated))
+      setLocalHistory(updated)
+    } catch {}
+  }
 
   if (!isAuthenticated) {
     return (
@@ -200,6 +227,7 @@ export default function AstroDice() {
       const data = await res.json()
       setResult(data)
       setGuideCollapsed(true)
+      _pushLocalHistory(data.dice_display, question.trim(), category, data.core_sentence)
     } catch (e) {
       setError(`解读失败，请稍后重试（${e.message}）`)
     } finally {
@@ -252,6 +280,38 @@ export default function AstroDice() {
       </h1>
 
       <GuideCard collapsed={guideCollapsed} onToggle={() => setGuideCollapsed(v => !v)} />
+
+      {/* ── 今日历史（24h，来自 localStorage）── */}
+      {!result && localHistory.length > 0 && (
+        <div style={{
+          background: '#0d0d22', border: '1px solid #2a2a5a',
+          borderRadius: '10px', padding: '14px 18px', marginBottom: '20px',
+        }}>
+          <div style={{ color: '#8888aa', fontSize: '0.8rem', marginBottom: '10px', letterSpacing: '0.08em' }}>
+            今日记录
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {localHistory.map((r, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: '10px', alignItems: 'flex-start',
+                padding: '8px 10px', background: '#12122a',
+                borderRadius: '8px', fontSize: '0.82rem',
+              }}>
+                <span style={{ color: '#c9a84c', flexShrink: 0 }}>
+                  {r.planet} · {r.sign} · {r.house}宫
+                </span>
+                <span style={{ color: '#6666aa', flexShrink: 0 }}>
+                  {new Date(r.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span style={{ color: '#8888aa', overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.question}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Step 1：输入问题 ── */}
       {!result && (
