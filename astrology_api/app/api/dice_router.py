@@ -63,7 +63,8 @@ async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth
     from app.rag.dice import roll_dice, interpret_dice
 
     username = user.get("username", "")
-    _check_daily_limit(username)  # 先检查，查 dice_rolls 表，同步
+    if not user.get("is_admin"):
+        _check_daily_limit(username)  # 先检查，查 dice_rolls 表，同步
 
     try:
         dice = roll_dice()
