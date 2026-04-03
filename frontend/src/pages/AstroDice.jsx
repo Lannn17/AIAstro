@@ -171,7 +171,8 @@ export default function AstroDice() {
 
   // 骰子动画弹窗
   const [showDiceModal, setShowDiceModal] = useState(false)
-    const diceSettledResolve = useRef(null)
+  const diceSettledResolve = useRef(null)
+  const resultRef = useRef(null)
 
   // localStorage 历史（24h）
   const [localHistory, setLocalHistory] = useState([])
@@ -266,10 +267,13 @@ export default function AstroDice() {
     setGuideCollapsed(true)
     _pushLocalHistory(apiData.dice_display, question.trim(), category, apiData.core_sentence)
 
-    // 4. 停留一下让用户看到骰子停下的状态，再关弹窗
+    // 4. 停留一下让用户看到骰子停下的状态，再关弹窗并滚到结果顶部
     setTimeout(() => {
       setShowDiceModal(false)
       setLoading(false)
+      setTimeout(() => {
+        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
     }, 1000)
   }
 
@@ -503,7 +507,7 @@ export default function AstroDice() {
 
       {/* ── Step 2：结果展示 ── */}
       {result && (
-        <div>
+        <div ref={resultRef}>
           {/* 问题回显 */}
           <div style={{
             background: '#12122a', borderRadius: '8px', padding: '10px 16px',
