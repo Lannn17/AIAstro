@@ -36,20 +36,16 @@ class DiceRerollRequest(BaseModel):
 
 # ── 每日限制检查 ────────────────────────────────────────────────────
 
-def _check_daily_limit(user: UserInfo) -> str:
-    """同一用户同一天只能发起一次主掷骰（reroll 不限）。返回 prefix 供 analytics 使用。"""
+def _check_daily_limit(username: str) -> None:
+    """查 dice_rolls 表：同一用户今日已有记录则拒绝。"""
     from app.db import USE_TURSO, _turso_query, _sqlite_fetchall
     today = date_type.today().isoformat()
-    username = user.get("username", "")
-    prefix = hashlib.sha256(f"dice:{username}:{today}".encode()).hexdigest()[:16]
-
     sql = """
-        SELECT COUNT(*) as cnt FROM query_analytics
-        WHERE label = 'astro_dice'
+        SELECT COUNT(*) as cnt FROM dice_rolls
+        WHERE username = ?
           AND created_at >= ?
-          AND query_hash LIKE ?
     """
-    params = [f"{today}T00:00:00", f"{prefix}%"]
+    params = [username, f"{today}T00:00:00"]
     rows = _turso_query(sql, params) if USE_TURSO else _sqlite_fetchall(sql, params)
     cnt = rows[0]["cnt"] if rows else 0
     if cnt >= 1:
@@ -57,7 +53,6 @@ def _check_daily_limit(user: UserInfo) -> str:
             status_code=429,
             detail="今日已完成一次占星骰子占卜。占星能量不宜滥用，明日再来。"
         )
-    return prefix
 
 
 # ── 端点 ───────────────────────────────────────────────────────────
@@ -67,7 +62,8 @@ async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth
     """掷三颗骰子并生成主解读"""
     from app.rag.dice import roll_dice, interpret_dice
 
-    prefix = _check_daily_limit(user)
+    username = user.get("username", "")
+    _check_daily_limit(username)  # 先检查，查 dice_rolls 表，同步
 
     try:
         dice = roll_dice()
@@ -94,9 +90,26 @@ async def dice_roll(body: DiceRollRequest, user: UserInfo = Depends(require_auth
             category=body.category,
             natal_context=natal_context,
         )
+
+        # 同步写入 dice_rolls（确保下次检查能查到）
+        interp = result.get("interpretation", "")
+        db_save_dice_roll(
+            username=username,
+            question=body.question,
+            category=body.category,
+            planet=dice["planet"],
+            sign=dice["sign"],
+            house=dice["house"],
+            chart_id=body.chart_id,
+            interp_summary=interp[:200],
+        )
+
+        # analytics 仍然异步（非关键）
+        prefix = hashlib.sha256(f"dice:{username}:{date_type.today().isoformat()}".encode()).hexdigest()[:16]
         asyncio.create_task(_log_dice_analytics(body.question, result, prefix))
-        asyncio.create_task(_save_dice_roll(user, body, dice, result))
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         print(f"[DICE ERROR]\n{traceback.format_exc()}", flush=True)
@@ -162,23 +175,6 @@ async def _log_dice_analytics(query: str, result: dict, prefix: str):
         print(f"[Dice Analytics] score={max_score:.3f} cited={any_cited}", flush=True)
     except Exception as e:
         print(f"[Dice Analytics] log failed (non-fatal): {e}", flush=True)
-
-
-async def _save_dice_roll(user: UserInfo, body: DiceRollRequest, dice: dict, result: dict):
-    try:
-        interp = result.get("interpretation", "")
-        db_save_dice_roll(
-            username=user.get("username", ""),
-            question=body.question,
-            category=body.category,
-            planet=dice["planet"],
-            sign=dice["sign"],
-            house=dice["house"],
-            chart_id=body.chart_id,
-            interp_summary=interp[:200],
-        )
-    except Exception as e:
-        print(f"[DiceRoll] save failed (non-fatal): {e}", flush=True)
 
 
 async def _log_reroll_analytics(query: str, result: dict, mode: str):
