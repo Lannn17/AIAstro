@@ -218,7 +218,7 @@ export default function AstroDice() {
   }
 
   // ── 主掷骰 ──
-      async function handleRoll() {
+  async function handleRoll() {
     if (!question.trim()) { setError('请先输入你想询问的问题'); return }
     setError('')
     setLoading(true)
@@ -227,61 +227,46 @@ export default function AstroDice() {
     setSupplementResult(null)
     setRerollMode(null)
 
-    // 1. 显示骰子弹窗
-    setShowDiceModal(true)
-
-    // 2. 动画 Promise — 等待骰子落定
-    const animationPromise = new Promise((resolve) => {
-      // 保存 resolve 供 onSettled 回调使用
-      diceSettledResolve.current = resolve
-      // 150ms 后启动掷骰动画
-      setTimeout(() => {
-        diceRef.current?.throwDice()
-      }, 200)
-      // 安全超时：最多等 8 秒（防止动画卡住）
-      setTimeout(() => resolve(null), 8000)
-    })
-
-    // 3. API Promise — 同时请求后端
-    const apiPromise = (async () => {
-      try {
-        const res = await apiFetch(`${API_BASE}/api/dice/roll`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({
-            question: question.trim(),
-            category,
-            chart_id: selectedChartId || undefined,
-          }),
-        })
-        if (res.status === 429) {
-          const d = await res.json()
-          return { error: d.detail }
-        }
-        if (!res.ok) throw new Error(res.status)
-        return { data: await res.json() }
-      } catch (e) {
-        return { error: `解读失败，请稍后重试（${e.message}）` }
+    // 1. 先发 API 请求——429 直接拦截，不打开动画弹窗
+    let apiData
+    try {
+      const res = await apiFetch(`${API_BASE}/api/dice/roll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          question: question.trim(),
+          category,
+          chart_id: selectedChartId || undefined,
+        }),
+      })
+      if (res.status === 429) {
+        const d = await res.json()
+        setError(d.detail)
+        setLoading(false)
+        return
       }
-    })()
-
-    // 4. 等两者都完成
-    const [, apiResult] = await Promise.all([animationPromise, apiPromise])
-
-    // 5. 处理结果
-    if (apiResult.error) {
-      setError(apiResult.error)
-      setShowDiceModal(false)
+      if (!res.ok) throw new Error(res.status)
+      apiData = await res.json()
+    } catch (e) {
+      setError(`解读失败，请稍后重试（${e.message}）`)
       setLoading(false)
       return
     }
 
-    const data = apiResult.data
-    setResult(data)
-    setGuideCollapsed(true)
-    _pushLocalHistory(data.dice_display, question.trim(), category, data.core_sentence)
+    // 2. API 成功后再显示骰子动画弹窗
+    setShowDiceModal(true)
+    await new Promise((resolve) => {
+      diceSettledResolve.current = resolve
+      setTimeout(() => { diceRef.current?.throwDice() }, 200)
+      setTimeout(() => resolve(null), 8000)
+    })
 
-    // 6. 停留一下让用户看到骰子停下的状态，再关弹窗
+    // 3. 渲染结果
+    setResult(apiData)
+    setGuideCollapsed(true)
+    _pushLocalHistory(apiData.dice_display, question.trim(), category, apiData.core_sentence)
+
+    // 4. 停留一下让用户看到骰子停下的状态，再关弹窗
     setTimeout(() => {
       setShowDiceModal(false)
       setLoading(false)
