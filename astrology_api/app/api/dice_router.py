@@ -35,23 +35,21 @@ class DiceRerollRequest(BaseModel):
 
 # ── 每日限制检查 ────────────────────────────────────────────────────
 
-def _check_daily_limit(user: UserInfo):
-    """同一用户同一天只能发起一次主掷骰（reroll 不限）"""
-    from app.db import _turso_exec
+def _check_daily_limit(user: UserInfo) -> str:
+    """同一用户同一天只能发起一次主掷骰（reroll 不限）。返回 prefix 供 analytics 使用。"""
+    from app.db import USE_TURSO, _turso_query, _sqlite_fetchall
     today = date_type.today().isoformat()
-    user_id = user.get("user_id")
     username = user.get("username", "")
+    prefix = hashlib.sha256(f"dice:{username}:{today}".encode()).hexdigest()[:16]
 
-    # 用 username 匹配，因为 admin 没有 user_id
     sql = """
         SELECT COUNT(*) as cnt FROM query_analytics
         WHERE label = 'astro_dice'
           AND created_at >= ?
           AND query_hash LIKE ?
     """
-    # query_hash 前缀存 username，便于按用户查询
-    prefix = hashlib.sha256(f"dice:{username}:{today}".encode()).hexdigest()[:16]
-    rows = _turso_exec(sql, [f"{today}T00:00:00", f"{prefix}%"])
+    params = [f"{today}T00:00:00", f"{prefix}%"]
+    rows = _turso_query(sql, params) if USE_TURSO else _sqlite_fetchall(sql, params)
     cnt = rows[0]["cnt"] if rows else 0
     if cnt >= 1:
         raise HTTPException(
